@@ -27,6 +27,7 @@ rust_test(
         "@crate_index//:googletest",
         "//shell_wrapper:status",
         "//shell_wrapper:status_matchers_rs",
+        "//willow/src/api:willow_api_common",
         "//willow/src/shell:ahe_shell",
         "//willow/src/shell:kahe_shell",
         "//willow/src/shell:parameters_shell",

@@ -20,6 +20,7 @@ use shell_testing_parameters::{make_ahe_config, make_kahe_config};
 use single_thread_hkdf::Seed;
 use vahe_shell::ShellVahe;
 use vahe_traits::{Recover, VaheBase};
+use willow_api_common::AggregationConfig;
 use willow_v1_client::WillowV1Client;
 use willow_v1_common::{WillowClientMessage, WillowCommon};
 
@@ -43,10 +44,11 @@ pub fn generate_random_signed_vector(num_values: usize, max_absolute_value: i64)
 /// Creates a `WillowCommon` for SHELL with the default AHE/KAHE configurations
 /// and the given public seeds.
 pub fn create_willow_common(
+    aggregation_config: &AggregationConfig,
     public_kahe_seed: &Seed,
     public_ahe_seed: &Seed,
 ) -> WillowCommon<ShellKahe, ShellVahe> {
-    let kahe = ShellKahe::new(make_kahe_config(), public_kahe_seed).unwrap();
+    let kahe = ShellKahe::new(make_kahe_config(aggregation_config), public_kahe_seed).unwrap();
     let vahe = ShellVahe::new(make_ahe_config(), public_ahe_seed).unwrap();
     WillowCommon { kahe, vahe }
 }

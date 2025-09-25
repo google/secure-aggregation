@@ -27,7 +27,9 @@ rust_library(
     srcs = ["shell_benchmarks.rs"],
     deps = [
         "@crate_index//:clap",
+        "//willow/src/api:willow_api_common",
         "//willow/src/shell:kahe_shell",
+        "//willow/src/shell:shell_parameters_generation",
         "//willow/src/shell:single_thread_hkdf",
         "//willow/src/shell:vahe_shell",
         "//willow/src/testing_utils",

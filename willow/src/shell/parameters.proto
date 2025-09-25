@@ -14,25 +14,21 @@
 
 edition = "2023";
 
-package secure_aggregation_willow;
+package secure_aggregation.willow;
 
 // This proto defines how to pack an input vector into a KAHE plaintext.
-// An input vector is split into `num_packed_coeffs` many sub-vectors of length
-// `dimension` each. Each sub-vector is then packed into a single plaintext
-// coefficient using base `base` encoding to allow summation over all clients'
-// contributions.
-message PackedVectorConfig {
+// An input vector is split into `num_packed_coeffs` many sub-vectors of
+// length `dimension` each. Each sub-vector is then packed into a single
+// plaintext coefficient using base `base` encoding to allow summation over
+// all clients' contributions.
+message PackedVectorConfigProto {
   int64 base = 1;
   int64 dimension = 2;
   int64 num_packed_coeffs = 3;
 }
 
-message ShellKahePackingConfig {
-  map<string, PackedVectorConfig> packed_vectors = 1;
-}
-
 // This proto defines the parameters for instantiating the KAHE scheme
-message ShellKaheConfig {
+message ShellKaheConfigProto {
   // The first two fields define the KAHE ciphertext ring Z[X]/(q, X^N+1),
   // where `log_n` is log2(N) and `moduli` is the list of prime factors of q.
   int64 log_n = 1;
@@ -46,5 +42,5 @@ message ShellKaheConfig {
   int64 num_public_polynomials = 4;
 
   // Configures how input vectors are packed into the KAHE plaintext.
-  ShellKahePackingConfig packing_config = 5;
+  map<string, PackedVectorConfigProto> packed_vectors = 5;
 }

@@ -90,7 +90,8 @@ FfiStatus WriteSmallRnsPolynomialToBuffer(const RnsPolynomialWrapper* poly,
 //  a RnsPolynomialWrapper containing the polynomial in RNS coefficient form to
 //  `out`.
 FfiStatus ReadSmallRnsPolynomialFromBuffer(const int64_t* buffer,
-                                           uint64_t buffer_len, uint64_t log_n,
+                                           uint64_t buffer_len,
+                                           uint64_t num_coeffs,
                                            ModuliWrapper moduli,
                                            RnsPolynomialWrapper* out);
 

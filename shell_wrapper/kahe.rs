@@ -18,8 +18,16 @@
 use shell_types::{Moduli, RnsContextRef, RnsPolynomial, RnsPolynomialVec};
 use single_thread_hkdf::{SeedWrapper, SingleThreadHkdfWrapper};
 use status::rust_status_from_cpp;
+use std::collections::HashMap;
 use std::marker::PhantomData;
 use std::mem::MaybeUninit;
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct PackedVectorConfig {
+    pub base: u64,
+    pub dimension: u64,
+    pub num_packed_coeffs: u64,
+}
 
 #[cxx::bridge]
 mod ffi {
@@ -28,12 +36,19 @@ mod ffi {
         pub ptr: UniquePtr<KahePublicParameters>,
     }
 
+    pub struct BigIntVectorWrapper {
+        pub ptr: UniquePtr<CxxVector<BigInteger>>,
+    }
+
     unsafe extern "C++" {
         include!("shell_wrapper/kahe.h");
         include!("shell_wrapper/shell_types.h");
 
         #[namespace = "secure_aggregation"]
         type KahePublicParameters;
+
+        #[namespace = "secure_aggregation"]
+        type BigInteger;
 
         type FfiStatus = shell_types::ffi::FfiStatus;
         type ModuliWrapper = shell_types::ffi::ModuliWrapper;
@@ -66,10 +81,24 @@ mod ffi {
             out: *mut RnsPolynomialWrapper,
         ) -> FfiStatus;
 
-        pub unsafe fn Encrypt(
-            input_values: &[u64],
+        pub unsafe fn PackMessagesRaw(
+            messages: &[u64],
             packing_base: u64,
-            num_packing: u64,
+            packing_dimension: u64,
+            num_packed_values: u64,
+            packed_values: *mut BigIntVectorWrapper,
+        ) -> FfiStatus;
+
+        pub unsafe fn UnpackMessagesRaw(
+            packing_base: u64,
+            packing_dimension: u64,
+            num_packed_values: u64,
+            packed_values: &mut BigIntVectorWrapper,
+            out: &mut Vec<u64>,
+        ) -> FfiStatus;
+
+        pub unsafe fn Encrypt(
+            packed_values: &BigIntVectorWrapper,
             secret_key: &RnsPolynomialWrapper,
             params: &KahePublicParametersWrapper,
             prng: *mut SingleThreadHkdfWrapper,
@@ -77,13 +106,10 @@ mod ffi {
         ) -> FfiStatus;
 
         pub unsafe fn Decrypt(
-            packing_base: u64,
-            num_packing: u64,
             ciphertexts: &RnsPolynomialVecWrapper,
             secret_key: &RnsPolynomialWrapper,
             params: &KahePublicParametersWrapper,
-            output_values: &mut [u64],
-            n_written: *mut u64,
+            output_values: *mut BigIntVectorWrapper,
         ) -> FfiStatus;
     }
 }
@@ -152,68 +178,86 @@ pub fn generate_secret_key(
     Ok(unsafe { out.assume_init() })
 }
 
-/// Encrypts a vector of values.
-///
-/// The values are encoded as a polynomial, then encrypted with the secret key
-/// and the public polynomial at `public_polynomial_index` in `params`.
+pub use ffi::BigIntVectorWrapper;
+
+/// Encrypts the vectors stored in `input_vectors` using `secret_key` and the public polynomials
+/// stored in `params`. The input vectors are packed according to the given `packed_vector_configs`.
+/// Returns the resulting ciphertexts.
 pub fn encrypt(
-    input_values: &[u64],
+    input_vectors: &HashMap<String, Vec<u64>>,
+    packed_vector_configs: &HashMap<String, PackedVectorConfig>,
     secret_key: &RnsPolynomial,
     params: &KahePublicParametersWrapper,
-    packing_base: u64,
-    num_packing: usize,
     prng: &mut SingleThreadHkdfWrapper,
 ) -> Result<RnsPolynomialVec, status::StatusError> {
+    let mut packed_values = MaybeUninit::<BigIntVectorWrapper>::zeroed();
+    // SAFETY: No lifetime constraints (`PackMessagesRaw` may create a new vector of BigIntegers
+    // wrapped by `packed_values` which does not keep any reference to the inputs).
+    // `PackMessagesRaw` only appends to the C++ vector wrapped by `packed_values`,
+    // allocating it in case it is NULL (in the first iteration).
+    for (id, packed_vector_config) in packed_vector_configs.iter() {
+        if !input_vectors.contains_key(id) {
+            return Err(status::invalid_argument(format!("Input vector with id {} not found", id)));
+        }
+        rust_status_from_cpp(unsafe {
+            ffi::PackMessagesRaw(
+                &input_vectors[id],
+                packed_vector_config.base,
+                packed_vector_config.dimension,
+                packed_vector_config.num_packed_coeffs,
+                packed_values.as_mut_ptr(),
+            )
+        })?;
+    }
+
     let mut out = MaybeUninit::<RnsPolynomialVec>::zeroed();
-    // SAFETY: No lifetime constraints (`Encrypt` creates a new polynomial which
-    // does not keep any reference to the inputs). `Encrypt` reads the
-    // `input_values` buffer within a valid range.
+    // SAFETY: No lifetime constraints (`Encrypt` creates a new vector of polynomials wrapped by
+    // `out` which does not keep any reference to the inputs). `Encrypt` reads the C++ vector
+    // wrapped by `packed_values`, updates the states wrapped by `prng`, and writes into the C++
+    // vector wrapped by `out`.
     rust_status_from_cpp(unsafe {
-        ffi::Encrypt(
-            input_values,
-            packing_base,
-            num_packing as u64,
-            secret_key,
-            params,
-            prng,
-            out.as_mut_ptr(),
-        )
+        ffi::Encrypt(&packed_values.assume_init(), secret_key, params, prng, out.as_mut_ptr())
     })?;
     // SAFETY: `out` is safely initialized if we get to this point.
     Ok(unsafe { out.assume_init() })
 }
 
-/// Decrypts a ciphertext that was encrypted with `secret_key` and the public
-/// polynomial a stored at `public_polynomial_index` in `params`. Writes the
-/// decrypted values into `output_values`. Returns the number of values written.
-///
-/// This low-level API works with slices. The caller can allocate vectors if
-/// they want. Using an uninitialized Vec::with_capacity works too, but then we
-/// need to manually update the length with `unsafe {
-/// output_values.set_len(n_messages_written) }` because Rust doesn't know that
-/// C has written into the vector.
+/// Decrypts ciphertexts that were encrypted with `secret_key` and the public polynomials stored
+/// in `params`. Returns the unpacked decrypted values.
+/// The decrypted values are unpacked according to the given `packed_vector_configs`.
 pub fn decrypt(
     ciphertext: &RnsPolynomialVec,
     secret_key: &RnsPolynomial,
     params: &KahePublicParametersWrapper,
-    packing_base: u64,
-    num_packing: usize,
-    output_values: &mut [u64],
-) -> Result<usize, status::StatusError> {
-    // SAFETY:  No lifetime constraints (`DecryptionResult` just holds two ints and
-    // does not keep any reference to the inputs). `Decrypt` only modifies the
-    // `output_values` buffer within a valid range.
-    let mut n_written = 0u64;
+    packed_vector_configs: &HashMap<String, PackedVectorConfig>,
+) -> Result<HashMap<String, Vec<u64>>, status::StatusError> {
+    let mut packed_values = MaybeUninit::<BigIntVectorWrapper>::zeroed();
+    // SAFETY: No lifetime constraints (`packed_values` does not keep any reference to the inputs).
+    // `Decrypt` creates a new C++ vector wrapped by `output_values` and only modifies this buffer.
     rust_status_from_cpp(unsafe {
-        ffi::Decrypt(
-            packing_base,
-            num_packing as u64,
-            ciphertext,
-            secret_key,
-            params,
-            output_values,
-            &mut n_written,
-        )
+        ffi::Decrypt(ciphertext, secret_key, params, packed_values.as_mut_ptr())
     })?;
-    Ok(n_written as usize)
+
+    let mut output_vectors = HashMap::<String, Vec<u64>>::new();
+    // Assume the packed values are stored in the same order as the configs.
+    for (id, packed_vector_config) in packed_vector_configs.iter() {
+        let unpacked_size =
+            (packed_vector_config.num_packed_coeffs * packed_vector_config.dimension) as usize;
+        let mut unpacked_values = Vec::with_capacity(unpacked_size);
+        /// SAFETY: No lifetime constraints (output values of `UnpackMessagesRaw` do not keep any
+        /// reference to its inputs). `UnpackMessagesRaw` reads and removes a prefix of the C++
+        /// vector wrapped by `packed_values`, and writes into the buffer `out`.
+        rust_status_from_cpp(unsafe {
+            ffi::UnpackMessagesRaw(
+                packed_vector_config.base,
+                packed_vector_config.dimension,
+                packed_vector_config.num_packed_coeffs,
+                packed_values.assume_init_mut(),
+                &mut unpacked_values,
+            )
+        })?;
+        output_vectors.insert(id.clone(), unpacked_values);
+    }
+
+    Ok(output_vectors)
 }

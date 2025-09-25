@@ -112,7 +112,8 @@ FfiStatus WriteSmallRnsPolynomialToBuffer(const RnsPolynomialWrapper* poly,
 }
 
 FfiStatus ReadSmallRnsPolynomialFromBuffer(const int64_t* buffer,
-                                           uint64_t buffer_len, uint64_t log_n,
+                                           uint64_t buffer_len,
+                                           uint64_t num_coeffs,
                                            ModuliWrapper moduli,
                                            RnsPolynomialWrapper* out) {
   if (buffer == nullptr || out == nullptr) {
@@ -120,7 +121,6 @@ FfiStatus ReadSmallRnsPolynomialFromBuffer(const int64_t* buffer,
         secure_aggregation::kNullPointerErrorMessage));
   }
 
-  int num_coeffs = 1 << log_n;
   if (buffer_len > num_coeffs) {
     return MakeFfiStatus(
         absl::InvalidArgumentError("Buffer has too many coefficients, it does "
