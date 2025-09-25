@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use kahe::KahePublicParametersWrapper;
+use kahe::{KahePublicParametersWrapper, PackedVectorConfig};
 use kahe_traits::{
     KaheBase, KaheDecrypt, KaheEncrypt, KaheKeygen, TrySecretKeyFrom, TrySecretKeyInto,
 };
@@ -21,106 +21,93 @@ use shell_types::{
     write_small_rns_polynomial_to_buffer, RnsPolynomial, RnsPolynomialVec,
 };
 use single_thread_hkdf::{Seed, SingleThreadHkdfPrng};
+use std::collections::HashMap;
 
 /// Number of bits supported by the C++ big integer type used for KAHE
 /// plaintext.
-const BIG_INT_BITS: u64 = 256;
+const BIG_INT_BITS: usize = 256;
 
-/// Stores parameters to create a new RNS context for KAHE.
-#[derive(Debug, Clone)]
-pub struct KaheRnsConfig {
-    pub log_n: u64,
-    pub log_t: u64,
-    pub qs: Vec<u64>,
-}
-
-/// ShellKahe configuration. For a fixed RNS context, we can have multiple
-/// values for the other parameters (e.g. short or long inputs, or different
-/// combinations of packing_base/num_packing that fit within the same plaintext
-/// modulus). Can only be created with valid parameters from outside this crate.
-#[derive(Debug, Clone)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct ShellKaheConfig {
-    pub input_domain: u64,
-    pub max_num_clients: usize,
+    pub log_n: usize,
+    pub moduli: Vec<u64>,
+    pub log_t: usize,
     pub num_public_polynomials: usize,
-    pub rns_config: KaheRnsConfig,
-    pub(crate) packing_base: u64,
-    pub(crate) num_packing: usize,
-}
-
-impl ShellKaheConfig {
-    /// Validates parameters and creates a new ShellKaheConfig instance.
-    pub fn new(
-        input_domain: u64,
-        max_num_clients: usize,
-        num_packing: usize,
-        num_public_polynomials: usize,
-        rns_config: KaheRnsConfig,
-    ) -> Result<Self, status::StatusError> {
-        if num_packing == 0 {
-            return Err(status::invalid_argument("num_packing must be > 0"));
-        }
-        // B = n * t
-        let packing_base = input_domain * max_num_clients as u64;
-        if packing_base <= 1 {
-            return Err(status::invalid_argument("packing_base must be > 1"));
-        }
-        if rns_config.log_t > BIG_INT_BITS {
-            return Err(status::invalid_argument(format!(
-                "log_t must be <= {} for plaintexts to fit in the C++ big integer type, got {}",
-                BIG_INT_BITS, rns_config.log_t
-            )));
-        }
-        let log_packing_base = (packing_base as f64).log2().ceil() as u64;
-        if (num_packing as u64) * log_packing_base > rns_config.log_t {
-            return Err(status::invalid_argument(format!(
-                "packing_base^num_packing must not be larger than the KAHE plaintext modulus 2^log_t: packing_base = {}, num_packing = {}, log_t = {}", packing_base, num_packing, rns_config.log_t
-            )));
-        }
-        Ok(Self {
-            input_domain,
-            max_num_clients,
-            num_public_polynomials,
-            rns_config,
-            packing_base,
-            num_packing,
-        })
-    }
+    pub packed_vector_configs: HashMap<String, PackedVectorConfig>,
 }
 
 /// Base type holding public KAHE configuration and C++ parameters.
 pub struct ShellKahe {
-    input_domain: u64,
-    packing_base: u64,
-    num_packing: usize,
-    rns_config: KaheRnsConfig,
+    /// Parameters used to initialize ShellKahe.
+    config: ShellKaheConfig,
+
+    /// Number of coefficients in a KAHE polynomial.
+    num_coeffs: usize,
+
+    /// The KAHE public parameters implemented in C++, including the public polynomials and
+    /// the parameters to instantiate the KAHE scheme.
     public_kahe_parameters: KahePublicParametersWrapper,
 }
 
 impl ShellKahe {
-    /// Creates a new ShellKahe instance.
-    pub fn new(config: ShellKaheConfig, public_seed: &Seed) -> Result<Self, status::StatusError> {
+    pub fn new(
+        shell_kahe_config: ShellKaheConfig,
+        public_seed: &Seed,
+    ) -> Result<Self, status::StatusError> {
+        Self::validate_kahe_config(&shell_kahe_config)?;
+        let num_coeffs = 1 << shell_kahe_config.log_n;
         let public_kahe_parameters = kahe::create_public_parameters(
-            config.rns_config.log_n,
-            config.rns_config.log_t,
-            &config.rns_config.qs,
-            config.num_public_polynomials,
+            shell_kahe_config.log_n as u64,
+            shell_kahe_config.log_t as u64,
+            &shell_kahe_config.moduli,
+            shell_kahe_config.num_public_polynomials,
             &public_seed,
         )?;
-        Ok(Self {
-            input_domain: config.input_domain,
-            packing_base: config.packing_base,
-            num_packing: config.num_packing,
-            rns_config: config.rns_config,
-            public_kahe_parameters,
-        })
+        Ok(Self { config: shell_kahe_config, num_coeffs, public_kahe_parameters })
+    }
+
+    /// Validates KAHE parameters in ShellKaheConfig.
+    fn validate_kahe_config(config: &ShellKaheConfig) -> Result<(), status::StatusError> {
+        if config.log_t > BIG_INT_BITS {
+            return Err(status::invalid_argument(format!(
+                "log_t must be <= {} for plaintexts to fit in the C++ big integer type, got {}",
+                BIG_INT_BITS, config.log_t
+            )));
+        }
+        for (id, packed_vector_config) in config.packed_vector_configs.iter() {
+            let base = packed_vector_config.base;
+            let dimension = packed_vector_config.dimension;
+            let num_packed_coeffs = packed_vector_config.num_packed_coeffs;
+            if base <= 1 {
+                return Err(status::invalid_argument(format!("base must be > 1, got {}", base)));
+            }
+            if dimension <= 0 {
+                return Err(status::invalid_argument(format!(
+                    "For packing id {}, dimension must be > 0, got {}",
+                    id, dimension
+                )));
+            }
+            if num_packed_coeffs <= 0 {
+                return Err(status::invalid_argument(format!(
+                    "For packing id {}, num_packed_coeffs must be > 0, got {}",
+                    id, num_packed_coeffs
+                )));
+            }
+            let log_base = (base as f64).log2().ceil() as u64;
+            if log_base * dimension > config.log_t as u64 {
+                return Err(status::invalid_argument(format!(
+                    "For packing id {}, base^dimension must not be larger than the KAHE plaintext modulus 2^log_t+1: base = {}, dimension = {}, log_t = {}", id, base, dimension, config.log_t
+                )));
+            }
+        }
+        Ok(())
     }
 }
 
 impl KaheBase for ShellKahe {
     type SecretKey = RnsPolynomial;
 
-    type Plaintext = Vec<u64>;
+    type Plaintext = HashMap<String, Vec<u64>>;
 
     type Ciphertext = RnsPolynomialVec;
 
@@ -150,8 +137,22 @@ impl KaheBase for ShellKahe {
                 right.len()
             )));
         }
-        for (i, v) in left.iter().enumerate() {
-            right[i] += v;
+        for (id, values) in left.iter() {
+            if let Some(right_values) = right.get_mut(id) {
+                if right_values.len() != values.len() {
+                    return Err(status::invalid_argument(format!(
+                        "right values for key {} must have the same length as left, got {} and {}",
+                        id,
+                        right_values.len(),
+                        values.len()
+                    )));
+                }
+                for (i, v) in values.iter().enumerate() {
+                    right_values[i] += v;
+                }
+            } else {
+                return Err(status::invalid_argument(format!("right must contain key {}", id)));
+            }
         }
         Ok(())
     }
@@ -181,21 +182,38 @@ impl KaheEncrypt for ShellKahe {
         r: &mut Self::Rng,
     ) -> Result<Self::Ciphertext, status::StatusError> {
         // Check that inputs are valid to avoid packing and plaintext overflow errors.
-        for v in pt.iter() {
-            if *v >= self.input_domain {
-                return Err(status::invalid_argument(format!(
-                    "plaintext value {} is larger than the input domain {}",
-                    *v, self.input_domain
-                )));
+        for (id, values) in pt.iter() {
+            if let Some(packed_vector_config) = self.config.packed_vector_configs.get(id) {
+                let max_length =
+                    packed_vector_config.dimension * packed_vector_config.num_packed_coeffs;
+                if values.len() > max_length as usize {
+                    return Err(status::invalid_argument(format!(
+                        "plaintext for id {} can have at most {} elements, got {}",
+                        id,
+                        max_length,
+                        values.len()
+                    )));
+                }
+                for v in values.iter() {
+                    if *v >= packed_vector_config.base {
+                        return Err(status::invalid_argument(format!(
+                            "plaintext for id {} cannot contain values larger than the input bound {}, got {}",
+                            id,
+                            packed_vector_config.base,
+                            *v,
+                        )));
+                    }
+                }
+            } else {
+                return Err(status::invalid_argument(format!("unknown plaintext id {}", id)));
             }
         }
 
         kahe::encrypt(
-            &pt[..],
+            &pt,
+            &self.config.packed_vector_configs,
             &sk,
             &self.public_kahe_parameters,
-            self.packing_base,
-            self.num_packing,
             &mut r.0,
         )
     }
@@ -207,42 +225,19 @@ impl KaheDecrypt for ShellKahe {
         ct: &Self::Ciphertext,
         sk: &Self::SecretKey,
     ) -> Result<Self::Plaintext, status::StatusError> {
-        // Allocate the right number of values to hold an unpacked and padded output.
-        let num_coeffs = 1 << self.rns_config.log_n;
-        let num_values = num_coeffs * self.num_packing * (ct.len as usize);
-        let mut output_values = vec![0; num_values];
-
-        // Decrypt into the buffer.
-        let n_written = kahe::decrypt(
-            &ct,
-            &sk,
-            &self.public_kahe_parameters,
-            self.packing_base,
-            self.num_packing,
-            &mut output_values[..],
-        )?;
-
-        if n_written != num_values {
-            return Err(status::internal(format!(
-                "Expected {} decrypted values, but got {}.",
-                num_values, n_written
-            )));
-        }
-        Ok(output_values)
+        kahe::decrypt(&ct, &sk, &self.public_kahe_parameters, &self.config.packed_vector_configs)
     }
 }
 
 impl TrySecretKeyInto<Vec<i64>> for ShellKahe {
     fn try_secret_key_into(&self, sk: Self::SecretKey) -> Result<Vec<i64>, status::StatusError> {
-        let num_coeffs = 1 << self.rns_config.log_n;
-        let mut signed_values: Vec<i64> = vec![0; num_coeffs];
+        let mut signed_values: Vec<i64> = vec![0; self.num_coeffs];
         let moduli = kahe::get_moduli(&self.public_kahe_parameters);
-
         let n_written = write_small_rns_polynomial_to_buffer(&sk, &moduli, &mut signed_values[..])?;
-        if n_written != num_coeffs {
+        if n_written != self.num_coeffs {
             return Err(status::internal(format!(
                 "Expected {} coefficients, but got {}.",
-                num_coeffs, n_written
+                self.num_coeffs, n_written
             )));
         }
 
@@ -255,20 +250,18 @@ impl TrySecretKeyFrom<Vec<i64>> for ShellKahe {
         &self,
         sk_buffer: Vec<i64>,
     ) -> Result<Self::SecretKey, status::StatusError> {
-        let log_n = self.rns_config.log_n as usize;
-        if sk_buffer.len() < log_n {
+        if sk_buffer.len() < self.num_coeffs {
             return Err(status::invalid_argument(format!(
                 "secret key buffer is too short: {} < {}",
                 sk_buffer.len(),
-                self.rns_config.log_n
+                self.num_coeffs
             )));
         }
 
         let moduli = kahe::get_moduli(&self.public_kahe_parameters);
-        let num_coeffs = 1 << log_n;
         let poly = read_small_rns_polynomial_from_buffer(
-            &sk_buffer[..num_coeffs], // Remove potential padding from AHE decryption.
-            self.rns_config.log_n,
+            &sk_buffer[..self.num_coeffs], // Remove potential padding from AHE decryption.
+            self.num_coeffs as u64,
             &moduli,
         )?;
         Ok(poly)
@@ -278,7 +271,17 @@ impl TrySecretKeyFrom<Vec<i64>> for ShellKahe {
 #[cfg(test)]
 mod test {
     // Instead of `super::*` because we consume types from other testing crates.
+    use googletest::{gtest, verify_eq, verify_le};
+    use kahe::PackedVectorConfig;
     use kahe_shell::*;
+    use kahe_traits::{
+        KaheBase, KaheDecrypt, KaheEncrypt, KaheKeygen, TrySecretKeyFrom, TrySecretKeyInto,
+    };
+    use prng_traits::SecurePrng;
+    use shell_testing_parameters::{make_kahe_config_for, set_kahe_num_public_polynomials};
+    use single_thread_hkdf::SingleThreadHkdfPrng;
+    use std::collections::HashMap;
+    use testing_utils::generate_random_unsigned_vector;
 
     /// Standard deviation of the discrete Gaussian distribution used for
     /// secret key generation. Hardcoded in shell_wrapper/kahe.h for now (if we ever
@@ -293,61 +296,41 @@ mod test {
     /// Tail bound for the case of a single secret key.
     const TAIL_BOUND: i64 = (TAIL_BOUND_MULTIPLIER * SECRET_KEY_STD + 1.0) as i64;
 
-    use googletest::{gtest, verify_eq, verify_le, verify_that};
-    use kahe_traits::{
-        KaheBase, KaheDecrypt, KaheEncrypt, KaheKeygen, TrySecretKeyFrom, TrySecretKeyInto,
-    };
-    use prng_traits::SecurePrng;
-    use shell_testing_parameters::make_kahe_rns_config;
-    use single_thread_hkdf::SingleThreadHkdfPrng;
-    use testing_utils::generate_random_unsigned_vector;
+    /// Default ID used in tests.
+    const DEFAULT_ID: &str = "default";
 
     #[gtest]
     fn test_encrypt_decrypt_short() -> googletest::Result<()> {
         let plaintext_modulus_bits = 39;
-        let input_domain = 10;
-        let max_num_clients = 100;
-        let num_packing = 2;
-        let num_public_polynomials = 1;
-        let rns_config = make_kahe_rns_config(plaintext_modulus_bits)?;
-        let kahe_config = ShellKaheConfig::new(
-            input_domain,
-            max_num_clients,
-            num_packing,
-            num_public_polynomials,
-            rns_config.clone(),
-        )?;
+        let packed_vector_configs = HashMap::from([(
+            String::from(DEFAULT_ID),
+            PackedVectorConfig { base: 10, dimension: 2, num_packed_coeffs: 5 },
+        )]);
+        let kahe_config = make_kahe_config_for(plaintext_modulus_bits, packed_vector_configs)?;
         let public_seed = SingleThreadHkdfPrng::generate_seed()?;
         let kahe = ShellKahe::new(kahe_config, &public_seed)?;
 
-        let pt = vec![1, 2, 3, 4, 5, 6, 7, 8];
+        let pt = HashMap::from([(String::from(DEFAULT_ID), vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9])]);
         let seed = SingleThreadHkdfPrng::generate_seed()?;
         let mut prng = SingleThreadHkdfPrng::create(&seed)?;
         let sk = kahe.key_gen(&mut prng)?;
         let ct = kahe.encrypt(&pt, &sk, &mut prng)?;
         let decrypted = kahe.decrypt(&ct, &sk)?;
-        verify_eq!(&pt, &decrypted[..pt.len()])
+        verify_eq!(&pt, &decrypted)
     }
 
     #[gtest]
     fn test_encrypt_decrypt_with_serialized_key() -> googletest::Result<()> {
         let plaintext_modulus_bits = 39;
-        let input_domain = 10;
-        let max_num_clients = 100;
-        let num_packing = 2;
-        let num_public_polynomials = 1;
-        let rns_config = make_kahe_rns_config(plaintext_modulus_bits)?;
-        let kahe_config = ShellKaheConfig::new(
-            input_domain,
-            max_num_clients,
-            num_packing,
-            num_public_polynomials,
-            rns_config.clone(),
-        )?;
+        let packed_vector_configs = HashMap::from([(
+            String::from(DEFAULT_ID),
+            PackedVectorConfig { base: 10, dimension: 2, num_packed_coeffs: 5 },
+        )]);
+        let kahe_config = make_kahe_config_for(plaintext_modulus_bits, packed_vector_configs)?;
         let public_seed = SingleThreadHkdfPrng::generate_seed()?;
         let kahe = ShellKahe::new(kahe_config, &public_seed)?;
 
-        let pt = vec![1, 2, 3, 4, 5, 6, 7, 8];
+        let pt = HashMap::from([(String::from(DEFAULT_ID), vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9])]);
         let seed = SingleThreadHkdfPrng::generate_seed()?;
         let mut prng = SingleThreadHkdfPrng::create(&seed)?;
         let sk = kahe.key_gen(&mut prng)?;
@@ -359,24 +342,28 @@ mod test {
 
         // Check that the decrypted value is the same as the original plaintext.
         let decrypted = kahe.decrypt(&ct, &sk_recovered)?;
-        verify_eq!(&pt, &decrypted[..pt.len()])
+        verify_eq!(&pt, &decrypted)
     }
 
     #[gtest]
     fn test_encrypt_decrypt_long() -> googletest::Result<()> {
         let plaintext_modulus_bits = 17;
         let input_domain = 5;
-        let max_num_clients = 1000;
-        let num_packing = 1;
-        let num_public_polynomials = 2;
-        let rns_config = make_kahe_rns_config(plaintext_modulus_bits)?;
-        let kahe_config = ShellKaheConfig::new(
-            input_domain,
-            max_num_clients,
-            num_packing,
-            num_public_polynomials,
-            rns_config.clone(),
-        )?;
+        let packed_vector_configs = HashMap::from([(
+            String::from(DEFAULT_ID),
+            PackedVectorConfig {
+                base: input_domain,
+                dimension: 1,
+                num_packed_coeffs: 0, // Dummy value until we compute it from kahe_config.
+            },
+        )]);
+        let mut kahe_config = make_kahe_config_for(plaintext_modulus_bits, packed_vector_configs)?;
+        // Set the number of packed coefficients to 2x the KAHE ring degree.
+        let num_messages = (1 << kahe_config.log_n) * 2; // Needs two polynomials.
+        let packed_vector_config = kahe_config.packed_vector_configs.get_mut(DEFAULT_ID).unwrap();
+        packed_vector_config.num_packed_coeffs = num_messages;
+        set_kahe_num_public_polynomials(&mut kahe_config);
+
         let public_seed = SingleThreadHkdfPrng::generate_seed()?;
         let kahe = ShellKahe::new(kahe_config, &public_seed)?;
 
@@ -385,8 +372,10 @@ mod test {
         let sk = kahe.key_gen(&mut prng)?;
 
         // Generate a random vector, encrypt and decrypt it.
-        let num_messages = (1 << rns_config.log_n) * 2; // Needs two polynomials.
-        let pt = generate_random_unsigned_vector(num_messages, input_domain);
+        let pt = HashMap::from([(
+            String::from(DEFAULT_ID),
+            generate_random_unsigned_vector(num_messages as usize, input_domain as u64),
+        )]);
         let ct = kahe.encrypt(&pt, &sk, &mut prng)?;
         let decrypted = kahe.decrypt(&ct, &sk)?;
         verify_eq!(pt, decrypted) // Both vectors are padded to the same length.
@@ -397,32 +386,36 @@ mod test {
     fn add_two_inputs() -> googletest::Result<()> {
         let plaintext_modulus_bits = 93;
         let input_domain = 10;
-        let max_num_clients = 2;
-        let num_packing = 1;
-        let num_public_polynomials = 2;
-        let rns_config = make_kahe_rns_config(plaintext_modulus_bits)?;
-        let kahe_config = ShellKaheConfig::new(
-            input_domain,
-            max_num_clients,
-            num_packing,
-            num_public_polynomials,
-            rns_config.clone(),
-        )?;
+        let num_messages = 50;
+        let packed_vector_configs = HashMap::from([(
+            String::from(DEFAULT_ID),
+            PackedVectorConfig {
+                base: input_domain * 2,
+                dimension: 1,
+                num_packed_coeffs: num_messages,
+            },
+        )]);
+        let kahe_config = make_kahe_config_for(plaintext_modulus_bits, packed_vector_configs)?;
+
         let public_seed = SingleThreadHkdfPrng::generate_seed()?;
         let kahe = ShellKahe::new(kahe_config, &public_seed)?;
         let seed = SingleThreadHkdfPrng::generate_seed()?;
         let mut prng = SingleThreadHkdfPrng::create(&seed)?;
 
-        let num_messages = 50;
-
         // Client 1
         let sk1 = kahe.key_gen(&mut prng)?;
-        let pt1 = generate_random_unsigned_vector(num_messages, input_domain);
+        let pt1 = HashMap::from([(
+            String::from(DEFAULT_ID),
+            generate_random_unsigned_vector(num_messages as usize, input_domain as u64),
+        )]);
         let ct1 = kahe.encrypt(&pt1, &sk1, &mut prng)?;
 
         // Client 2
         let mut sk2 = kahe.key_gen(&mut prng)?;
-        let mut pt2 = generate_random_unsigned_vector(num_messages, input_domain);
+        let mut pt2 = HashMap::from([(
+            String::from(DEFAULT_ID),
+            generate_random_unsigned_vector(num_messages as usize, input_domain as u64),
+        )]);
         let mut ct2 = kahe.encrypt(&pt2, &sk2, &mut prng)?;
 
         // Decryptor adds up keys
@@ -432,24 +425,15 @@ mod test {
         kahe.add_ciphertexts_in_place(&ct1, &mut ct2)?;
         let pt_sum = kahe.decrypt(&ct2, &sk2)?;
         kahe.add_plaintexts_in_place(&pt1, &mut pt2)?;
-        verify_eq!(&pt2, &pt_sum[..num_messages])
+        verify_eq!(&pt2, &pt_sum)
     }
 
     #[gtest]
     fn read_write_secret_key() -> googletest::Result<()> {
         let plaintext_modulus_bits = 17;
-        let input_domain = 2;
-        let max_num_clients = 100;
-        let num_packing = 2;
-        let num_public_polynomials = 1;
-        let rns_config = make_kahe_rns_config(plaintext_modulus_bits)?;
-        let kahe_config = ShellKaheConfig::new(
-            input_domain,
-            max_num_clients,
-            num_packing,
-            num_public_polynomials,
-            rns_config.clone(),
-        )?;
+        let packed_vector_configs = HashMap::from([]);
+        let kahe_config = make_kahe_config_for(plaintext_modulus_bits, packed_vector_configs)?;
+
         let public_seed = SingleThreadHkdfPrng::generate_seed()?;
         let kahe = ShellKahe::new(kahe_config, &public_seed)?;
         let seed = SingleThreadHkdfPrng::generate_seed()?;
@@ -491,22 +475,12 @@ mod test {
     fn test_key_serialization_is_homomorphic() -> googletest::Result<()> {
         // Set up a ShellKahe instance.
         let plaintext_modulus_bits = 39;
-        let input_domain = 10;
-        let max_num_clients = 100;
-        let num_packing = 2;
-        let num_public_polynomials = 1;
-        let rns_config = make_kahe_rns_config(plaintext_modulus_bits)?;
-        let kahe_config = ShellKaheConfig::new(
-            input_domain,
-            max_num_clients,
-            num_packing,
-            num_public_polynomials,
-            rns_config.clone(),
-        )?;
+        let packed_vector_configs = HashMap::from([]);
+        let kahe_config = make_kahe_config_for(plaintext_modulus_bits, packed_vector_configs)?;
         let public_seed = SingleThreadHkdfPrng::generate_seed()?;
         let kahe = ShellKahe::new(kahe_config, &public_seed)?;
 
-        let pt = vec![1, 2, 3, 4, 5, 6, 7, 8];
+        // The seed used to sample the secret keys.
         let seed = SingleThreadHkdfPrng::generate_seed()?;
 
         // Generate two keys, write them to buffers then add the buffers together.

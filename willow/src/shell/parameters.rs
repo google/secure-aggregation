@@ -13,7 +13,9 @@
 // limitations under the License.
 
 use ahe_shell::ShellAheConfig;
-use kahe_shell::{KaheRnsConfig, ShellKaheConfig};
+use kahe_shell::ShellKaheConfig;
+use shell_parameters_generation::{divide_and_roundup, generate_packing_config};
+use willow_api_common::AggregationConfig;
 
 /// This file contains parameters for the KAHE and AHE schemes in Willow, which
 /// are selected to have at least 128 bits of computational security and 40 bits
@@ -35,14 +37,12 @@ use kahe_shell::{KaheRnsConfig, ShellKaheConfig};
 /// - input of length 1K with 32-bit domain
 /// - max number of clients 10M
 /// - max number of decryptors 100
-const KAHE_LOG_N_1K_10M: u64 = 12;
-const KAHE_LOG_T_1K_10M: u64 = 56;
+const KAHE_LOG_N_1K_10M: usize = 12;
+const KAHE_LOG_T_1K_10M: usize = 56;
 const KAHE_QS_1K_10M: [u64; 2] = [
     274877816833, // 38 bits
     274877718529, // 38 bits
 ];
-const KAHE_NUM_PACKING_1K_10M: usize = 1;
-const KAHE_NUM_PUBLIC_POLY_1K_10M: usize = 1;
 const AHE_LOG_N_1K_10M: u64 = 12;
 const AHE_T_1K_10M: u64 = 109965;
 const AHE_QS_1K_10M: [u64; 2] = [1099510824961, 1099508760577]; // 80 bits total
@@ -52,16 +52,14 @@ const AHE_S_FLOOD_1K_10M: f64 = 3.0834e+16;
 /// - input of length 100K with 32-bit domain
 /// - max number of clients 10M
 /// - max number of decryptors 100
-const KAHE_LOG_N_100K_10M: u64 = 13;
-const KAHE_LOG_T_100K_10M: u64 = 168;
+const KAHE_LOG_N_100K_10M: usize = 13;
+const KAHE_LOG_T_100K_10M: usize = 168;
 const KAHE_QS_100K_10M: [u64; 4] = [
     1125899906629633, // 50 bits
     1125899905744897, // 50 bits
     1125899905351681, // 50 bits
     1125899903827969, // 50 bits
 ];
-const KAHE_NUM_PACKING_100K_10M: usize = 3;
-const KAHE_NUM_PUBLIC_POLY_100K_10M: usize = 5;
 const AHE_LOG_N_100K_10M: u64 = 12;
 const AHE_T_100K_10M: u64 = 6582404323;
 const AHE_QS_100K_10M: [u64; 2] = [281474976546817, 281474975662081]; // 96 bits total
@@ -71,16 +69,14 @@ const AHE_S_FLOOD_100K_10M: f64 = 3.0834e+16;
 /// - input of length 10M with 32-bit domain
 /// - max number of clients 10M
 /// - max number of decryptors 100
-const KAHE_LOG_N_10M_10M: u64 = 14;
-const KAHE_LOG_T_10M_10M: u64 = 224;
+const KAHE_LOG_N_10M_10M: usize = 14;
+const KAHE_LOG_T_10M_10M: usize = 224;
 const KAHE_QS_10M_10M: [u64; 4] = [
     2305843009211596801, // 61 bits
     2305843009211400193, // 61 bits
     2305843009210515457, // 61 bits
     2305843009210023937, // 61 bits
 ];
-const KAHE_NUM_PACKING_10M_10M: usize = 4;
-const KAHE_NUM_PUBLIC_POLY_10M_10M: usize = 153;
 const AHE_LOG_N_10M_10M: u64 = 12;
 const AHE_T_10M_10M: u64 = 7121256483;
 const AHE_QS_10M_10M: [u64; 2] = [281474976546817, 281474975662081]; // 96 bits total
@@ -89,28 +85,40 @@ const AHE_S_FLOOD_10M_10M: f64 = 3.0834e+16;
 /// Creates a pair (ShellKaheConfig, ShellAheConfig) to be used to instantiate
 /// KAHE and AHE schemes for the given protocol setting.
 pub fn create_shell_configs(
-    input_length: u64,
-    input_domain: u64,
-    max_num_clients: usize,
-    max_num_decryptors: usize,
+    aggregation_config: &AggregationConfig,
 ) -> Result<(ShellKaheConfig, ShellAheConfig), status::StatusError> {
-    if input_length <= 1000
-        && input_domain <= (1u64 << 32)
-        && max_num_clients <= 10_000_000
-        && max_num_decryptors <= 100
+    // Use heuristics to select parameters.
+    let total_input_length: i64 = aggregation_config
+        .vector_lengths_and_bounds
+        .values()
+        .map(|(length, _)| *length as i64)
+        .sum();
+    let max_input_bound = aggregation_config
+        .vector_lengths_and_bounds
+        .values()
+        .map(|(_, bound)| bound)
+        .max()
+        .unwrap();
+
+    if total_input_length <= 1000
+        && *max_input_bound <= (1i64 << 32)
+        && aggregation_config.max_number_of_clients <= 10_000_000
+        && aggregation_config.max_number_of_decryptors <= 100
     {
+        let packed_vector_configs = generate_packing_config(KAHE_LOG_T_1K_10M, aggregation_config)?;
+        let kahe_total_num_coeffs: usize = packed_vector_configs
+            .values()
+            .map(|packed_vector_cfg| packed_vector_cfg.num_packed_coeffs as usize)
+            .sum();
+        let kahe_num_coeffs = 1 << KAHE_LOG_N_1K_10M;
         return Ok((
-            ShellKaheConfig::new(
-                input_domain,
-                max_num_clients,
-                KAHE_NUM_PACKING_1K_10M,
-                KAHE_NUM_PUBLIC_POLY_1K_10M,
-                KaheRnsConfig {
-                    log_n: KAHE_LOG_N_1K_10M,
-                    log_t: KAHE_LOG_T_1K_10M,
-                    qs: KAHE_QS_1K_10M.to_vec(),
-                },
-            )?,
+            ShellKaheConfig {
+                log_n: KAHE_LOG_N_1K_10M,
+                moduli: KAHE_QS_1K_10M.to_vec(),
+                log_t: KAHE_LOG_T_1K_10M,
+                num_public_polynomials: divide_and_roundup(kahe_total_num_coeffs, kahe_num_coeffs),
+                packed_vector_configs,
+            },
             ShellAheConfig {
                 log_n: AHE_LOG_N_1K_10M,
                 t: AHE_T_1K_10M,
@@ -120,23 +128,26 @@ pub fn create_shell_configs(
         ));
     }
 
-    if input_length <= 100_000
-        && input_domain <= (1u64 << 32)
-        && max_num_clients <= 10_000_000
-        && max_num_decryptors <= 100
+    if total_input_length <= 100_000
+        && *max_input_bound <= (1i64 << 32)
+        && aggregation_config.max_number_of_clients <= 10_000_000
+        && aggregation_config.max_number_of_decryptors <= 100
     {
+        let packed_vector_configs =
+            generate_packing_config(KAHE_LOG_T_100K_10M, aggregation_config)?;
+        let kahe_total_num_coeffs: usize = packed_vector_configs
+            .values()
+            .map(|packed_vector_cfg| packed_vector_cfg.num_packed_coeffs as usize)
+            .sum();
+        let kahe_num_coeffs = 1 << KAHE_LOG_N_100K_10M;
         return Ok((
-            ShellKaheConfig::new(
-                input_domain,
-                max_num_clients,
-                KAHE_NUM_PACKING_100K_10M,
-                KAHE_NUM_PUBLIC_POLY_100K_10M,
-                KaheRnsConfig {
-                    log_n: KAHE_LOG_N_100K_10M,
-                    log_t: KAHE_LOG_T_100K_10M,
-                    qs: KAHE_QS_100K_10M.to_vec(),
-                },
-            )?,
+            ShellKaheConfig {
+                log_n: KAHE_LOG_N_100K_10M,
+                moduli: KAHE_QS_100K_10M.to_vec(),
+                log_t: KAHE_LOG_T_100K_10M,
+                num_public_polynomials: divide_and_roundup(kahe_total_num_coeffs, kahe_num_coeffs),
+                packed_vector_configs,
+            },
             ShellAheConfig {
                 log_n: AHE_LOG_N_100K_10M,
                 t: AHE_T_100K_10M,
@@ -146,23 +157,26 @@ pub fn create_shell_configs(
         ));
     }
 
-    if input_length <= 10_000_000
-        && input_domain <= (1u64 << 32)
-        && max_num_clients <= 10000000
-        && max_num_decryptors <= 100
+    if total_input_length <= 10_000_000
+        && *max_input_bound <= (1i64 << 32)
+        && aggregation_config.max_number_of_clients <= 10000000
+        && aggregation_config.max_number_of_decryptors <= 100
     {
+        let packed_vector_configs =
+            generate_packing_config(KAHE_LOG_T_10M_10M, aggregation_config)?;
+        let kahe_total_num_coeffs: usize = packed_vector_configs
+            .values()
+            .map(|packed_vector_cfg| packed_vector_cfg.num_packed_coeffs as usize)
+            .sum();
+        let kahe_num_coeffs = 1 << KAHE_LOG_N_10M_10M;
         return Ok((
-            ShellKaheConfig::new(
-                input_domain,
-                max_num_clients,
-                KAHE_NUM_PACKING_10M_10M,
-                KAHE_NUM_PUBLIC_POLY_10M_10M,
-                KaheRnsConfig {
-                    log_n: KAHE_LOG_N_10M_10M,
-                    log_t: KAHE_LOG_T_10M_10M,
-                    qs: KAHE_QS_10M_10M.to_vec(),
-                },
-            )?,
+            ShellKaheConfig {
+                log_n: KAHE_LOG_N_10M_10M,
+                moduli: KAHE_QS_10M_10M.to_vec(),
+                log_t: KAHE_LOG_T_10M_10M,
+                num_public_polynomials: divide_and_roundup(kahe_total_num_coeffs, kahe_num_coeffs),
+                packed_vector_configs,
+            },
             ShellAheConfig {
                 log_n: AHE_LOG_N_10M_10M,
                 t: AHE_T_10M_10M,
@@ -173,7 +187,7 @@ pub fn create_shell_configs(
     }
 
     Err(status::invalid_argument(format!(
-        "input setting is not supported: input_length = {}, input_domain = {}, max_num_clients = {}, max_num_decryptors = {}",
-        input_length, input_domain, max_num_clients, max_num_decryptors
+        "input setting is not supported: aggregation_config = {:?}",
+        aggregation_config
     )))
 }

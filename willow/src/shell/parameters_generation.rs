@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use protobuf::{proto, ProtoStr};
-use shell_parameters_rust_proto::{PackedVectorConfig, ShellKaheConfig, ShellKahePackingConfig};
+use kahe::PackedVectorConfig;
+use std::collections::HashMap;
 use willow_api_common::AggregationConfig;
 
 /// Generating KAHE and AHE parameters given the Willow protocol configuration.
@@ -24,7 +24,7 @@ const MAX_PACKING_BASE_BITS: usize = 63;
 const BIG_INT_BITS: usize = 256;
 
 // Returns ceil(x / y).
-fn divide_and_roundup(x: usize, y: usize) -> usize {
+pub fn divide_and_roundup(x: usize, y: usize) -> usize {
     (x + y - 1) / y
 }
 
@@ -34,7 +34,7 @@ fn divide_and_roundup(x: usize, y: usize) -> usize {
 pub fn generate_packing_config(
     plaintext_bits: usize,
     agg_config: &AggregationConfig,
-) -> Result<ShellKahePackingConfig, status::StatusError> {
+) -> Result<HashMap<String, PackedVectorConfig>, status::StatusError> {
     if plaintext_bits == 0 {
         return Err(status::invalid_argument("`plaintext_bits` must be positive."));
     }
@@ -47,7 +47,7 @@ pub fn generate_packing_config(
     if agg_config.max_number_of_clients <= 0 {
         return Err(status::invalid_argument("`max_number_of_clients` must be positive."));
     }
-    let mut packing_config = ShellKahePackingConfig::new();
+    let mut packing_configs = HashMap::<String, PackedVectorConfig>::new();
     for (id, (length, bound)) in agg_config.vector_lengths_and_bounds.iter() {
         if *length <= 0 {
             return Err(status::invalid_argument(format!(
@@ -83,14 +83,14 @@ pub fn generate_packing_config(
             )));
         }
         let num_packed_coeffs = divide_and_roundup(*length as usize, dimension);
-        packing_config.packed_vectors_mut().insert(
-            ProtoStr::from_str(&id),
-            proto!(PackedVectorConfig {
-                base: base as i64,
-                dimension: dimension as i64,
-                num_packed_coeffs: num_packed_coeffs as i64,
-            }),
+        packing_configs.insert(
+            id.clone(),
+            PackedVectorConfig {
+                base: base as u64,
+                dimension: dimension as u64,
+                num_packed_coeffs: num_packed_coeffs as u64,
+            },
         );
     }
-    Ok(packing_config)
+    Ok(packing_configs)
 }
