@@ -12,6 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# TODO(itester): Consider hiding the micro_rpc targets from open source.
+# Same as in https://source.corp.google.com/piper///depot/google3/third_party/fcp/protos/confidentialcompute/BUILD
+
+load("//net/grpc:cc_grpc_library.bzl", "cc_grpc_library")
+load("//net/proto2/compiler/stubby/cc:cc_stubby_library.bzl", "cc_stubby_library")
+load("//security/oak/micro_rpc/codegen/build_defs:micro_rpc.bzl", "cc_micro_rpc_library")  # fcp:google-only(internal use only)
 load("@protobuf//bazel:cc_proto_library.bzl", "cc_proto_library")
 load("@protobuf//bazel:proto_library.bzl", "proto_library")
 load("@protobuf//rust:defs.bzl", "rust_proto_library")
@@ -42,11 +48,31 @@ rust_proto_library(
 proto_library(
     name = "decryptor_proto",
     srcs = ["decryptor.proto"],
+    has_services = True,
+    deps = ["//third_party/oak/proto/micro_rpc:options_proto"],
 )
 
 cc_proto_library(
     name = "decryptor_cc_proto",
     deps = [":decryptor_proto"],
+)
+
+cc_stubby_library(
+    name = "decryptor_cc_stubby",
+    srcs = [":decryptor_proto"],
+    deps = [":decryptor_cc_proto"],
+)
+
+cc_grpc_library(
+    name = "decryptor_cc_grpc_proto",
+    srcs = [":decryptor_proto"],
+    deps = [":decryptor_cc_proto"],
+)
+
+cc_micro_rpc_library(
+    name = "decryptor_cc_micro_proto",
+    srcs = [":decryptor_proto"],
+    deps = [":decryptor_cc_proto"],
 )
 
 proto_library(

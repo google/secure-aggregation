@@ -16,7 +16,25 @@ syntax = "proto3";
 
 package secure_aggregation.willow;
 
+import "third_party/oak/proto/micro_rpc/options.proto";
+
 option java_multiple_files = true;
+
+// DecryptorService is the service that implements the Willow Decryptor.
+service DecryptorService {
+  // Generates a new AHE key pair and returns the public key.
+  rpc GenerateKey(GenerateKeyRequest) returns (GenerateKeyResponse) {
+    option deadline = 60.0;
+    option (.oak.micro_rpc.method_id) = 1;
+  }
+
+  // Decrypts the content of the given request using the keys maintained in the
+  // state.
+  rpc Decrypt(DecryptRequest) returns (DecryptResponse) {
+    option deadline = 60.0;
+    option (.oak.micro_rpc.method_id) = 2;
+  }
+}
 
 message GenerateKeyRequest {
   // The key ID to use for the generated key. If the key with the given ID
@@ -72,3 +90,6 @@ message DecryptorResponse {
     Status error = 3;
   }
 }
+
+// Decryptor configuration - used to configure replicated Decryptor job.
+message DecryptorConfig {}
