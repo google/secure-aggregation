@@ -1,4 +1,4 @@
-# Copyright 2021 Google LLC
+# Copyright 2025 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -16,8 +16,7 @@ load("@protobuf//bazel:cc_proto_library.bzl", "cc_proto_library")
 load("@protobuf//bazel:proto_library.bzl", "proto_library")
 
 package(
-    default_applicable_licenses = [
-    ],
+    default_applicable_licenses = ["//third_party/secure_aggregation:license"],
     default_visibility = ["//visibility:public"],
 )
 
@@ -29,4 +28,15 @@ proto_library(
 cc_proto_library(
     name = "decryptor_cc_proto",
     deps = [":decryptor_proto"],
+)
+
+proto_library(
+    name = "input_spec_proto",
+    srcs = ["input_spec.proto"],
+    compatible_with = ["//buildenv/target:non_prod"],
+)
+
+cc_proto_library(
+    name = "input_spec_cc_proto",
+    deps = [":input_spec_proto"],
 )
