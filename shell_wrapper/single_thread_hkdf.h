@@ -35,13 +35,15 @@ FfiStatus CreateSingleThreadHkdf(rust::Slice<const uint8_t> seed,
                                  SingleThreadHkdfWrapper& out);
 FfiStatus Rand8(SingleThreadHkdfWrapper& prng, uint8_t& out);
 
-size_t SingleThreadHkdfSeedLength();
-
 // FFI-friendly wrapper around crypto::tink::subtle::ComputeHkdf, with fixed
 // hash function SHA256.
 FfiStatus ComputeHkdfWrapper(rust::Slice<const uint8_t> input,
                              rust::Slice<const uint8_t> salt,
                              rust::Slice<const uint8_t> info, size_t out_len,
                              std::unique_ptr<std::string>& out);
+
+extern "C" {
+size_t SingleThreadHkdfSeedLength();
+}
 
 #endif  // SECURE_AGGREGATION_WILLOW_SRC_PRNG_SINGLE_THREAD_HKDF_WRAPPER_H_

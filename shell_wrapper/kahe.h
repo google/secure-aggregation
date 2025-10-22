@@ -35,6 +35,7 @@
 namespace secure_aggregation {
 // Forward-declare types for use by the cxx-generated `kahe.rs.h`.
 struct KahePublicParameters;
+struct BigIntVector;
 }  // namespace secure_aggregation
 
 #include "shell_wrapper/kahe.rs.h"
@@ -93,36 +94,18 @@ absl::StatusOr<RnsPolynomial> DecryptPolynomial(
     const RnsPolynomial& a,
     absl::Span<const rlwe::PrimeModulus<ModularInt>* const> moduli);
 
-// Packs messages taken from a raw pointer.
-// Expects packing_base > 1, num_packing > 0, num_coeffs > 0,
-// packing_base^num_packing < std::numeric_limits<BigInteger>::max().
-std::vector<std::vector<BigInteger>> PackMessagesRaw(const uint64_t* messages,
-                                                     int num_messages,
-                                                     uint64_t packing_base,
-                                                     int num_packing,
-                                                     int num_coeffs);
-
-// Unpacks messages into a buffer `output_values` of length
-// at least `output_values_length`. Returns the elements written to the buffer
-// (0 if it didn't write anything).
-// Expects packing_base > 1, num_packing > 0, num_coeffs > 0,
-// packing_base^num_packing < std::numeric_limits<BigInteger>::max().
-int UnpackMessagesRaw(
-    const std::vector<std::vector<BigInteger>>& packed_messages,
-    Integer packing_base, int num_packing, int output_values_length,
-    Integer* output_values);
-
 }  // namespace internal
 
-// Encrypts a vector of packed messages, where each coordinate is a vector of
-// integers that will be encoded into a single polynomial.
+// Encrypts a vector of packed messages, where the packed messages are first
+// encoded into plaintext polynomials and then encrypted.
 absl::StatusOr<std::vector<RnsPolynomial>> EncodeAndEncryptVector(
-    std::vector<std::vector<BigInteger>>& packed_messages,
+    const std::vector<BigInteger>& packed_values,
     const RnsPolynomial& secret_key, const KahePublicParameters& params,
     Prng* prng);
 
-// Decrypts a vector of ciphertexts.
-absl::StatusOr<std::vector<std::vector<BigInteger>>> DecodeAndDecryptVector(
+// Decrypts a vector of ciphertexts, and returns the concatenated vector of
+// decrypted messages.
+absl::StatusOr<std::vector<BigInteger>> DecodeAndDecryptVector(
     absl::Span<const RnsPolynomial> ciphertexts,
     const RnsPolynomial& secret_key, const KahePublicParameters& params);
 
@@ -158,32 +141,47 @@ FfiStatus GenerateSecretKeyWrapper(const KahePublicParametersWrapper& params,
                                    SingleThreadHkdfWrapper* prng,
                                    RnsPolynomialWrapper* out);
 
-// Packs, encodes and encrypts the messages contained in the `input_values`
-// buffer. `packing_base` and `num_packing` are the parameters for packing: the
-// encoder takes large modular integers obtained by combining `num_packing`
-// smaller uint64_t values, each of which is less than `packing_base`. If
-// successful, returns OK and sets *out to a vector of ciphertexts, each of
-// which is a polynomial.
-FfiStatus Encrypt(rust::Slice<const uint64_t> input_values,
-                  uint64_t packing_base, uint64_t num_packing,
+// Packs `messages` into a vector of BigIntegers using base `packing_base`
+// encoding, where the packed values are appended to `packed_values`.
+// Expects `packed_values` to be a valid pointer but the underlying vector
+// may be unallocated, and expects packing_base > 1, packing_dimension > 0,
+// num_coeffs > 0, packing_base^packing_dimension <
+// std::numeric_limits<BigInteger>::max().
+// Note that `messages` is effectively padded with zeros to the nearest multiple
+// of `packing_dimension` before packing.
+FfiStatus PackMessagesRaw(rust::Slice<const uint64_t> messages,
+                          uint64_t packing_base, uint64_t packing_dimension,
+                          uint64_t num_packed_values,
+                          BigIntVectorWrapper* packed_values);
+
+// Unpacks messages stored at `packed_values[0..num_packed_values]` and appends
+// them to `out`, and removes these packed values from `packed_values`.
+// Expects `packed_values.ptr` to be a valid pointer to the vector of packed
+// values, and expects packing_base > 1, packing_dimension > 0,
+// num_packed_values > 0, packing_base^packing_dimension <
+// std::numeric_limits<BigInteger>::max().
+FfiStatus UnpackMessagesRaw(uint64_t packing_base, uint64_t packing_dimension,
+                            uint64_t num_packed_values,
+                            BigIntVectorWrapper& packed_values,
+                            rust::Vec<uint64_t>& out);
+
+// Encrypts the messages contained in `packed_values`. If successful, returns OK
+// and sets *out to a vector of ciphertext polynomials.
+// Expects `out` to be a valid pointer but the underlying vector may be
+// unallocated.
+FfiStatus Encrypt(const BigIntVectorWrapper& packed_values,
                   const RnsPolynomialWrapper& secret_key,
                   const KahePublicParametersWrapper& params,
                   SingleThreadHkdfWrapper* prng, RnsPolynomialVecWrapper* out);
 
-// Decrypts, decodes and unpacks `ciphertexts` into the `output_values` buffer.
-// Returns a status, and writes the number of outputs written to `n_written`.
-// Each decoded message is a large modular integer, which is then split into
-// `num_packing` smaller uint64_t values by decomposing into base
-// `packing_base`. Note: Internally, decryption yields num_coeffs * num_packing
-//       * ciphertexts.size() Integers exactly (decryption does padding), with
-//       num_coeffs = 1 << params->ptr->context->LogN(). But this function can
-//       take a smaller `output_values_length` to fill a smaller buffer, e.g. to
-//       remove padding if the plaintext vector length is known.
-FfiStatus Decrypt(uint64_t packing_base, uint64_t num_packing,
-                  const RnsPolynomialVecWrapper& ciphertexts,
+// Decrypts `ciphertexts` into a vector written to `output_values` buffer, and
+// returns a status.
+// Expects `output_values` to be a valid pointer but the underlying vector may
+// be unallocated.
+FfiStatus Decrypt(const RnsPolynomialVecWrapper& ciphertexts,
                   const RnsPolynomialWrapper& secret_key,
                   const KahePublicParametersWrapper& params,
-                  rust::Slice<uint64_t> output_values, uint64_t* n_written);
+                  BigIntVectorWrapper* output_values);
 
 }  // extern "C"
 

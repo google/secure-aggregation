@@ -77,6 +77,7 @@ rust_test(
     deps = [
         ":kahe_shell",
         "@crate_index//:googletest",
+        "//shell_wrapper:kahe",
         "//shell_wrapper:status",
         "//willow/src/testing_utils",
         "//willow/src/testing_utils:shell_testing_parameters",
@@ -91,7 +92,11 @@ rust_library(
     deps = [
         ":ahe_shell",
         ":kahe_shell",
+        ":shell_parameters_generation",
+        "@protobuf//rust:protobuf",
+        "//shell_wrapper:kahe",
         "//shell_wrapper:status",
+        "//willow/src/api:willow_api_common",
     ],
 )
 
@@ -111,14 +116,39 @@ rust_proto_library(
     deps = [":shell_parameters_proto"],
 )
 
+# Parameters utilities (e.g. conversion between rust structs and protos)
+rust_library(
+    name = "shell_parameters_utils",
+    srcs = ["parameters_utils.rs"],
+    crate_root = "parameters_utils.rs",
+    deps = [
+        ":kahe_shell",
+        ":shell_parameters_rust_proto",
+        "@protobuf//rust:protobuf",
+        "//shell_wrapper:kahe",
+        "//shell_wrapper:status",
+    ],
+)
+
+rust_test(
+    name = "shell_parameters_utils_test",
+    crate = ":shell_parameters_utils",
+    deps = [
+        ":shell_parameters_utils",
+        "@crate_index//:googletest",
+        "@protobuf//rust:protobuf_gtest_matchers",
+        "//shell_wrapper:status",
+    ],
+)
+
 # Parameter generation
 rust_library(
     name = "shell_parameters_generation",
     srcs = ["parameters_generation.rs"],
     crate_root = "parameters_generation.rs",
     deps = [
-        ":shell_parameters_rust_proto",
-        "@protobuf//rust:protobuf",
+        ":kahe_shell",
+        "//shell_wrapper:kahe",
         "//shell_wrapper:status",
         "//willow/src/api:willow_api_common",
     ],
