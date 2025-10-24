@@ -1,0 +1,83 @@
+// Copyright 2025 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+edition = "2023";
+
+package third_party_secure_aggregation_willow_proto_willow;
+
+option java_multiple_files = true;
+
+// This message describes the result of a group-by query.
+// It contains a list of output vectors, each with a name, data type, and role.
+// The role is either GROUP_BY or METRIC. The latter represents a metric to be
+// aggregated (added). Group-by columns are expected to be of type STRING, while
+// metrics are expected to be of type INT64.
+message InputSpec {
+  // Supported data types for output vectors in `ExampleQuerySpec` in
+  // plan.proto.
+  enum DataType {
+    DATA_TYPE_UNSPECIFIED = 0;
+    INT32 = 1;
+    INT64 = 2;
+    BOOL = 3;
+    FLOAT = 4;
+    DOUBLE = 5;
+    BYTES = 6;
+    STRING = 7;
+  }
+  // Defines a domain as an interval.
+  message Interval {
+    // The lower bound of the interval. The interval is inclusive.
+    double min = 1;
+    // The upper bound of the interval. The interval is inclusive.
+    double max = 2;
+  }
+
+  message StringValues {
+    repeated string values = 1;
+  }
+
+  // A new message type to represent the domain specification.
+  message DomainSpec {
+    oneof domain_type {
+      // Defines a domain as an ordered list of string values.
+      StringValues string_values = 1;
+
+      // Defines a domain as an interval of values.
+      Interval interval = 2;
+    }
+  }
+
+  enum RoleType {
+    ROLE_TYPE_UNSPECIFIED = 0;
+    GROUP_BY = 1;
+    METRIC = 2;
+  }
+
+  message InputVectorSpec {
+    // The output vector name.
+    string vector_name = 1;
+
+    // The data type for each entry in the vector.
+    DataType data_type = 2;
+
+    // The role of the vector in the result, e.g. group-by column.
+    RoleType role = 3;
+
+    // An optional field to define the domain of the output vector.
+    // This could be used for validation or other logic.
+    DomainSpec domain_spec = 4;
+  }
+  repeated InputVectorSpec input_vector_specs = 1;
+}
