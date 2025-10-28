@@ -30,3 +30,13 @@ cc_proto_library(
     name = "decryptor_cc_proto",
     deps = [":decryptor_proto"],
 )
+
+proto_library(
+    name = "key_proto",
+    srcs = ["key.proto"],
+)
+
+cc_proto_library(
+    name = "key_cc_proto",
+    deps = [":key_proto"],
+)
