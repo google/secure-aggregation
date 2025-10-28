@@ -13,13 +13,18 @@
 // limitations under the License.
 
 use ahe_shell::ShellAheConfig;
-use kahe_shell::{KaheRnsConfig, ShellKaheConfig};
+use kahe::PackedVectorConfig;
+use kahe_shell::ShellKaheConfig;
+use shell_parameters_generation::{divide_and_roundup, generate_packing_config};
+use std::collections::HashMap;
+use willow_api_common::AggregationConfig;
 
-/// Creates an KAHE RNS configuration with the given plaintext modulus bits, by
+/// Creates an KAHE configuration with the given plaintext modulus bits, by
 /// looking up some pre-generated configurations.
-pub fn make_kahe_rns_config(
+pub fn make_kahe_config_for(
     plaintext_modulus_bits: usize,
-) -> Result<KaheRnsConfig, status::StatusError> {
+    packed_vector_configs: HashMap<String, PackedVectorConfig>,
+) -> Result<ShellKaheConfig, status::StatusError> {
     // Configurations below come from:
     // google3/experimental/users/baiyuli/async_rlwe_secagg/parameters.cc,
     // originally generated with:
@@ -29,36 +34,60 @@ pub fn make_kahe_rns_config(
     //       log2(kTailBoundMultiplier) - log2(kPrgErrorS)
     //       = composite_modulus_bits - 7
     match plaintext_modulus_bits {
-        17 => Ok(KaheRnsConfig { log_n: 10, log_t: 17, qs: vec![16760833] }),
-        39 => Ok(KaheRnsConfig { log_n: 11, log_t: 39, qs: vec![70368744067073] }),
+        17 => {
+            let total_num_coeffs =
+                packed_vector_configs.values().map(|cfg| cfg.num_packed_coeffs as usize).sum();
+            Ok(ShellKaheConfig {
+                log_n: 10,
+                moduli: vec![16760833u64],
+                log_t: 17,
+                packed_vector_configs,
+                num_public_polynomials: divide_and_roundup(total_num_coeffs, 1 << 10),
+            })
+        }
+        39 => {
+            let total_num_coeffs =
+                packed_vector_configs.values().map(|cfg| cfg.num_packed_coeffs as usize).sum();
+            Ok(ShellKaheConfig {
+                log_n: 11,
+                moduli: vec![70368744067073u64],
+                log_t: 39,
+                packed_vector_configs,
+                num_public_polynomials: divide_and_roundup(total_num_coeffs, 1 << 11),
+            })
+        }
         93 => {
-            Ok(KaheRnsConfig { log_n: 12, log_t: 93, qs: vec![1125899906826241, 1125899906629633] })
+            let total_num_coeffs =
+                packed_vector_configs.values().map(|cfg| cfg.num_packed_coeffs as usize).sum();
+            Ok(ShellKaheConfig {
+                log_n: 12,
+                moduli: vec![1125899906826241u64, 1125899906629633u64],
+                log_t: 93,
+                packed_vector_configs,
+                num_public_polynomials: divide_and_roundup(total_num_coeffs, 1 << 12),
+            })
         }
         _ => Err(status::invalid_argument(format!(
-            "No RNS configuration for plaintext_modulus_bits = {}",
+            "No KAHE configuration for plaintext_modulus_bits = {}",
             plaintext_modulus_bits
         ))),
     }
 }
 
+pub fn set_kahe_num_public_polynomials(kahe_config: &mut ShellKaheConfig) -> () {
+    let num_coeffs_per_poly = 1 << kahe_config.log_n;
+    let total_num_coeffs =
+        kahe_config.packed_vector_configs.values().map(|cfg| cfg.num_packed_coeffs as usize).sum();
+    kahe_config.num_public_polynomials = divide_and_roundup(total_num_coeffs, num_coeffs_per_poly);
+}
+
 /// Creates a sample KAHE configuration, for quick tests that need just any
 /// valid configuration.
-pub fn make_kahe_config() -> ShellKaheConfig {
+pub fn make_kahe_config(aggregation_config: &AggregationConfig) -> ShellKaheConfig {
     const PLAINTEXT_MODULUS_BITS: usize = 93;
-    const INPUT_DOMAIN: u64 = 10;
-    const MAX_NUM_CLIENTS: usize = 100_000;
-    const NUM_PACKING: usize = 2;
-    const NUM_PUBLIC_POLYNOMIALS: usize = 1;
-
-    let rns_config = make_kahe_rns_config(PLAINTEXT_MODULUS_BITS).unwrap();
-    ShellKaheConfig::new(
-        INPUT_DOMAIN,
-        MAX_NUM_CLIENTS,
-        NUM_PACKING,
-        NUM_PUBLIC_POLYNOMIALS,
-        rns_config,
-    )
-    .unwrap()
+    let packed_vector_configs =
+        generate_packing_config(PLAINTEXT_MODULUS_BITS, aggregation_config).unwrap();
+    make_kahe_config_for(PLAINTEXT_MODULUS_BITS, packed_vector_configs).unwrap()
 }
 
 /// Creates an AHE configuration with 69-bit main modulus and 64-bit RNS moduli.

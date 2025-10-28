@@ -54,6 +54,7 @@ rust_test(
     crate = ":willow_v1_client",
     deps = [
         "@crate_index//:googletest",
+        "//willow/src/api:willow_api_common",
         "//willow/src/shell:single_thread_hkdf",
         "//willow/src/testing_utils",
         "//willow/src/traits:prng_traits",

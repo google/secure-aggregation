@@ -13,20 +13,23 @@
 // limitations under the License.
 
 use clap::Parser;
+use std::collections::HashMap;
 use std::hint::black_box;
 use std::time::Duration;
 
 use client_traits::SecureAggregationClient;
 use decryptor_traits::SecureAggregationDecryptor;
-use kahe_shell::{ShellKahe, ShellKaheConfig};
+use kahe_shell::ShellKahe;
 use kahe_traits::KaheBase;
 use prng_traits::SecurePrng;
 use server_traits::SecureAggregationServer;
-use shell_testing_parameters::{make_ahe_config, make_kahe_rns_config};
+use shell_parameters_generation::generate_packing_config;
+use shell_testing_parameters::{make_ahe_config, make_kahe_config_for};
 use single_thread_hkdf::SingleThreadHkdfPrng;
 use testing_utils::{generate_random_unsigned_vector, ShellClient, ShellClientMessage};
 use vahe_shell::ShellVahe;
 use verifier_traits::SecureAggregationVerifier;
+use willow_api_common::AggregationConfig;
 use willow_v1_client::WillowV1Client;
 use willow_v1_common::{
     CiphertextContribution, DecryptionRequestContribution, DecryptorPublicKey,
@@ -35,6 +38,8 @@ use willow_v1_common::{
 use willow_v1_decryptor::{DecryptorState, WillowV1Decryptor};
 use willow_v1_server::{ServerState, WillowV1Server};
 use willow_v1_verifier::{VerifierState, WillowV1Verifier};
+
+const DEFAULT_ID: &str = "default";
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
@@ -116,17 +121,22 @@ struct BaseInputs {
 fn setup_base(args: &Args) -> BaseInputs {
     // Create common configs and seeds. Prepare enough public polynomials to
     // accomodate the input length.
-    let kahe_rns_config = make_kahe_rns_config(args.plaintext_modulus_bits).unwrap();
-    let num_coeffs = 1 << kahe_rns_config.log_n;
-    let num_public_polynomials = (args.input_length as f64 / num_coeffs as f64).ceil() as usize;
-    let kahe_config = ShellKaheConfig::new(
-        args.input_domain,
-        args.max_num_clients,
-        args.num_packing,
-        num_public_polynomials,
-        kahe_rns_config.clone(),
-    )
-    .unwrap();
+    let default_id = String::from(DEFAULT_ID);
+    let aggregation_config = AggregationConfig {
+        vector_lengths_and_bounds: HashMap::from([(
+            default_id.clone(),
+            (args.input_length as isize, args.input_domain as i64),
+        )]),
+        max_number_of_decryptors: 1,
+        max_number_of_clients: args.max_num_clients as i64,
+        max_decryptor_dropouts: 0,
+        session_id: String::from("benchmark"),
+        willow_version: (1, 0),
+    };
+    let packed_vector_configs =
+        generate_packing_config(args.plaintext_modulus_bits, &aggregation_config).unwrap();
+    let kahe_config =
+        make_kahe_config_for(args.plaintext_modulus_bits, packed_vector_configs).unwrap();
     let ahe_config = make_ahe_config();
     let public_kahe_seed = SingleThreadHkdfPrng::generate_seed().unwrap();
     let public_ahe_seed = SingleThreadHkdfPrng::generate_seed().unwrap();
@@ -197,8 +207,9 @@ struct ClientInputs {
 
 fn setup_client(args: &Args) -> ClientInputs {
     let inputs = setup_base(args);
-    let plaintext = generate_random_unsigned_vector(args.input_length, args.input_domain);
-    ClientInputs { client: inputs.client, public_key: inputs.public_key, plaintext }
+    let input_values = generate_random_unsigned_vector(args.input_length, args.input_domain);
+    let plaintext = HashMap::from([(String::from(DEFAULT_ID), input_values)]);
+    ClientInputs { client: inputs.client, public_key: inputs.public_key, plaintext: plaintext }
 }
 
 fn run_client(inputs: &mut ClientInputs) {
@@ -227,8 +238,9 @@ fn setup_verifier_verify_client_message(args: &Args) -> VerifierInputs {
     let mut decryption_request_contributions = vec![];
     for _ in 0..args.n_iterations {
         // Generates a plaintext and encrypts.
-        let client_plaintext =
+        let client_input_values =
             generate_random_unsigned_vector(args.input_length, args.input_domain);
+        let client_plaintext = HashMap::from([(String::from(DEFAULT_ID), client_input_values)]);
         let client_message =
             inputs.client.create_client_message(&client_plaintext, &inputs.public_key).unwrap();
         let (_, decryption_request_contribution) =
@@ -260,8 +272,9 @@ fn setup_server_handle_client_message(args: &Args) -> ServerInputs {
     let mut ciphertext_contributions = vec![];
     for _ in 0..args.n_iterations {
         // Generates a plaintext and encrypts.
-        let client_plaintext =
+        let client_input_values =
             generate_random_unsigned_vector(args.input_length, args.input_domain);
+        let client_plaintext = HashMap::from([(String::from(DEFAULT_ID), client_input_values)]);
         let client_message =
             inputs.client.create_client_message(&client_plaintext, &inputs.public_key).unwrap();
         let (ciphertext_contribution, _) =
@@ -297,7 +310,8 @@ fn setup_server_recover_aggregation_result(args: &Args) -> ServerRecoverInputs {
     let mut inputs = setup_base(args);
 
     // Client generates a plaintext and encrypts.
-    let client_plaintext = generate_random_unsigned_vector(args.input_length, args.input_domain);
+    let client_input_values = generate_random_unsigned_vector(args.input_length, args.input_domain);
+    let client_plaintext = HashMap::from([(String::from(DEFAULT_ID), client_input_values)]);
     let client_message =
         inputs.client.create_client_message(&client_plaintext, &inputs.public_key).unwrap();
 
@@ -347,8 +361,9 @@ fn setup_decryptor_partial_decryption(args: &Args) -> DecryptorInputs {
     let mut inputs = setup_base(args);
     for _ in 0..args.max_num_clients {
         // Generates a plaintext and encrypts.
-        let client_plaintext =
+        let client_input_values =
             generate_random_unsigned_vector(args.input_length, args.input_domain);
+        let client_plaintext = HashMap::from([(String::from(DEFAULT_ID), client_input_values)]);
         let client_message =
             inputs.client.create_client_message(&client_plaintext, &inputs.public_key).unwrap();
 

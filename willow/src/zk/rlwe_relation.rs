@@ -1061,7 +1061,7 @@ mod tests {
         let a_buffer = [1, 2, 3, 4];
         let expected_result = [1 as u128, 2 as u128, 3 as u128, 4 as u128];
         let n = 4;
-        let a = read_small_rns_polynomial_from_buffer(&a_buffer, 2, &moduli)?;
+        let a = read_small_rns_polynomial_from_buffer(&a_buffer, n as u64, &moduli)?;
         let a_unpacked = unpack_rns_polynomial(&context, &a, n)?;
         assert!(a_unpacked.eq(&expected_result));
         Ok(())
@@ -1102,8 +1102,8 @@ mod tests {
 
         let poly_buffer = [1; 4096];
 
-        let a = read_small_rns_polynomial_from_buffer(&poly_buffer, 12, &moduli)?;
-        let c = read_small_rns_polynomial_from_buffer(&poly_buffer, 12, &moduli)?;
+        let a = read_small_rns_polynomial_from_buffer(&poly_buffer, n as u64, &moduli)?;
+        let c = read_small_rns_polynomial_from_buffer(&poly_buffer, n as u64, &moduli)?;
 
         let statement = RlweRelationProofStatement {
             n: n,
@@ -1140,8 +1140,8 @@ mod tests {
 
         let poly_buffer = [1; 4096];
 
-        let a = read_small_rns_polynomial_from_buffer(&poly_buffer, 12, &moduli)?;
-        let c = read_small_rns_polynomial_from_buffer(&poly_buffer, 12, &moduli)?;
+        let a = read_small_rns_polynomial_from_buffer(&poly_buffer, n as u64, &moduli)?;
+        let c = read_small_rns_polynomial_from_buffer(&poly_buffer, n as u64, &moduli)?;
 
         let statement = RlweRelationProofStatement {
             n: n,
@@ -1177,8 +1177,8 @@ mod tests {
 
         let poly_buffer = [1; 4096];
 
-        let a = read_small_rns_polynomial_from_buffer(&poly_buffer, 12, &moduli)?;
-        let c = read_small_rns_polynomial_from_buffer(&poly_buffer, 12, &moduli)?;
+        let a = read_small_rns_polynomial_from_buffer(&poly_buffer, n as u64, &moduli)?;
+        let c = read_small_rns_polynomial_from_buffer(&poly_buffer, n as u64, &moduli)?;
 
         let statement = RlweRelationProofStatement {
             n: n,
@@ -1207,8 +1207,8 @@ mod tests {
 
         let poly_buffer = [1; 4096];
 
-        let a = read_small_rns_polynomial_from_buffer(&poly_buffer, 12, &moduli)?;
-        let c = read_small_rns_polynomial_from_buffer(&poly_buffer, 12, &moduli)?;
+        let a = read_small_rns_polynomial_from_buffer(&poly_buffer, n as u64, &moduli)?;
+        let c = read_small_rns_polynomial_from_buffer(&poly_buffer, n as u64, &moduli)?;
 
         let statement = RlweRelationProofStatement {
             n: n,
@@ -1294,11 +1294,11 @@ mod tests {
         let c_buffer = [5, -8, 9, 17];
         let v_buffer = [-1, -1, 4, 0];
 
-        let a = read_small_rns_polynomial_from_buffer(&a_buffer, 2, &moduli)?;
-        let c = read_small_rns_polynomial_from_buffer(&c_buffer, 2, &moduli)?;
-        let r = read_small_rns_polynomial_from_buffer(&r_buffer, 2, &moduli)?;
-        let e = read_small_rns_polynomial_from_buffer(&e_buffer, 2, &moduli)?;
-        let v = read_small_rns_polynomial_from_buffer(&v_buffer, 2, &moduli)?;
+        let a = read_small_rns_polynomial_from_buffer(&a_buffer, n as u64, &moduli)?;
+        let c = read_small_rns_polynomial_from_buffer(&c_buffer, n as u64, &moduli)?;
+        let r = read_small_rns_polynomial_from_buffer(&r_buffer, n as u64, &moduli)?;
+        let e = read_small_rns_polynomial_from_buffer(&e_buffer, n as u64, &moduli)?;
+        let v = read_small_rns_polynomial_from_buffer(&v_buffer, n as u64, &moduli)?;
 
         let statement = RlweRelationProofStatement {
             n: n,
@@ -1340,11 +1340,11 @@ mod tests {
         let c_buffer = [5, -8, 9, 17];
         let v_buffer = [-1, -1, 4, 0];
 
-        let a = read_small_rns_polynomial_from_buffer(&a_buffer, 2, &moduli)?;
-        let c = read_small_rns_polynomial_from_buffer(&c_buffer, 2, &moduli)?;
-        let r = read_small_rns_polynomial_from_buffer(&r_buffer, 2, &moduli)?;
-        let e = read_small_rns_polynomial_from_buffer(&e_buffer, 2, &moduli)?;
-        let v = read_small_rns_polynomial_from_buffer(&v_buffer, 2, &moduli)?;
+        let a = read_small_rns_polynomial_from_buffer(&a_buffer, n as u64, &moduli)?;
+        let c = read_small_rns_polynomial_from_buffer(&c_buffer, n as u64, &moduli)?;
+        let r = read_small_rns_polynomial_from_buffer(&r_buffer, n as u64, &moduli)?;
+        let e = read_small_rns_polynomial_from_buffer(&e_buffer, n as u64, &moduli)?;
+        let v = read_small_rns_polynomial_from_buffer(&v_buffer, n as u64, &moduli)?;
 
         let statement = RlweRelationProofStatement {
             n: n,
@@ -1386,11 +1386,11 @@ mod tests {
         let c_buffer = [5, -8, 9, 17];
         let v_buffer = [-1, -1, 4, 0];
 
-        let a = read_small_rns_polynomial_from_buffer(&a_buffer, 2, &moduli)?;
-        let c = read_small_rns_polynomial_from_buffer(&c_buffer, 2, &moduli)?;
-        let r = read_small_rns_polynomial_from_buffer(&r_buffer, 2, &moduli)?;
-        let e = read_small_rns_polynomial_from_buffer(&e_buffer, 2, &moduli)?;
-        let v = read_small_rns_polynomial_from_buffer(&v_buffer, 2, &moduli)?;
+        let a = read_small_rns_polynomial_from_buffer(&a_buffer, n as u64, &moduli)?;
+        let c = read_small_rns_polynomial_from_buffer(&c_buffer, n as u64, &moduli)?;
+        let r = read_small_rns_polynomial_from_buffer(&r_buffer, n as u64, &moduli)?;
+        let e = read_small_rns_polynomial_from_buffer(&e_buffer, n as u64, &moduli)?;
+        let v = read_small_rns_polynomial_from_buffer(&v_buffer, n as u64, &moduli)?;
 
         let mut statement = RlweRelationProofStatement {
             n: n,
@@ -1455,11 +1455,11 @@ mod tests {
         let c_buffer = [5, -8, 9, 17];
         let v_buffer = [-1, -1, 4, 0];
 
-        let a = read_small_rns_polynomial_from_buffer(&a_buffer, 2, &moduli)?;
-        let c = read_small_rns_polynomial_from_buffer(&c_buffer, 2, &moduli)?;
-        let r = read_small_rns_polynomial_from_buffer(&r_buffer, 2, &moduli)?;
-        let e = read_small_rns_polynomial_from_buffer(&e_buffer, 2, &moduli)?;
-        let v = read_small_rns_polynomial_from_buffer(&v_buffer, 2, &moduli)?;
+        let a = read_small_rns_polynomial_from_buffer(&a_buffer, n as u64, &moduli)?;
+        let c = read_small_rns_polynomial_from_buffer(&c_buffer, n as u64, &moduli)?;
+        let r = read_small_rns_polynomial_from_buffer(&r_buffer, n as u64, &moduli)?;
+        let e = read_small_rns_polynomial_from_buffer(&e_buffer, n as u64, &moduli)?;
+        let v = read_small_rns_polynomial_from_buffer(&v_buffer, n as u64, &moduli)?;
 
         let mut statement = RlweRelationProofStatement {
             n: n,
@@ -1535,11 +1535,11 @@ mod tests {
         let c_buffer = [5, -8, 9, 17];
         let v_buffer = [-1, -1, 4, 0];
 
-        let a = read_small_rns_polynomial_from_buffer(&a_buffer, 2, &moduli)?;
-        let c = read_small_rns_polynomial_from_buffer(&c_buffer, 2, &moduli)?;
-        let r = read_small_rns_polynomial_from_buffer(&r_buffer, 2, &moduli)?;
-        let e = read_small_rns_polynomial_from_buffer(&e_buffer, 2, &moduli)?;
-        let v = read_small_rns_polynomial_from_buffer(&v_buffer, 2, &moduli)?;
+        let a = read_small_rns_polynomial_from_buffer(&a_buffer, n as u64, &moduli)?;
+        let c = read_small_rns_polynomial_from_buffer(&c_buffer, n as u64, &moduli)?;
+        let r = read_small_rns_polynomial_from_buffer(&r_buffer, n as u64, &moduli)?;
+        let e = read_small_rns_polynomial_from_buffer(&e_buffer, n as u64, &moduli)?;
+        let v = read_small_rns_polynomial_from_buffer(&v_buffer, n as u64, &moduli)?;
 
         let mut statement = RlweRelationProofStatement {
             n: n,
@@ -1618,11 +1618,11 @@ mod tests {
         let c_buffer = [5, -8, 9, 17];
         let v_buffer = [-1, -1, 4, 0];
 
-        let a = read_small_rns_polynomial_from_buffer(&a_buffer, 2, &moduli)?;
-        let c = read_small_rns_polynomial_from_buffer(&c_buffer, 2, &moduli)?;
-        let r = read_small_rns_polynomial_from_buffer(&r_buffer, 2, &moduli)?;
-        let e = read_small_rns_polynomial_from_buffer(&e_buffer, 2, &moduli)?;
-        let v = read_small_rns_polynomial_from_buffer(&v_buffer, 2, &moduli)?;
+        let a = read_small_rns_polynomial_from_buffer(&a_buffer, n as u64, &moduli)?;
+        let c = read_small_rns_polynomial_from_buffer(&c_buffer, n as u64, &moduli)?;
+        let r = read_small_rns_polynomial_from_buffer(&r_buffer, n as u64, &moduli)?;
+        let e = read_small_rns_polynomial_from_buffer(&e_buffer, n as u64, &moduli)?;
+        let v = read_small_rns_polynomial_from_buffer(&v_buffer, n as u64, &moduli)?;
 
         let mut statement = RlweRelationProofStatement {
             n: n,

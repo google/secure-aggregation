@@ -66,34 +66,49 @@ mod test {
     use super::*;
 
     use ahe_traits::{AheKeygen, PartialDec};
-    use googletest::{gtest, verify_eq};
+    use googletest::prelude::container_eq;
+    use googletest::{gtest, verify_eq, verify_that};
     use kahe_traits::{KaheDecrypt, TrySecretKeyFrom};
     use prng_traits::SecurePrng;
     use single_thread_hkdf::SingleThreadHkdfPrng;
+    use std::collections::HashMap;
     use testing_utils::create_willow_common;
     use vahe_traits::{Recover, VaheBase};
+    use willow_api_common::AggregationConfig;
 
     #[gtest]
     fn test_create_client_message() -> googletest::Result<()> {
+        let default_id = String::from("default");
+        let aggregation_config = AggregationConfig {
+            vector_lengths_and_bounds: HashMap::from([(default_id.clone(), (16, 10))]),
+            max_number_of_decryptors: 1,
+            max_number_of_clients: 1,
+            max_decryptor_dropouts: 0,
+            session_id: String::from("test"),
+            willow_version: (1, 0),
+        };
         // Generate public parameters for KAHE and AHE.
         let public_kahe_seed = SingleThreadHkdfPrng::generate_seed()?;
         let public_ahe_seed = SingleThreadHkdfPrng::generate_seed()?;
 
         // Create a client.
-        let common = create_willow_common(&public_kahe_seed, &public_ahe_seed);
+        let common = create_willow_common(&aggregation_config, &public_kahe_seed, &public_ahe_seed);
         let client_seed = SingleThreadHkdfPrng::generate_seed()?;
         let prng = SingleThreadHkdfPrng::create(&client_seed)?;
         let mut client = WillowV1Client { common: common, prng: prng };
 
         // Generate AHE keys.
-        let common = create_willow_common(&public_kahe_seed, &public_ahe_seed);
+        let common = create_willow_common(&aggregation_config, &public_kahe_seed, &public_ahe_seed);
         let seed = SingleThreadHkdfPrng::generate_seed()?;
         let mut prng = SingleThreadHkdfPrng::create(&seed)?;
         let (sk_share, pk_share, _) = common.vahe.key_gen(&mut prng)?;
         let public_key = common.vahe.aggregate_public_key_shares(&[pk_share])?;
 
         // Create client message.
-        let client_plaintext = vec![1, 2, 3, 4, 5, 6, 7, 8, 7, 6, 5, 4, 3, 2, 1];
+        let client_plaintext = HashMap::from([(
+            default_id.clone(),
+            vec![1, 2, 3, 4, 5, 6, 7, 8, 7, 6, 5, 4, 3, 2, 1],
+        )]);
         let client_message = client.create_client_message(&client_plaintext, &public_key)?;
 
         // Decrypt client message.
@@ -109,37 +124,58 @@ mod test {
         let decrypted_plaintext =
             common.kahe.decrypt(&client_message.kahe_ciphertext, &decrypted_kahe_key)?;
 
-        verify_eq!(decrypted_plaintext[..client_plaintext.len()], client_plaintext)
+        verify_that!(decrypted_plaintext.keys().collect::<Vec<_>>(), container_eq([&default_id]))?;
+        let client_plaintext_length = client_plaintext.get(&default_id).unwrap().len();
+        verify_eq!(
+            decrypted_plaintext.get(&default_id).unwrap()[..client_plaintext_length],
+            client_plaintext.get(&default_id).unwrap()[..]
+        )
     }
 
     #[gtest]
     fn test_client_messages_are_aggregatable() -> googletest::Result<()> {
+        let default_id = String::from("default");
+        let aggregation_config = AggregationConfig {
+            vector_lengths_and_bounds: HashMap::from([(default_id.clone(), (16, 10))]),
+            max_number_of_decryptors: 1,
+            max_number_of_clients: 2,
+            max_decryptor_dropouts: 0,
+            session_id: String::from("test"),
+            willow_version: (1, 0),
+        };
+
         // Generate public parameters for KAHE and AHE.
         let public_kahe_seed = SingleThreadHkdfPrng::generate_seed()?;
         let public_ahe_seed = SingleThreadHkdfPrng::generate_seed()?;
 
         // Create a client.
-        let common = create_willow_common(&public_kahe_seed, &public_ahe_seed);
+        let common = create_willow_common(&aggregation_config, &public_kahe_seed, &public_ahe_seed);
         let client1_seed = SingleThreadHkdfPrng::generate_seed()?;
         let prng = SingleThreadHkdfPrng::create(&client1_seed)?;
         let mut client1 = WillowV1Client { common: common, prng: prng };
 
         // Create a second client.
-        let common = create_willow_common(&public_kahe_seed, &public_ahe_seed);
+        let common = create_willow_common(&aggregation_config, &public_kahe_seed, &public_ahe_seed);
         let client2_seed = SingleThreadHkdfPrng::generate_seed()?;
         let prng = SingleThreadHkdfPrng::create(&client2_seed)?;
         let mut client2 = WillowV1Client { common: common, prng: prng };
 
         // Generate AHE keys.
-        let common = create_willow_common(&public_kahe_seed, &public_ahe_seed);
+        let common = create_willow_common(&aggregation_config, &public_kahe_seed, &public_ahe_seed);
         let seed = SingleThreadHkdfPrng::generate_seed()?;
         let mut prng = SingleThreadHkdfPrng::create(&seed)?;
         let (sk_share, pk_share, _) = common.vahe.key_gen(&mut prng)?;
         let public_key = common.vahe.aggregate_public_key_shares(&[pk_share])?;
 
         // Create client messages.
-        let client1_plaintext = vec![1, 2, 3, 4, 5, 6, 7, 8, 7, 6, 5, 4, 3, 2, 1];
-        let client2_plaintext = vec![1, 1, 2, 3, 5, 8, 3, 1, 4, 5, 9, 4, 3, 7, 0];
+        let client1_plaintext = HashMap::from([(
+            default_id.clone(),
+            vec![1, 2, 3, 4, 5, 6, 7, 8, 7, 6, 5, 4, 3, 2, 1],
+        )]);
+        let client2_plaintext = HashMap::from([(
+            default_id.clone(),
+            vec![1, 1, 2, 3, 5, 8, 3, 1, 4, 5, 9, 4, 3, 7, 0],
+        )]);
         let expected_output = vec![2, 3, 5, 7, 10, 14, 10, 9, 11, 11, 14, 8, 6, 9, 1];
         let mut client_message = client1.create_client_message(&client1_plaintext, &public_key)?;
         let extra_message = client2.create_client_message(&client2_plaintext, &public_key)?;
@@ -167,6 +203,11 @@ mod test {
         let decrypted_plaintext =
             common.kahe.decrypt(&client_message.kahe_ciphertext, &decrypted_kahe_key)?;
 
-        verify_eq!(decrypted_plaintext[..expected_output.len()], expected_output)
+        verify_that!(decrypted_plaintext.keys().collect::<Vec<_>>(), container_eq([&default_id]))?;
+        let client_plaintext_length = client1_plaintext.get(&default_id).unwrap().len();
+        verify_eq!(
+            decrypted_plaintext.get(&default_id).unwrap()[..client_plaintext_length],
+            expected_output
+        )
     }
 }

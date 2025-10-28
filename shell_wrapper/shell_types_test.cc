@@ -235,7 +235,7 @@ TEST(ShellTypesTest, ReadWriteSmallRnsPolynomialToBufferKahe) {
   }
 
   RnsPolynomialWrapper poly{nullptr};
-  status = ReadSmallRnsPolynomialFromBuffer(buffer, buffer_len, kLogN,
+  status = ReadSmallRnsPolynomialFromBuffer(buffer, buffer_len, 1 << kLogN,
                                             moduli_wrapper, &poly);
   SECAGG_EXPECT_OK(UnwrapFfiStatus(status));
   EXPECT_NE(poly.ptr, nullptr);
@@ -321,9 +321,9 @@ TEST(ShellTypesTest, ReadWriteErrors) {
   }
 
   // Try to read from the buffer.
-  status =
-      ReadSmallRnsPolynomialFromBuffer(long_input_buffer, long_input_buffer_len,
-                                       kLogN, moduli_wrapper, &poly_wrapper);
+  status = ReadSmallRnsPolynomialFromBuffer(long_input_buffer,
+                                            long_input_buffer_len, 1 << kLogN,
+                                            moduli_wrapper, &poly_wrapper);
   // We should get an error.
   EXPECT_THAT(UnwrapFfiStatus(status),
               StatusIs(absl::StatusCode::kInvalidArgument,
