@@ -23,8 +23,7 @@ use kahe_shell::ShellKahe;
 use kahe_traits::KaheBase;
 use prng_traits::SecurePrng;
 use server_traits::SecureAggregationServer;
-use shell_parameters_generation::generate_packing_config;
-use shell_testing_parameters::{make_ahe_config, make_kahe_config_for};
+use parameters_shell::create_shell_configs;
 use single_thread_hkdf::SingleThreadHkdfPrng;
 use testing_utils::{generate_random_unsigned_vector, ShellClient, ShellClientMessage};
 use vahe_shell::ShellVahe;
@@ -48,21 +47,13 @@ pub struct Args {
     #[arg(short = 'l', long, default_value_t = 100)]
     pub input_length: usize,
 
-    /// Input domain, i.e. each client submits a vector in [0,t)^l.
+    /// Input domain, i.e. each client submits a vector in [0,t]^l.
     #[arg(short = 't', long, default_value_t = 10)]
     pub input_domain: u64,
 
     /// Max number of clients.
     #[arg(short = 'n', long, default_value_t = 1_000)]
     pub max_num_clients: usize,
-
-    /// Number of values to pack on each coefficient.
-    #[arg(short = 'L', long, default_value_t = 2)]
-    pub num_packing: usize,
-
-    /// Number of bits in the plaintext modulus.
-    #[arg(long, default_value_t = 93)]
-    pub plaintext_modulus_bits: usize,
 
     /// Number of iterations.
     #[arg(long, default_value_t = 1_000)]
@@ -133,11 +124,7 @@ fn setup_base(args: &Args) -> BaseInputs {
         session_id: String::from("benchmark"),
         willow_version: (1, 0),
     };
-    let packed_vector_configs =
-        generate_packing_config(args.plaintext_modulus_bits, &aggregation_config).unwrap();
-    let kahe_config =
-        make_kahe_config_for(args.plaintext_modulus_bits, packed_vector_configs).unwrap();
-    let ahe_config = make_ahe_config();
+    let (kahe_config, ahe_config) = create_shell_configs(&aggregation_config).unwrap();
     let public_kahe_seed = SingleThreadHkdfPrng::generate_seed().unwrap();
     let public_ahe_seed = SingleThreadHkdfPrng::generate_seed().unwrap();
 
