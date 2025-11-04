@@ -18,7 +18,11 @@ package secure_aggregation.willow;
 
 option java_multiple_files = true;
 
-message GenerateKeyRequest {}
+message GenerateKeyRequest {
+  // The key ID to use for the generated key. If the key with the given ID
+  // already exists, it will be returned instead.
+  bytes key_id = 1;
+}
 
 message GenerateKeyResponse {
   // The serialized bytes of the public key.
@@ -28,8 +32,10 @@ message GenerateKeyResponse {
 message DecryptRequest {
   // The serialized bytes of the message to decrypt.
   bytes decryption_request = 1;
-  // The serialized bytes of the public key as returned by GenerateAheKeyPair
-  bytes public_key = 2;
+  // The serialized bytes of the public key as returned by GenerateKey.
+  bytes public_key = 2 [deprecated = true];
+  // The key ID of the public key that was used in the GenerateKey call.
+  bytes key_id = 3;
 }
 
 message DecryptResponse {
