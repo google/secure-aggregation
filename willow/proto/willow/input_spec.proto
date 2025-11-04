@@ -1,0 +1,113 @@
+// Copyright 2025 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+edition = "2023";
+
+package secure_aggregation.willow;
+
+// This message describes the specification of the input data for the secure
+// aggregation protocol. It contains two lists of `InputVectorSpec` messages:
+// `metric_vector_specs` for metrics to be aggregated and
+// `group_by_vector_specs` for columns used for grouping.
+//
+// Each `InputVectorSpec` includes:
+// -   `vector_name`: The name of the input vector.
+// -   `data_type`: The data type of the values in the vector.
+// -   `domain_spec`: An optional specification of the domain of the values in
+//     the vector, used for validation and encoding.
+//
+// Examples:
+//
+// 1.  Specifying a GROUP_BY column for "country":
+//     group_by_vector_specs {
+//       vector_name: "country"
+//       data_type: STRING
+//       domain_spec {
+//         string_values {
+//           values: ["US", "CA", "MX"]
+//         }
+//       }
+//     }
+//     This defines a group-by vector named "country" of type STRING, where
+//     the allowed values are "US", "CA", and "MX".
+//
+// 2.  Specifying a METRIC column for "revenue":
+//     metric_vector_specs {
+//       vector_name: "revenue"
+//       data_type: INT64
+//       domain_spec {
+//         interval {
+//           min: 0
+//           max: 1000000
+//         }
+//       }
+//     }
+//     This defines a metric vector named "revenue" of type INT64, where
+//     values are expected to be between 0 and 1,000,000.
+//
+// 3.  Specifying a GROUP_BY column for "is_active":
+//     group_by_vector_specs {
+//       vector_name: "is_active"
+//       data_type: BOOL
+//     }
+//     This defines a group-by vector named "is_active" of type BOOL.
+message InputSpec {
+  // Supported data types for output vectors
+  enum DataType {
+    DATA_TYPE_UNSPECIFIED = 0;
+    INT32 = 1;
+    INT64 = 2;
+    BOOL = 3;
+    FLOAT = 4;
+    DOUBLE = 5;
+    BYTES = 6;
+    STRING = 7;
+  }
+  // Defines a domain as an interval.
+  message Interval {
+    // The lower bound of the interval. The interval is inclusive.
+    double min = 1;
+    // The upper bound of the interval. The interval is inclusive.
+    double max = 2;
+  }
+
+  message StringValues {
+    repeated string values = 1;
+  }
+
+  // A new message type to represent the domain specification.
+  message DomainSpec {
+    oneof domain_type {
+      // Defines a domain as an ordered list of string values.
+      StringValues string_values = 1;
+
+      // Defines a domain as an interval of values.
+      Interval interval = 2;
+    }
+  }
+
+  message InputVectorSpec {
+    // The output vector name.
+    string vector_name = 1;
+
+    // The data type for each entry in the vector.
+    DataType data_type = 2;
+
+    // An field to define the domain of the output vector.
+    // This could be used for validation or other logic.
+    DomainSpec domain_spec = 3;
+  }
+  repeated InputVectorSpec metric_vector_specs = 1;
+  repeated InputVectorSpec group_by_vector_specs = 2;
+}

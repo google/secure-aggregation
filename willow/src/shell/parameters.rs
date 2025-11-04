@@ -159,7 +159,7 @@ pub fn create_shell_configs(
 
     if total_input_length <= 10_000_000
         && *max_input_bound <= (1i64 << 32)
-        && aggregation_config.max_number_of_clients <= 10000000
+        && aggregation_config.max_number_of_clients <= 10_000_000
         && aggregation_config.max_number_of_decryptors <= 100
     {
         let packed_vector_configs =
