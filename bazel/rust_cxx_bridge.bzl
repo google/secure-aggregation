@@ -105,9 +105,6 @@ def rust_cxx_bridge(name, src, deps = [], visibility = None, crate_features = []
         srcs = [out_cc],
         hdrs = [out_h],
         deps = deps + ["%s/include" % name],
-        # Allow "backwards" dependencies from the impl library onto the generated thunk code.
-        # (Used e.g. if it calls `extern "Rust"` functions).
-        linkopts = ["-Wl,--warn-backrefs-exclude=blaze-out/*/%s/_objs/%s/*" % (native.package_name(), name)],
         **kwargs
     )
 
