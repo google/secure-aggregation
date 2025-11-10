@@ -35,6 +35,7 @@ pub struct WillowClientMessage<Kahe: KaheBase, Vahe: VaheBase> {
     pub kahe_ciphertext: Kahe::Ciphertext,
     pub ahe_ciphertext: Vahe::Ciphertext,
     pub proof: Vahe::EncryptionProof,
+    pub nonce: Vec<u8>,
 }
 
 // Partial decryption request is an aggregated AHE ciphertext.
@@ -65,7 +66,7 @@ pub struct CiphertextContribution<Kahe: KaheBase, Vahe: VaheBase> {
 pub struct DecryptionRequestContribution<Vahe: VaheBase> {
     pub partial_dec_ciphertext: Vahe::PartialDecCiphertext,
     pub proof: Vahe::EncryptionProof,
-    // pub client_id: u128,
+    pub nonce: Vec<u8>,
 }
 
 impl<Kahe: KaheBase, Vahe: VaheBase> SecureAggregationCommon for WillowCommon<Kahe, Vahe> {

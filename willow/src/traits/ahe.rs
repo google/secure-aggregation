@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use prng_traits::SecurePrng;
 use status::StatusError;
 
 /// Base trait for (Asymmetric) multiparty Additive Homomorphic Encryption (AHE)
@@ -94,7 +95,7 @@ pub trait AheBase: Sized {
     ) -> Result<(), StatusError>;
 
     /// Randomness source, typically a SecurePrng.
-    type Rng;
+    type Rng: SecurePrng;
 }
 
 pub trait AheKeygen: AheBase {

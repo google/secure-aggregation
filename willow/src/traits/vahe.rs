@@ -22,6 +22,10 @@ pub trait VaheBase: AheBase + Sized {
 }
 
 pub trait VerifiableKeyGen: VaheBase {
+    /// Generate a secret key and a public key.
+    ///
+    /// Returns the secret key share, the public key share, and a proof that the
+    /// key generation was correct.
     fn verifiable_key_gen(
         &self,
         prng: &mut Self::Rng,
@@ -29,28 +33,40 @@ pub trait VerifiableKeyGen: VaheBase {
 }
 
 pub trait KeyGenVerify: VaheBase {
+    /// Verify that the key generation proof is valid.
     fn verify_key_gen(&self, proof: &Self::KeyGenProof, key_share: &Self::PublicKeyShare)
         -> Status;
 }
 
 pub trait VerifiableEncrypt: VaheBase {
+    /// Encrypt a plaintext with a given public key.
+    ///
+    /// `nonce` is a unique identifier for this encryption. It must be used
+    /// when verifying the encryption proof.
     fn verifiable_encrypt(
         &self,
         plaintext: &Self::Plaintext,
         pk: &Self::PublicKey,
+        nonce: &[u8],
         prng: &mut Self::Rng,
     ) -> Result<(Self::Ciphertext, Self::EncryptionProof), StatusError>;
 }
 
 pub trait EncryptVerify: VaheBase {
+    /// Verify that the encryption proof is valid.
+    ///
+    /// `nonce` must match the nonce passed to `verifiable_encrypt`.
     fn verify_encrypt(
         &self,
         proof: &Self::EncryptionProof,
         ciphertext: &Self::PartialDecCiphertext,
+        nonce: &[u8],
     ) -> Status;
 }
 
 pub trait VerifiablePartialDec: VaheBase {
+    /// Decrypt a ciphertext with a given secret key. Returns the partial
+    /// decryption and a proof that the decryption was correct.
     fn verifiable_partial_dec(
         &self,
         ct_1: &Self::PartialDecCiphertext,
@@ -60,6 +76,7 @@ pub trait VerifiablePartialDec: VaheBase {
 }
 
 pub trait PartialDecVerify: VaheBase {
+    /// Verify that the partial decryption proof is valid.
     fn verify_partial_dec(
         &self,
         proof: &Self::PartialDecProof,

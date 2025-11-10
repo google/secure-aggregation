@@ -15,6 +15,7 @@
 use ahe_traits::AheBase;
 use client_traits::SecureAggregationClient;
 use kahe_traits::{KaheBase, KaheEncrypt, KaheKeygen, TrySecretKeyInto};
+use prng_traits::SecurePrng;
 use vahe_traits::{VaheBase, VerifiableEncrypt};
 use willow_v1_common::{WillowClientMessage, WillowCommon};
 
@@ -51,13 +52,18 @@ where
         let ahe_plaintext: Vahe::Plaintext =
             self.common.kahe.try_secret_key_into(kahe_secret_key)?;
 
+        // Generate a nonce for the VAHE encryption.
+        let nonce =
+            (0..16).map(|_| self.prng.rand8()).collect::<Result<Vec<u8>, status::StatusError>>()?;
+
         // Encrypt AHE plaintext with public key.
         let (ahe_ciphertext, proof) = self.common.vahe.verifiable_encrypt(
             &ahe_plaintext,
             signed_public_key,
+            &nonce,
             &mut self.prng,
         )?;
-        Ok(WillowClientMessage { kahe_ciphertext, ahe_ciphertext, proof })
+        Ok(WillowClientMessage { kahe_ciphertext, ahe_ciphertext, proof, nonce })
     }
 }
 

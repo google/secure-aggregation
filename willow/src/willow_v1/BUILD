@@ -45,6 +45,7 @@ rust_library(
         "//willow/src/traits:client_traits",
         "//willow/src/traits:common_traits",
         "//willow/src/traits:kahe_traits",
+        "//willow/src/traits:prng_traits",
         "//willow/src/traits:vahe_traits",
     ],
 )

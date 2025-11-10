@@ -13,6 +13,7 @@
 // limitations under the License.
 
 //! Traits for Key Additive Homomorphic Encryption (KAHE) schemes.
+use prng_traits::SecurePrng;
 use status::StatusError;
 
 /// Base trait for KAHE primitives, containing types that are shared across all
@@ -54,7 +55,7 @@ pub trait KaheBase: Sized {
     ) -> Result<(), StatusError>;
 
     /// Randomness source, typically a SecurePrng.
-    type Rng;
+    type Rng: SecurePrng;
 }
 
 /// Key generation

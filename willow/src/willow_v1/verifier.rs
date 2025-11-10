@@ -48,9 +48,11 @@ where
         contribution: DecryptionRequestContribution<Vahe>,
         state: &mut Self::VerifierState,
     ) -> Result<(), status::StatusError> {
-        self.common
-            .vahe
-            .verify_encrypt(&contribution.proof, &contribution.partial_dec_ciphertext)?;
+        self.common.vahe.verify_encrypt(
+            &contribution.proof,
+            &contribution.partial_dec_ciphertext,
+            &contribution.nonce,
+        )?;
         if let Some(ref mut sum) = state.partial_dec_ciphertext_sum {
             self.common
                 .vahe

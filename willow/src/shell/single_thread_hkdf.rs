@@ -45,7 +45,7 @@ mod test {
     use prng_traits::SecurePrng;
 
     #[gtest]
-    /// Two sequences of 8 random bytes should be different (w.h.p).
+    /// Two sequences of 8 random bits should be different (w.h.p).
     fn test_rand8() -> googletest::Result<()> {
         let mut equal = true;
         let seed = SingleThreadHkdfPrng::generate_seed()?;

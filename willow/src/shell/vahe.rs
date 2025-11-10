@@ -208,6 +208,7 @@ impl VerifiableEncrypt for ShellVahe {
         &self,
         plaintext: &Self::Plaintext,
         pk: &Self::PublicKey,
+        nonce: &[u8],
         prng: &mut Self::Rng,
     ) -> Result<(Self::Ciphertext, Self::EncryptionProof), StatusError> {
         let (ciphertext, metadata, wraparounds) =
@@ -222,6 +223,7 @@ impl VerifiableEncrypt for ShellVahe {
         }
 
         let (mut transcript, proof_seed) = self.get_transcript_and_proof_seed(b"encryption")?;
+        transcript.append_message(b"nonce:", nonce);
         let prover = RlweRelationProver::new(proof_seed.as_bytes(), self.ahe.num_coeffs());
         let mut proof = vec![];
         for i in 0..num_polynomials {
@@ -251,6 +253,7 @@ impl EncryptVerify for ShellVahe {
         &self,
         proof: &Vec<RlweRelationProof>,
         ciphertext_component_a: &Self::PartialDecCiphertext,
+        nonce: &[u8],
     ) -> Status {
         let num_polynomials = ciphertext_component_a.0.len();
         if proof.len() != num_polynomials {
@@ -260,6 +263,7 @@ impl EncryptVerify for ShellVahe {
         }
 
         let (mut transcript, proof_seed) = self.get_transcript_and_proof_seed(b"encryption")?;
+        transcript.append_message(b"nonce:", nonce);
         let verifier = RlweRelationVerifier::new(proof_seed.as_bytes(), self.ahe.num_coeffs());
         for i in 0..num_polynomials {
             let statement = RlweRelationProofStatement {
@@ -399,6 +403,7 @@ mod test {
     use single_thread_hkdf::SingleThreadHkdfPrng;
 
     const CONTEXT_STRING: &[u8] = b"testing_context_string";
+    const NONCE: &[u8] = b"0123456789ABCDEF";
 
     #[gtest]
     fn test_verifiable_key_gen() -> googletest::Result<()> {
@@ -430,8 +435,9 @@ mod test {
         let mut prng = SingleThreadHkdfPrng::create(&seed)?;
         let (_, pk_share, _) = vahe.verifiable_key_gen(&mut prng)?;
         let plaintext = vec![47i64; 8];
-        let (ciphertext, proof) = vahe.verifiable_encrypt(&plaintext, &pk_share, &mut prng)?;
-        vahe.verify_encrypt(&proof, &ciphertext.component_a)?;
+        let (ciphertext, proof) =
+            vahe.verifiable_encrypt(&plaintext, &pk_share, NONCE, &mut prng)?;
+        vahe.verify_encrypt(&proof, &ciphertext.component_a, NONCE)?;
         Ok(())
     }
 
@@ -442,8 +448,25 @@ mod test {
         let mut prng = SingleThreadHkdfPrng::create(&seed)?;
         let (_, pk_share, _) = vahe.verifiable_key_gen(&mut prng)?;
         let plaintext = vec![47i64; 256];
-        let (ciphertext, proof) = vahe.verifiable_encrypt(&plaintext, &pk_share, &mut prng)?;
-        vahe.verify_encrypt(&proof, &ciphertext.component_a)?;
+        let (ciphertext, proof) =
+            vahe.verifiable_encrypt(&plaintext, &pk_share, NONCE, &mut prng)?;
+        vahe.verify_encrypt(&proof, &ciphertext.component_a, NONCE)?;
+        Ok(())
+    }
+
+    #[gtest]
+    fn test_verifiable_encrypt_with_bad_nonce() -> googletest::Result<()> {
+        let vahe = ShellVahe::new(make_ahe_config(), CONTEXT_STRING)?;
+        let seed = SingleThreadHkdfPrng::generate_seed()?;
+        let mut prng = SingleThreadHkdfPrng::create(&seed)?;
+        let (_, pk_share, _) = vahe.verifiable_key_gen(&mut prng)?;
+        let plaintext = vec![47i64; 8];
+        let (ciphertext, proof) =
+            vahe.verifiable_encrypt(&plaintext, &pk_share, NONCE, &mut prng)?;
+        let bad_nonce = b"BADBADBADBAD";
+        let status = vahe.verify_encrypt(&proof, &ciphertext.component_a, bad_nonce);
+        // bad_nonce doesn't match NONCE, so the proof verification should fail.
+        assert!(status.is_err());
         Ok(())
     }
 
@@ -454,9 +477,10 @@ mod test {
         let mut prng = SingleThreadHkdfPrng::create(&seed)?;
         let (_, pk_share, key_gen_proof) = vahe.verifiable_key_gen(&mut prng)?;
         let plaintext = vec![47i64; 8];
-        let (ciphertext, mut proof) = vahe.verifiable_encrypt(&plaintext, &pk_share, &mut prng)?;
+        let (ciphertext, mut proof) =
+            vahe.verifiable_encrypt(&plaintext, &pk_share, NONCE, &mut prng)?;
         proof.push(key_gen_proof);
-        let status = vahe.verify_encrypt(&proof, &ciphertext.component_a);
+        let status = vahe.verify_encrypt(&proof, &ciphertext.component_a, NONCE);
         assert!(status.is_err());
         Ok(())
     }
@@ -468,9 +492,10 @@ mod test {
         let mut prng = SingleThreadHkdfPrng::create(&seed)?;
         let (_, pk_share, key_gen_proof) = vahe.verifiable_key_gen(&mut prng)?;
         let plaintext = vec![47i64; 8];
-        let (ciphertext, mut proof) = vahe.verifiable_encrypt(&plaintext, &pk_share, &mut prng)?;
+        let (ciphertext, mut proof) =
+            vahe.verifiable_encrypt(&plaintext, &pk_share, NONCE, &mut prng)?;
         proof[0] = key_gen_proof;
-        let status = vahe.verify_encrypt(&proof, &ciphertext.component_a);
+        let status = vahe.verify_encrypt(&proof, &ciphertext.component_a, NONCE);
         assert!(status.is_err());
         Ok(())
     }
@@ -482,7 +507,7 @@ mod test {
         let mut prng = SingleThreadHkdfPrng::create(&seed)?;
         let (sk_share, pk_share, _) = vahe.verifiable_key_gen(&mut prng)?;
         let plaintext = vec![47i64; 8];
-        let (ciphertext, _) = vahe.verifiable_encrypt(&plaintext, &pk_share, &mut prng)?;
+        let (ciphertext, _) = vahe.verifiable_encrypt(&plaintext, &pk_share, NONCE, &mut prng)?;
         let (pd, proof) =
             vahe.verifiable_partial_dec(&ciphertext.component_a, &sk_share, &mut prng)?;
         vahe.verify_partial_dec(&proof, &ciphertext.component_a, &pd)?;
@@ -496,7 +521,7 @@ mod test {
         let mut prng = SingleThreadHkdfPrng::create(&seed)?;
         let (sk_share, pk_share, _) = vahe.verifiable_key_gen(&mut prng)?;
         let plaintext = vec![47i64; 256];
-        let (ciphertext, _) = vahe.verifiable_encrypt(&plaintext, &pk_share, &mut prng)?;
+        let (ciphertext, _) = vahe.verifiable_encrypt(&plaintext, &pk_share, NONCE, &mut prng)?;
         let (pd, proof) =
             vahe.verifiable_partial_dec(&ciphertext.component_a, &sk_share, &mut prng)?;
         vahe.verify_partial_dec(&proof, &ciphertext.component_a, &pd)?;
@@ -510,7 +535,7 @@ mod test {
         let mut prng = SingleThreadHkdfPrng::create(&seed)?;
         let (sk_share, pk_share, key_gen_proof) = vahe.verifiable_key_gen(&mut prng)?;
         let plaintext = vec![47i64; 8];
-        let (ciphertext, _) = vahe.verifiable_encrypt(&plaintext, &pk_share, &mut prng)?;
+        let (ciphertext, _) = vahe.verifiable_encrypt(&plaintext, &pk_share, NONCE, &mut prng)?;
         let (pd, mut proof) =
             vahe.verifiable_partial_dec(&ciphertext.component_a, &sk_share, &mut prng)?;
         proof.push(key_gen_proof);
@@ -526,7 +551,7 @@ mod test {
         let mut prng = SingleThreadHkdfPrng::create(&seed)?;
         let (sk_share, pk_share, key_gen_proof) = vahe.verifiable_key_gen(&mut prng)?;
         let plaintext = vec![47i64; 8];
-        let (ciphertext, _) = vahe.verifiable_encrypt(&plaintext, &pk_share, &mut prng)?;
+        let (ciphertext, _) = vahe.verifiable_encrypt(&plaintext, &pk_share, NONCE, &mut prng)?;
         let (pd, mut proof) =
             vahe.verifiable_partial_dec(&ciphertext.component_a, &sk_share, &mut prng)?;
         proof[0] = key_gen_proof;

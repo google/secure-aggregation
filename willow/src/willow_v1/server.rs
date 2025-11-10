@@ -91,7 +91,11 @@ where
                 kahe_ciphertext: client_message.kahe_ciphertext,
                 ahe_recover_ciphertext,
             },
-            DecryptionRequestContribution { partial_dec_ciphertext, proof: client_message.proof },
+            DecryptionRequestContribution {
+                partial_dec_ciphertext,
+                proof: client_message.proof,
+                nonce: client_message.nonce,
+            },
         ))
     }
 
