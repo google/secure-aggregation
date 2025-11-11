@@ -178,6 +178,7 @@ fn encrypt_decrypt_multiple_clients() -> googletest::Result<()> {
 
     // Clients encrypt.
     let mut expected_output = vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+    let mut client_messages = vec![];
     for client in &mut clients {
         let client_input_values = vec![1, 2, 3, 4, 5, 6, 7, 8, 7, 6, 5, 4, 3, 2, 1];
         for i in 0..expected_output.len() {
@@ -185,6 +186,14 @@ fn encrypt_decrypt_multiple_clients() -> googletest::Result<()> {
         }
         let client_plaintext = HashMap::from([(default_id.clone(), client_input_values)]);
         let client_message = client.create_client_message(&client_plaintext, &public_key).unwrap();
+        client_messages.push(client_message);
+    }
+
+    // Sort client messages by nonce.
+    client_messages.sort_by(|a, b| a.nonce.cmp(&b.nonce));
+
+    // Handle client messages.
+    for client_message in client_messages {
         // The client message is split and handled by the server and verifier.
         let (ciphertext_contribution, decryption_request_contribution) =
             server.split_client_message(client_message).unwrap();
@@ -272,6 +281,7 @@ fn encrypt_decrypt_multiple_clients_including_invalid_proofs() -> googletest::Re
 
     // Good Clients encrypt and should be included in the aggregation.
     let mut expected_output = vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+    let mut client_messages = vec![];
     for client in &mut good_clients {
         let client_input_values = vec![1, 2, 3, 4, 5, 6, 7, 8, 7, 6, 5, 4, 3, 2, 1];
         for i in 0..expected_output.len() {
@@ -279,6 +289,14 @@ fn encrypt_decrypt_multiple_clients_including_invalid_proofs() -> googletest::Re
         }
         let client_plaintext = HashMap::from([(default_id.clone(), client_input_values)]);
         let client_message = client.create_client_message(&client_plaintext, &public_key).unwrap();
+        client_messages.push(client_message);
+    }
+
+    // Sort client messages by nonce.
+    client_messages.sort_by(|a, b| a.nonce.cmp(&b.nonce));
+
+    // Handle client messages.
+    for client_message in client_messages {
         // The client message is split and handled by the server and verifier.
         let (ciphertext_contribution, decryption_request_contribution) =
             server.split_client_message(client_message).unwrap();
@@ -296,6 +314,7 @@ fn encrypt_decrypt_multiple_clients_including_invalid_proofs() -> googletest::Re
         bad_proof = client_message.proof;
     }
     // Bad Clients encrypt and should not be included in the aggregation.
+    let mut client_messages = vec![];
     for i in 1..bad_clients.len() {
         let client = &mut bad_clients[i];
         let client_input_values = vec![8, 7, 6, 5, 4, 3, 2, 1, 2, 3, 4, 5, 6, 7, 8];
@@ -303,6 +322,10 @@ fn encrypt_decrypt_multiple_clients_including_invalid_proofs() -> googletest::Re
         let mut client_message =
             client.create_client_message(&client_plaintext, &public_key).unwrap();
         client_message.proof = bad_proof.clone();
+        client_messages.push(client_message);
+    }
+    client_messages.sort_by(|a, b| a.nonce.cmp(&b.nonce));
+    for client_message in client_messages {
         // The client message is split and handled by the server and verifier.
         let (_ciphertext_contribution, decryption_request_contribution) =
             server.split_client_message(client_message).unwrap();
@@ -400,6 +423,7 @@ fn encrypt_decrypt_many_clients_decryptors() -> googletest::Result<()> {
 
     // Create clients, and each client generates their messages.
     let mut expected_output = vec![0; INPUT_LENGTH as usize];
+    let mut client_messages = vec![];
     for _ in 0..NUM_CLIENTS {
         let (kahe_config, ahe_config) = create_shell_configs(&aggregation_config).unwrap();
         let kahe = ShellKahe::new(kahe_config, CONTEXT_STRING).unwrap();
@@ -416,6 +440,14 @@ fn encrypt_decrypt_many_clients_decryptors() -> googletest::Result<()> {
         }
         let client_plaintext = HashMap::from([(default_id.clone(), client_input_values)]);
         let client_message = client.create_client_message(&client_plaintext, &public_key).unwrap();
+        client_messages.push(client_message);
+    }
+
+    // Sort client messages by nonce.
+    client_messages.sort_by(|a, b| a.nonce.cmp(&b.nonce));
+
+    // Handle client messages.
+    for client_message in client_messages {
         // The client message is split and handled by the server and verifier.
         let (ciphertext_contribution, decryption_request_contribution) =
             server.split_client_message(client_message).unwrap();
@@ -505,6 +537,7 @@ fn encrypt_decrypt_no_dropout() -> googletest::Result<()> {
 
     // Clients encrypt.
     let mut expected_output = vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+    let mut client_messages = vec![];
     for client in &mut clients {
         let client_input_values = vec![1, 2, 3, 4, 5, 6, 7, 8, 7, 6, 5, 4, 3, 2, 1];
         for i in 0..expected_output.len() {
@@ -512,6 +545,14 @@ fn encrypt_decrypt_no_dropout() -> googletest::Result<()> {
         }
         let client_plaintext = HashMap::from([(default_id.clone(), client_input_values)]);
         let client_message = client.create_client_message(&client_plaintext, &public_key).unwrap();
+        client_messages.push(client_message);
+    }
+
+    // Sort client messages by nonce.
+    client_messages.sort_by(|a, b| a.nonce.cmp(&b.nonce));
+
+    // Handle client messages.
+    for client_message in client_messages {
         // The client message is split and handled by the server and verifier.
         let (ciphertext_contribution, decryption_request_contribution) =
             server.split_client_message(client_message).unwrap();
