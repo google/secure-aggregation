@@ -38,6 +38,17 @@ pub struct WillowClientMessage<Kahe: KaheBase, Vahe: VaheBase> {
     pub nonce: Vec<u8>,
 }
 
+impl<Kahe: KaheBase, Vahe: VaheBase> Clone for WillowClientMessage<Kahe, Vahe> {
+    fn clone(self: &WillowClientMessage<Kahe, Vahe>) -> WillowClientMessage<Kahe, Vahe> {
+        WillowClientMessage {
+            kahe_ciphertext: self.kahe_ciphertext.clone(),
+            ahe_ciphertext: self.ahe_ciphertext.clone(),
+            proof: self.proof.clone(),
+            nonce: self.nonce.clone(),
+        }
+    }
+}
+
 // Partial decryption request is an aggregated AHE ciphertext.
 pub struct PartialDecryptionRequest<Vahe: VaheBase> {
     pub partial_dec_ciphertext: Vahe::PartialDecCiphertext,

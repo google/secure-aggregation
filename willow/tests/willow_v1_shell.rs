@@ -193,7 +193,7 @@ fn encrypt_decrypt_multiple_clients() -> googletest::Result<()> {
     client_messages.sort_by(|a, b| a.nonce.cmp(&b.nonce));
 
     // Handle client messages.
-    for client_message in client_messages {
+    for client_message in client_messages.clone() {
         // The client message is split and handled by the server and verifier.
         let (ciphertext_contribution, decryption_request_contribution) =
             server.split_client_message(client_message).unwrap();
@@ -201,24 +201,44 @@ fn encrypt_decrypt_multiple_clients() -> googletest::Result<()> {
         server.handle_ciphertext_contribution(ciphertext_contribution, &mut server_state).unwrap();
     }
 
-    // Verifier creates the partial decryption request.
-    let pd_ct = verifier.create_partial_decryption_request(verifier_state).unwrap();
+    // Verify again using two states and merge the states to check that merge works.
+    let mut verifier_state_1 = VerifierState::default();
+    let mut verifier_state_2 = VerifierState::default();
+    let half = client_messages.len() / 2;
+    for (i, client_message) in client_messages.into_iter().enumerate() {
+        let (_, decryption_request_contribution) =
+            server.split_client_message(client_message).unwrap();
+        let mut verifier_state =
+            if i < half { &mut verifier_state_1 } else { &mut verifier_state_2 };
+        verifier.verify_and_include(decryption_request_contribution, &mut verifier_state).unwrap();
+    }
+    let verifier_state_merged =
+        verifier.merge_states(&verifier_state_1, &verifier_state_2).unwrap();
 
-    // Decryptor creates partial decryption.
-    let pd = decryptor.handle_partial_decryption_request(pd_ct, &decryptor_state).unwrap();
+    // Run the rest of the protocol twice, once with each of the the two copies of the verifier state.
+    for (mut server_state, verifier_state) in
+        [(server_state.clone(), verifier_state), (server_state, verifier_state_merged)]
+    {
+        // Verifier creates the partial decryption request.
+        let pd_ct = verifier.create_partial_decryption_request(verifier_state).unwrap();
 
-    // Server handles the partial decryption.
-    server.handle_partial_decryption(pd, &mut server_state).unwrap();
+        // Decryptor creates partial decryption.
+        let pd = decryptor.handle_partial_decryption_request(pd_ct, &decryptor_state).unwrap();
 
-    // Server recovers the aggregation result.
-    let aggregation_result = server.recover_aggregation_result(&server_state).unwrap();
+        // Server handles the partial decryption.
+        server.handle_partial_decryption(pd, &mut server_state).unwrap();
 
-    // Check that the (padded) result matches the client plaintext.
-    verify_that!(aggregation_result.keys().collect::<Vec<_>>(), container_eq([&default_id]))?;
-    verify_eq!(
-        aggregation_result.get(&default_id).unwrap()[..expected_output.len()],
-        expected_output
-    )
+        // Server recovers the aggregation result.
+        let aggregation_result = server.recover_aggregation_result(&server_state).unwrap();
+
+        // Check that the (padded) result matches the client plaintext.
+        verify_that!(aggregation_result.keys().collect::<Vec<_>>(), container_eq([&default_id]))?;
+        verify_eq!(
+            aggregation_result.get(&default_id).unwrap()[..expected_output.len()],
+            expected_output
+        )?;
+    }
+    Ok(())
 }
 
 // Encrypt and decrypt with multiple clients including invalid client proofs and a single decryptor.

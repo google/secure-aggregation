@@ -40,6 +40,16 @@ impl<Kahe: KaheBase, Vahe: VaheBase + PartialDec> Default for ServerState<Kahe, 
     }
 }
 
+impl<Kahe: KaheBase, Vahe: VaheBase + PartialDec> Clone for ServerState<Kahe, Vahe> {
+    fn clone(&self) -> Self {
+        Self {
+            decryptor_public_key_shares: self.decryptor_public_key_shares.clone(),
+            client_sum: self.client_sum.clone(),
+            partial_decryption_sum: self.partial_decryption_sum.clone(),
+        }
+    }
+}
+
 impl<Kahe, Vahe> SecureAggregationServer<WillowCommon<Kahe, Vahe>> for WillowV1Server<Kahe, Vahe>
 where
     Vahe: EncryptVerify + PartialDec + Recover,

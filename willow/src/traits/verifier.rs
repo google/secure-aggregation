@@ -26,6 +26,14 @@ pub trait SecureAggregationVerifier<Common: common_traits::SecureAggregationComm
         state: &mut Self::VerifierState,
     ) -> Result<(), StatusError>;
 
+    /// Merges two states into one. The resulting state should be equivalent to calling
+    /// `verify_and_include` on all the contributions included in both states.
+    fn merge_states(
+        &self,
+        state1: &Self::VerifierState,
+        state2: &Self::VerifierState,
+    ) -> Result<Self::VerifierState, StatusError>;
+
     /// Returns a decryption request for the sum of the contributions, consumes the state.
     fn create_partial_decryption_request(
         &self,

@@ -41,14 +41,40 @@ impl<Vahe: VaheBase> NonemptyVerifierState<Vahe> {
     }
 }
 
+impl<Vahe: VaheBase> Clone for NonemptyVerifierState<Vahe> {
+    fn clone(&self) -> Self {
+        Self {
+            partial_dec_ciphertext_sum: self.partial_dec_ciphertext_sum.clone(),
+            nonce_bounds: self.nonce_bounds.clone(),
+        }
+    }
+}
+
 /// State for the verifier.
 pub struct VerifierState<Vahe: VaheBase> {
     maybe_state: Option<NonemptyVerifierState<Vahe>>,
 }
 
+impl<Vahe: VaheBase> VerifierState<Vahe> {
+    /// Ensures that the wrapped state is valid, if it exists.
+    pub fn validate(&self) -> status::Status {
+        if let Some(state) = &self.maybe_state {
+            state.validate()
+        } else {
+            Ok(())
+        }
+    }
+}
+
 impl<Vahe: VaheBase> Default for VerifierState<Vahe> {
     fn default() -> Self {
         Self { maybe_state: None }
+    }
+}
+
+impl<Vahe: VaheBase> Clone for VerifierState<Vahe> {
+    fn clone(&self) -> Self {
+        Self { maybe_state: self.maybe_state.clone() }
     }
 }
 
@@ -75,20 +101,19 @@ where
         )?;
         if let Some(ref mut state) = state.maybe_state {
             state.validate()?;
-            self.common.vahe.add_pd_ciphertexts_in_place(
-                &contribution.partial_dec_ciphertext,
-                &mut state.partial_dec_ciphertext_sum,
-            )?;
             let smaller_than_left = &contribution.nonce < &state.nonce_bounds.0;
             let larger_than_right = &contribution.nonce > &state.nonce_bounds.1;
-            if !smaller_than_left && !larger_than_right {
-                return Err(status::failed_precondition("`contribution.nonce` lies within the interval of nonces already processed. To avoid this, sort contributions by nonce."))?;
-            }
             if smaller_than_left {
                 state.nonce_bounds.0 = contribution.nonce;
             } else if larger_than_right {
                 state.nonce_bounds.1 = contribution.nonce;
+            } else {
+                return Err(status::failed_precondition("`contribution.nonce` lies within the interval of nonces already processed. To avoid this, sort contributions by nonce."))?;
             }
+            self.common.vahe.add_pd_ciphertexts_in_place(
+                &contribution.partial_dec_ciphertext,
+                &mut state.partial_dec_ciphertext_sum,
+            )?;
         } else {
             state.maybe_state = Some(NonemptyVerifierState {
                 partial_dec_ciphertext_sum: contribution.partial_dec_ciphertext,
@@ -96,6 +121,49 @@ where
             });
         }
         Ok(())
+    }
+
+    /// Merges two states into one. Fails if the intervals in the two states overlap.
+    fn merge_states(
+        &self,
+        state1: &Self::VerifierState,
+        state2: &Self::VerifierState,
+    ) -> Result<Self::VerifierState, status::StatusError> {
+        match (&state1.maybe_state, &state2.maybe_state) {
+            (Some(state1), Some(state2)) => {
+                state1.validate()?;
+                state2.validate()?;
+                // Check for overlap between nonce intervals. Overlap occurs if
+                // state1.nonce_bounds.0 <= state2.nonce_bounds.1 AND state2.nonce_bounds.0 <= state1.nonce_bounds.1.
+                if state1.nonce_bounds.0 <= state2.nonce_bounds.1
+                    && state2.nonce_bounds.0 <= state1.nonce_bounds.1
+                {
+                    return Err(status::failed_precondition(
+                        "The nonce intervals of the two states overlap. Cannot merge states with overlapping nonce ranges.",
+                    ))?;
+                }
+                let bounds = if state1.nonce_bounds.0 < state2.nonce_bounds.0 {
+                    (state1.nonce_bounds.0.clone(), state2.nonce_bounds.1.clone())
+                } else {
+                    (state2.nonce_bounds.0.clone(), state1.nonce_bounds.1.clone())
+                };
+                let mut sum = state1.partial_dec_ciphertext_sum.clone();
+                self.common
+                    .vahe
+                    .add_pd_ciphertexts_in_place(&state2.partial_dec_ciphertext_sum, &mut sum)?;
+                Ok(VerifierState {
+                    maybe_state: Some(NonemptyVerifierState {
+                        partial_dec_ciphertext_sum: sum,
+                        nonce_bounds: bounds,
+                    }),
+                })
+            }
+            (None, Some(state)) | (Some(state), None) => {
+                state.validate()?;
+                Ok(VerifierState { maybe_state: Some((*state).clone()) })
+            }
+            (None, None) => Ok(VerifierState { maybe_state: None }),
+        }
     }
 
     /// Returns a partial decryption request for the sum of the contributions, consumes the state.

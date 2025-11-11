@@ -18,7 +18,7 @@ use status::StatusError;
 ///
 pub trait SecureAggregationServer<Common: common_traits::SecureAggregationCommon> {
     /// The state held by the server between messages.
-    type ServerState: Default;
+    type ServerState: Default + Clone;
     /// The result of the aggregation.
     type AggregationResult;
 

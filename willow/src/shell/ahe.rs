@@ -353,6 +353,7 @@ pub struct RecoverCiphertext(pub Vec<RnsPolynomial>);
 /// A plaintext gets encrypted into two components, usually denoted as `ct_0`
 /// (a.k.a. compontent B) and `c_1` (a.k.a. component A) -- note the reverse
 /// alphabetical order. Supports addition.
+#[derive(Clone)]
 pub struct Ciphertext {
     pub component_b: RecoverCiphertext,
     pub component_a: PartialDecCiphertext,

@@ -47,7 +47,7 @@ pub trait KaheBase: Sized {
     ) -> Result<(), StatusError>;
 
     /// Ciphertext. Supports addition.
-    type Ciphertext;
+    type Ciphertext: Clone;
     fn add_ciphertexts_in_place(
         &self,
         left: &Self::Ciphertext,

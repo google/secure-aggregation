@@ -28,7 +28,7 @@ pub trait AheBase: Sized {
     type SecretKeyShare;
 
     /// Public key share.
-    type PublicKeyShare;
+    type PublicKeyShare: Clone;
 
     type KeyGenMetadata;
 
@@ -51,10 +51,10 @@ pub trait AheBase: Sized {
     type PartialDecCiphertext: Clone;
 
     /// Part of a ciphertext that is used for recovery.
-    type RecoverCiphertext;
+    type RecoverCiphertext: Clone;
 
     /// Full AHE ciphertext. Supports addition.
-    type Ciphertext;
+    type Ciphertext: Clone;
     fn add_ciphertexts_in_place(
         &self,
         left: &Self::Ciphertext,
@@ -83,7 +83,7 @@ pub trait AheBase: Sized {
     type EncryptionMetadata;
 
     /// A partial decryption. Supports addition.
-    type PartialDecryption;
+    type PartialDecryption: Clone;
 
     /// Metadata associated with a partial decryption.
     type PartialDecryptionMetadata;
