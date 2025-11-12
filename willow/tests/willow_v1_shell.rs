@@ -26,11 +26,11 @@ use single_thread_hkdf::SingleThreadHkdfPrng;
 use status::StatusErrorCode;
 use status_matchers_rs::status_is;
 use std::collections::HashMap;
-use testing_utils::{create_willow_common, generate_random_unsigned_vector};
+use testing_utils::{
+    create_willow_common, generate_aggregation_config, generate_random_unsigned_vector,
+};
 use vahe_shell::ShellVahe;
-use vahe_traits::VaheBase;
 use verifier_traits::SecureAggregationVerifier;
-use willow_api_common::AggregationConfig;
 use willow_v1_client::WillowV1Client;
 use willow_v1_common::WillowCommon;
 use willow_v1_decryptor::{DecryptorState, WillowV1Decryptor};
@@ -39,30 +39,11 @@ use willow_v1_verifier::{VerifierState, WillowV1Verifier};
 
 const CONTEXT_STRING: &[u8] = b"testing_context_string";
 
-/// Generates an AggregationConfig for test cases in this file.
-fn generate_aggregation_config(
-    vector_id: String,
-    vector_length: isize,
-    vector_bound: i64,
-    max_number_of_decryptors: i64,
-    max_number_of_clients: i64,
-) -> AggregationConfig {
-    AggregationConfig {
-        vector_lengths_and_bounds: HashMap::from([(vector_id, (vector_length, vector_bound))]),
-        max_number_of_decryptors,
-        max_number_of_clients,
-        max_decryptor_dropouts: 0,
-        session_id: String::from("test"),
-        willow_version: (1, 0),
-    }
-}
-
 /// Encrypt and decrypt with a single decryptor and single client.
 #[gtest]
 fn encrypt_decrypt_one() -> googletest::Result<()> {
     let default_id = String::from("default");
     let aggregation_config = generate_aggregation_config(default_id.clone(), 16, 10, 1, 1);
-    let public_kahe_seed = SingleThreadHkdfPrng::generate_seed().unwrap();
 
     // Create client.
     let common = create_willow_common(&aggregation_config, CONTEXT_STRING);
@@ -136,8 +117,6 @@ fn encrypt_decrypt_multiple_clients() -> googletest::Result<()> {
     let default_id = String::from("default");
     let aggregation_config =
         generate_aggregation_config(default_id.clone(), 16, 10, 1, NUM_CLIENTS);
-
-    let public_kahe_seed = SingleThreadHkdfPrng::generate_seed().unwrap();
 
     // Create clients.
     let mut clients = vec![];
@@ -250,7 +229,6 @@ fn encrypt_decrypt_multiple_clients_including_invalid_proofs() -> googletest::Re
     let default_id = String::from("default");
     let aggregation_config =
         generate_aggregation_config(default_id.clone(), 16, 10, 1, NUM_MAX_CLIENTS);
-    let public_kahe_seed = SingleThreadHkdfPrng::generate_seed().unwrap();
 
     // Create clients.
     let mut good_clients = vec![];
@@ -395,9 +373,6 @@ fn encrypt_decrypt_many_clients_decryptors() -> googletest::Result<()> {
         MAX_NUM_CLIENTS,
     );
 
-    // Create the public seeds for all clients, decryptors, and server.
-    let public_kahe_seed = SingleThreadHkdfPrng::generate_seed().unwrap();
-
     // Create server.
     let (kahe_config, ahe_config) = create_shell_configs(&aggregation_config).unwrap();
     let kahe = ShellKahe::new(kahe_config, CONTEXT_STRING).unwrap();
@@ -508,7 +483,6 @@ fn encrypt_decrypt_no_dropout() -> googletest::Result<()> {
     let default_id = String::from("default");
     let aggregation_config =
         generate_aggregation_config(default_id.clone(), 16, 10, NUM_DECRYPTORS, NUM_CLIENTS);
-    let public_kahe_seed = SingleThreadHkdfPrng::generate_seed().unwrap();
 
     // Create clients.
     let mut clients = vec![];

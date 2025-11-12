@@ -18,6 +18,7 @@ use kahe_traits::KaheBase;
 use rand::Rng;
 use shell_testing_parameters::{make_ahe_config, make_kahe_config};
 use single_thread_hkdf::Seed;
+use std::collections::HashMap;
 use vahe_shell::ShellVahe;
 use vahe_traits::{Recover, VaheBase};
 use willow_api_common::AggregationConfig;
@@ -63,6 +64,24 @@ pub fn ahe_decrypt_with_single_sk_share(
     let partial_decryption =
         common.vahe.partial_decrypt(&decryption_request, &sk_share, prng).unwrap();
     common.vahe.recover(&partial_decryption, &rest_of_ciphertext, None)
+}
+
+/// Generates an AggregationConfig for test cases in this file.
+pub fn generate_aggregation_config(
+    vector_id: String,
+    vector_length: isize,
+    vector_bound: i64,
+    max_number_of_decryptors: i64,
+    max_number_of_clients: i64,
+) -> AggregationConfig {
+    AggregationConfig {
+        vector_lengths_and_bounds: HashMap::from([(vector_id, (vector_length, vector_bound))]),
+        max_number_of_decryptors,
+        max_number_of_clients,
+        max_decryptor_dropouts: 0,
+        session_id: String::from("test"),
+        willow_version: (1, 0),
+    }
 }
 
 /// Concrete implementation of the client using the Shell KAHE/VAHE

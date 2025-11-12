@@ -109,3 +109,27 @@ rust_library(
         "//willow/src/traits:verifier_traits",
     ],
 )
+
+rust_test(
+    name = "willow_v1_verifier_test",
+    crate = ":willow_v1_verifier",
+    deps = [
+        "@crate_index//:googletest",
+        "//shell_wrapper:status_matchers_rs",
+        "//willow/src/shell:kahe_shell",
+        "//willow/src/shell:single_thread_hkdf",
+        "//willow/src/shell:vahe_shell",
+        "//willow/src/testing_utils",
+        "//willow/src/traits:ahe_traits",
+        "//willow/src/traits:client_traits",
+        "//willow/src/traits:decryptor_traits",
+        "//willow/src/traits:kahe_traits",
+        "//willow/src/traits:prng_traits",
+        "//willow/src/traits:server_traits",
+        "//willow/src/traits:vahe_traits",
+        "//willow/src/willow_v1:willow_v1_client",
+        "//willow/src/willow_v1:willow_v1_common",
+        "//willow/src/willow_v1:willow_v1_decryptor",
+        "//willow/src/willow_v1:willow_v1_server",
+    ],
+)

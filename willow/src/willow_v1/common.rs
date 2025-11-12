@@ -15,6 +15,7 @@
 use ahe_traits::AheBase;
 use common_traits::SecureAggregationCommon;
 use kahe_traits::KaheBase;
+use std::fmt::Debug;
 use vahe_traits::VaheBase;
 
 /// Common types for a generic lightweight KAHE/AHE-based implementation of the
@@ -61,23 +62,49 @@ impl<Vahe: VaheBase> Clone for PartialDecryptionRequest<Vahe> {
     }
 }
 
+impl<Vahe: VaheBase> Debug for PartialDecryptionRequest<Vahe> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+        f.debug_struct("PartialDecryptionRequest")
+            .field("partial_dec_ciphertext", &"(OMITTED)")
+            .finish()
+    }
+}
+
 pub struct PartialDecryptionResponse<Vahe: VaheBase> {
     pub partial_decryption: Vahe::PartialDecryption,
 }
 
 /// The part of the client message that the verifier needn't check
-#[derive(Debug, Clone)]
 pub struct CiphertextContribution<Kahe: KaheBase, Vahe: VaheBase> {
     pub kahe_ciphertext: Kahe::Ciphertext,
     pub ahe_recover_ciphertext: Vahe::RecoverCiphertext,
 }
 
+impl<Kahe: KaheBase, Vahe: VaheBase> Clone for CiphertextContribution<Kahe, Vahe> {
+    fn clone(&self) -> CiphertextContribution<Kahe, Vahe> {
+        CiphertextContribution {
+            kahe_ciphertext: self.kahe_ciphertext.clone(),
+            ahe_recover_ciphertext: self.ahe_recover_ciphertext.clone(),
+        }
+    }
+}
+
 /// The material from the client that the verifier must check.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct DecryptionRequestContribution<Vahe: VaheBase> {
     pub partial_dec_ciphertext: Vahe::PartialDecCiphertext,
     pub proof: Vahe::EncryptionProof,
     pub nonce: Vec<u8>,
+}
+
+impl<Vahe: VaheBase> Clone for DecryptionRequestContribution<Vahe> {
+    fn clone(&self) -> DecryptionRequestContribution<Vahe> {
+        DecryptionRequestContribution {
+            partial_dec_ciphertext: self.partial_dec_ciphertext.clone(),
+            proof: self.proof.clone(),
+            nonce: self.nonce.clone(),
+        }
+    }
 }
 
 impl<Kahe: KaheBase, Vahe: VaheBase> SecureAggregationCommon for WillowCommon<Kahe, Vahe> {

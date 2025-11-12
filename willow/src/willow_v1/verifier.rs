@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use ahe_traits::AheBase;
 use kahe_traits::KaheBase;
+use std::fmt::Debug;
 use vahe_traits::{EncryptVerify, VaheBase};
 use verifier_traits::SecureAggregationVerifier;
 use willow_v1_common::{DecryptionRequestContribution, PartialDecryptionRequest, WillowCommon};
@@ -35,7 +35,7 @@ impl<Vahe: VaheBase> NonemptyVerifierState<Vahe> {
         if self.nonce_bounds.0 > self.nonce_bounds.1 {
             return Err(status::invalid_argument(
                 "`nonce_bounds.0` must be less than or equal to `nonce_bounds.1`",
-            ))?;
+            ));
         }
         Ok(())
     }
@@ -50,15 +50,28 @@ impl<Vahe: VaheBase> Clone for NonemptyVerifierState<Vahe> {
     }
 }
 
+impl<Vahe: VaheBase> Debug for NonemptyVerifierState<Vahe> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+        f.debug_struct("NonemptyVerifierState")
+            .field("partial_dec_ciphertext_sum", &"(OMITTED)")
+            .field("nonce_bounds", &self.nonce_bounds)
+            .finish()
+    }
+}
+
 /// State for the verifier.
-pub struct VerifierState<Vahe: VaheBase> {
-    maybe_state: Option<NonemptyVerifierState<Vahe>>,
+pub struct VerifierState<Vahe: VaheBase>(Option<NonemptyVerifierState<Vahe>>);
+
+impl<Vahe: VaheBase> Debug for VerifierState<Vahe> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+        f.debug_tuple("VerifierState").field(&self.0).finish()
+    }
 }
 
 impl<Vahe: VaheBase> VerifierState<Vahe> {
     /// Ensures that the wrapped state is valid, if it exists.
     pub fn validate(&self) -> status::Status {
-        if let Some(state) = &self.maybe_state {
+        if let Some(state) = &self.0 {
             state.validate()
         } else {
             Ok(())
@@ -68,13 +81,13 @@ impl<Vahe: VaheBase> VerifierState<Vahe> {
 
 impl<Vahe: VaheBase> Default for VerifierState<Vahe> {
     fn default() -> Self {
-        Self { maybe_state: None }
+        Self(None)
     }
 }
 
 impl<Vahe: VaheBase> Clone for VerifierState<Vahe> {
     fn clone(&self) -> Self {
-        Self { maybe_state: self.maybe_state.clone() }
+        Self(self.0.clone())
     }
 }
 
@@ -99,7 +112,7 @@ where
             &contribution.partial_dec_ciphertext,
             &contribution.nonce,
         )?;
-        if let Some(ref mut state) = state.maybe_state {
+        if let Some(ref mut state) = state.0 {
             state.validate()?;
             let smaller_than_left = &contribution.nonce < &state.nonce_bounds.0;
             let larger_than_right = &contribution.nonce > &state.nonce_bounds.1;
@@ -115,7 +128,7 @@ where
                 &mut state.partial_dec_ciphertext_sum,
             )?;
         } else {
-            state.maybe_state = Some(NonemptyVerifierState {
+            state.0 = Some(NonemptyVerifierState {
                 partial_dec_ciphertext_sum: contribution.partial_dec_ciphertext,
                 nonce_bounds: (contribution.nonce.clone(), contribution.nonce),
             });
@@ -129,7 +142,7 @@ where
         state1: &Self::VerifierState,
         state2: &Self::VerifierState,
     ) -> Result<Self::VerifierState, status::StatusError> {
-        match (&state1.maybe_state, &state2.maybe_state) {
+        match (&state1.0, &state2.0) {
             (Some(state1), Some(state2)) => {
                 state1.validate()?;
                 state2.validate()?;
@@ -151,18 +164,16 @@ where
                 self.common
                     .vahe
                     .add_pd_ciphertexts_in_place(&state2.partial_dec_ciphertext_sum, &mut sum)?;
-                Ok(VerifierState {
-                    maybe_state: Some(NonemptyVerifierState {
-                        partial_dec_ciphertext_sum: sum,
-                        nonce_bounds: bounds,
-                    }),
-                })
+                Ok(VerifierState(Some(NonemptyVerifierState {
+                    partial_dec_ciphertext_sum: sum,
+                    nonce_bounds: bounds,
+                })))
             }
             (None, Some(state)) | (Some(state), None) => {
                 state.validate()?;
-                Ok(VerifierState { maybe_state: Some((*state).clone()) })
+                Ok(VerifierState(Some((*state).clone())))
             }
-            (None, None) => Ok(VerifierState { maybe_state: None }),
+            (None, None) => Ok(VerifierState(None)),
         }
     }
 
@@ -171,7 +182,7 @@ where
         &self,
         state: Self::VerifierState,
     ) -> Result<PartialDecryptionRequest<Vahe>, status::StatusError> {
-        if let Some(state) = state.maybe_state {
+        if let Some(state) = state.0 {
             state.validate()?;
             Ok(PartialDecryptionRequest {
                 partial_dec_ciphertext: state.partial_dec_ciphertext_sum,
@@ -181,5 +192,197 @@ where
                 "Must handle at least one client message before requesting partial decryption",
             ))?
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use client_traits::SecureAggregationClient;
+    use decryptor_traits::SecureAggregationDecryptor;
+    use googletest::prelude::{
+        contains_substring, eq, err, gtest, verify_eq, verify_that, verify_true,
+    };
+    use kahe_shell::ShellKahe;
+    use prng_traits::SecurePrng;
+    use server_traits::SecureAggregationServer;
+    use single_thread_hkdf::SingleThreadHkdfPrng;
+    use status_matchers_rs::status_is;
+    use std::collections::HashMap;
+    use testing_utils::{create_willow_common, generate_aggregation_config};
+    use vahe_shell::ShellVahe;
+    use willow_v1_client::WillowV1Client;
+    use willow_v1_decryptor::{DecryptorState, WillowV1Decryptor};
+    use willow_v1_server::{ServerState, WillowV1Server};
+
+    const CONTEXT_STRING: &[u8] = b"testing_context_string";
+    const DEFAULT_VECTOR_ID: &str = "default";
+
+    struct VerifierTestSetup {
+        verifier: WillowV1Verifier<ShellKahe, ShellVahe>,
+        decryption_request_contribution: DecryptionRequestContribution<ShellVahe>,
+    }
+
+    fn setup() -> Result<VerifierTestSetup, status::StatusError> {
+        let aggregation_config =
+            generate_aggregation_config(DEFAULT_VECTOR_ID.to_string(), 16, 10, 1, 1);
+        let public_kahe_seed = SingleThreadHkdfPrng::generate_seed()?;
+
+        // Create client.
+        let common = create_willow_common(&aggregation_config, CONTEXT_STRING);
+        let seed = SingleThreadHkdfPrng::generate_seed()?;
+        let prng = SingleThreadHkdfPrng::create(&seed)?;
+        let mut client = WillowV1Client { common, prng };
+
+        // Create decryptor, which needs its own `common` (with same public polynomials
+        // generated from the seeds) and `prng`.
+        let common = create_willow_common(&aggregation_config, CONTEXT_STRING);
+        let seed = SingleThreadHkdfPrng::generate_seed()?;
+        let prng = SingleThreadHkdfPrng::create(&seed)?;
+        let mut decryptor_state = DecryptorState::default();
+        let mut decryptor = WillowV1Decryptor { common, prng };
+
+        // Create server.
+        let common = create_willow_common(&aggregation_config, CONTEXT_STRING);
+        let server = WillowV1Server { common };
+        let mut server_state = ServerState::default();
+
+        // Create verifier.
+        let common = create_willow_common(&aggregation_config, CONTEXT_STRING);
+        let verifier = WillowV1Verifier { common };
+
+        // Decryptor generates public key share.
+        let public_key_share = decryptor.create_public_key_share(&mut decryptor_state)?;
+
+        // Server handles the public key share.
+        server.handle_decryptor_public_key_share(public_key_share, &mut server_state)?;
+
+        // Server creates the public key.
+        let public_key = server.create_decryptor_public_key(&server_state)?;
+
+        // Client encrypts.
+        let client_plaintext = HashMap::from([(
+            DEFAULT_VECTOR_ID.to_string(),
+            vec![1, 2, 3, 4, 5, 6, 7, 8, 7, 6, 5, 4, 3, 2, 1],
+        )]);
+        let client_message = client.create_client_message(&client_plaintext, &public_key)?;
+
+        // The client message is split and handled by the server and verifier.
+        let (_, decryption_request_contribution) = server.split_client_message(client_message)?;
+
+        Ok(VerifierTestSetup { verifier, decryption_request_contribution })
+    }
+
+    #[gtest]
+    fn verify_and_include_fails_if_nonce_already_processed() -> googletest::Result<()> {
+        let setup = setup()?;
+        let mut verifier_state = VerifierState::default();
+        setup.verifier.verify_and_include(
+            setup.decryption_request_contribution.clone(),
+            &mut verifier_state,
+        )?;
+
+        // Verify again, should fail.
+        verify_that!(
+            setup
+                .verifier
+                .verify_and_include(setup.decryption_request_contribution, &mut verifier_state,),
+            status_is(status::StatusErrorCode::FailedPrecondition)
+                .with_message(contains_substring("already processed."))
+        )
+    }
+
+    #[gtest]
+    fn verify_and_include_fails_if_state_is_invalid() -> googletest::Result<()> {
+        let setup = setup()?;
+        let mut verifier_state = VerifierState::default();
+        setup.verifier.verify_and_include(
+            setup.decryption_request_contribution.clone(),
+            &mut verifier_state,
+        )?;
+
+        verifier_state.0.as_mut().unwrap().nonce_bounds.0 = b"2222".to_vec();
+        verifier_state.0.as_mut().unwrap().nonce_bounds.1 = b"1111".to_vec();
+
+        // Verify again, should fail.
+        verify_that!(
+            setup
+                .verifier
+                .verify_and_include(setup.decryption_request_contribution, &mut verifier_state,),
+            status_is(status::StatusErrorCode::InvalidArgument).with_message(eq(
+                "`nonce_bounds.0` must be less than or equal to `nonce_bounds.1`"
+            ))
+        )
+    }
+
+    #[gtest]
+    fn merge_states_fails_if_state_is_invalid() -> googletest::Result<()> {
+        let setup = setup()?;
+        let mut verifier_state_1 = VerifierState::default();
+        let verifier_state_2 = VerifierState::default();
+        setup.verifier.verify_and_include(
+            setup.decryption_request_contribution.clone(),
+            &mut verifier_state_1,
+        )?;
+
+        verifier_state_1.0.as_mut().unwrap().nonce_bounds.0 = b"2222".to_vec();
+        verifier_state_1.0.as_mut().unwrap().nonce_bounds.1 = b"1111".to_vec();
+
+        // Try to merge the states, should fail.
+        verify_that!(
+            setup.verifier.merge_states(&verifier_state_1, &verifier_state_2),
+            err(status_is(status::StatusErrorCode::InvalidArgument).with_message(eq(
+                "`nonce_bounds.0` must be less than or equal to `nonce_bounds.1`"
+            )))
+        )
+    }
+
+    fn merge_with_empty_state_preserves_nonce_bounds() -> googletest::Result<()> {
+        let setup = setup()?;
+        let mut verifier_state_1 = VerifierState::default();
+        let verifier_state_2 = VerifierState::default();
+        setup.verifier.verify_and_include(
+            setup.decryption_request_contribution.clone(),
+            &mut verifier_state_1,
+        )?;
+
+        // Merge with empty state, should preserve nonce bounds.
+        let verifier_state_3 = setup.verifier.merge_states(&verifier_state_1, &verifier_state_2)?;
+        let verifier_state_4 = setup.verifier.merge_states(&verifier_state_2, &verifier_state_1)?;
+
+        // Nonce bounds should be the same as in verifier_state_1.
+        verify_true!(verifier_state_3.0.is_some())?;
+        verify_eq!(
+            verifier_state_3.0.as_ref().unwrap().nonce_bounds,
+            verifier_state_1.0.as_ref().unwrap().nonce_bounds
+        )?;
+        verify_true!(verifier_state_4.0.is_some())?;
+        verify_eq!(
+            verifier_state_4.0.as_ref().unwrap().nonce_bounds,
+            verifier_state_1.0.as_ref().unwrap().nonce_bounds
+        )
+    }
+
+    #[gtest]
+    fn merge_empty_states_returns_empty_state() -> googletest::Result<()> {
+        let setup = setup()?;
+        let verifier_state_1 = VerifierState::default();
+        let verifier_state_2 = VerifierState::default();
+
+        let verifier_state_3 = setup.verifier.merge_states(&verifier_state_1, &verifier_state_2)?;
+        verify_true!(verifier_state_3.0.is_none())
+    }
+
+    #[gtest]
+    fn create_partial_decryption_request_fails_if_no_contributions() -> googletest::Result<()> {
+        let setup = setup()?;
+        let verifier_state = VerifierState::default();
+
+        verify_that!(
+            &setup.verifier.create_partial_decryption_request(verifier_state),
+            err(status_is(status::StatusErrorCode::FailedPrecondition)
+                .with_message(contains_substring("at least one client message ")))
+        )
     }
 }
