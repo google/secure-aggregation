@@ -236,6 +236,7 @@ fn setup_verifier_verify_client_message(args: &Args) -> VerifierInputs {
             inputs.server.split_client_message(client_message).unwrap();
         decryption_request_contributions.push(decryption_request_contribution);
     }
+    decryption_request_contributions.sort_by(|a, b| a.nonce.cmp(&b.nonce));
     VerifierInputs {
         verifier: inputs.verifier,
         verifier_state: inputs.verifier_state,
@@ -348,28 +349,25 @@ struct DecryptorInputs {
 
 fn setup_decryptor_partial_decryption(args: &Args) -> DecryptorInputs {
     let mut inputs = setup_base(args);
-    for _ in 0..args.max_num_clients {
-        // Generates a plaintext and encrypts.
-        let client_input_values =
-            generate_random_unsigned_vector(args.input_length, args.input_domain);
-        let client_plaintext = HashMap::from([(String::from(DEFAULT_ID), client_input_values)]);
-        let client_message =
-            inputs.client.create_client_message(&client_plaintext, &inputs.public_key).unwrap();
+    // Generates a plaintext and encrypts.
+    let client_input_values = generate_random_unsigned_vector(args.input_length, args.input_domain);
+    let client_plaintext = HashMap::from([(String::from(DEFAULT_ID), client_input_values)]);
+    let client_message =
+        inputs.client.create_client_message(&client_plaintext, &inputs.public_key).unwrap();
 
-        // Server splits the client message.
-        let (ciphertext_contribution, decryption_request_contribution) =
-            inputs.server.split_client_message(client_message).unwrap();
+    // Server splits the client message.
+    let (ciphertext_contribution, decryption_request_contribution) =
+        inputs.server.split_client_message(client_message).unwrap();
 
-        // The server and verifier each handle their part of the client message.
-        inputs
-            .server
-            .handle_ciphertext_contribution(ciphertext_contribution, &mut inputs.server_state)
-            .unwrap();
-        inputs
-            .verifier
-            .verify_and_include(decryption_request_contribution, &mut inputs.verifier_state)
-            .unwrap();
-    }
+    // The server and verifier each handle their part of the client message.
+    inputs
+        .server
+        .handle_ciphertext_contribution(ciphertext_contribution, &mut inputs.server_state)
+        .unwrap();
+    inputs
+        .verifier
+        .verify_and_include(decryption_request_contribution, &mut inputs.verifier_state)
+        .unwrap();
 
     // Verifier creates the partial decryption request.
     let pd_ct = inputs.verifier.create_partial_decryption_request(inputs.verifier_state).unwrap();
