@@ -93,7 +93,6 @@ rust_library(
         ":ahe_shell",
         ":kahe_shell",
         ":shell_parameters_generation",
-        "@protobuf//rust:protobuf",
         "//shell_wrapper:kahe",
         "//shell_wrapper:status",
         "//willow/src/api:willow_api_common",
