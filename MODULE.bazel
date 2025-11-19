@@ -6,17 +6,17 @@ module(
     compatibility_level = 1,
 )
 
-bazel_dep(name = "rules_rust", version = "0.65.0")
+bazel_dep(name = "rules_rust", version = "0.67.0")
 bazel_dep(name = "rules_cc", version = "0.2.9")
 bazel_dep(name = "rules_license", version = "1.0.0")
-bazel_dep(name = "protobuf", version = "33.0-rc1")
+bazel_dep(name = "protobuf", version = "33.1")
 archive_override(
     # Patches protobuf to make the Rust libraries visible. See
     # https://github.com/protocolbuffers/protobuf/issues/23866.
     module_name = "protobuf",
-    integrity = "sha256-n7r7YMeWhML9K/XhzBWVMXW30fErl3Hfp2hoxLNy+fs=",
-    strip_prefix = "protobuf-b53a3ab3602e5863861589daa2bc48232af330ad",
-    urls = ["https://github.com/google/protobuf/archive/b53a3ab3602e5863861589daa2bc48232af330ad.zip"],
+    integrity = "sha256-F4n12LZfTcM249HtTdCAw3iK35iU7Ei61GTtjK3cS4Y=",
+    strip_prefix = "protobuf-9151e03956a34b795ca0d58e19d8a9991904b459",
+    urls = ["https://github.com/google/protobuf/archive/9151e03956a34b795ca0d58e19d8a9991904b459.zip"],
 )
 
 bazel_dep(name = "abseil-cpp", version = "20250814.1")
