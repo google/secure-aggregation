@@ -145,6 +145,67 @@ rust_cxx_bridge(
     deps = [":shell_types_cc"],
 )
 
+# Serialization support
+cc_library(
+    name = "shell_serialization_cc",
+    srcs = ["shell_serialization.cc"],
+    hdrs = [
+        "shell_serialization.h",
+    ],
+    deps = [
+        ":shell_serialization_cxx/include",
+        ":shell_types_cc",
+        ":shell_types_cxx",
+        ":status_cc",
+        ":status_cxx",
+        "@abseil-cpp//absl/log",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:statusor",
+        "@abseil-cpp//absl/strings:string_view",
+        "@shell-encryption//shell_encryption/rns:rns_serialization_cc_proto",
+        "@cxx.rs//:core",
+    ],
+)
+
+cc_test(
+    name = "shell_serialization_test",
+    srcs = ["shell_serialization_test.cc"],
+    deps = [
+        ":shell_serialization_cc",
+        ":shell_types_cc",
+        ":shell_types_cxx",
+        ":status_cc",
+        ":status_matchers",
+        "@googletest//:gtest_main",
+        "@abseil-cpp//absl/status",
+        "@shell-encryption//shell_encryption/rns:rns_serialization_cc_proto",
+        "@shell-encryption//shell_encryption/testing:testing_prng",
+        "@cxx.rs//:core",
+    ],
+)
+
+rust_library(
+    name = "shell_serialization",
+    srcs = ["shell_serialization.rs"],
+    deps = [
+        ":shell_serialization_cc",
+        ":shell_types",
+        ":status",
+        "@protobuf//rust:protobuf",
+        "@shell-encryption//shell_encryption/rns:rns_serialization_rust_proto",
+        "@cxx.rs//:cxx",
+    ],
+)
+
+rust_cxx_bridge(
+    name = "shell_serialization_cxx",
+    src = "shell_serialization.rs",
+    deps = [
+        ":shell_serialization_cc",
+        ":shell_types_cc",
+    ],
+)
+
 cc_library(
     name = "testing_utils",
     testonly = 1,

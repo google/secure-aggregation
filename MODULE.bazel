@@ -25,10 +25,10 @@ bazel_dep(name = "tink_cc", version = "2.4.0")
 bazel_dep(name = "shell-encryption", version = "0.0.0")
 archive_override(
     module_name = "shell-encryption",
-    integrity = "sha256-qPgdzLiDGXZwj/p5xOuZRQKvqU/qrS0mI8DLhiBWyi0=",
-    strip_prefix = "shell-encryption-259ce90fdd021d035d237be3dce5ec5a17ff0367",
+    integrity = "sha256-fR28P87WkRNGlF38tO/cMz9mrt6g/+LF8jhK4eeAows=",
+    strip_prefix = "shell-encryption-8607279e72f79efc51077f2b4f982a6a6296774e",
     urls = [
-        "https://github.com/google/shell-encryption/archive/259ce90fdd021d035d237be3dce5ec5a17ff0367.zip",
+        "https://github.com/google/shell-encryption/archive/8607279e72f79efc51077f2b4f982a6a6296774e.zip",
     ],
 )
 
