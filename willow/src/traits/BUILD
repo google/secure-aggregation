@@ -65,14 +65,17 @@ rust_library(
     ],
 )
 
-# Protocol level traits: Common, Client, Server, Decryptor.
-
+# Protocol level message types: Client, Server, Decryptor.
 rust_library(
-    name = "common_traits",
+    name = "messages",
     srcs = [
-        "common.rs",
+        "messages.rs",
     ],
-    deps = [],
+    deps = [
+        ":ahe_traits",
+        ":kahe_traits",
+        ":vahe_traits",
+    ],
 )
 
 rust_library(
@@ -81,7 +84,9 @@ rust_library(
         "client.rs",
     ],
     deps = [
-        ":common_traits",
+        ":kahe_traits",
+        ":messages",
+        ":vahe_traits",
         "//shell_wrapper:status",
     ],
 )
@@ -92,7 +97,9 @@ rust_library(
         "server.rs",
     ],
     deps = [
-        ":common_traits",
+        ":kahe_traits",
+        ":messages",
+        ":vahe_traits",
         "//shell_wrapper:status",
     ],
 )
@@ -103,7 +110,8 @@ rust_library(
         "decryptor.rs",
     ],
     deps = [
-        ":common_traits",
+        ":messages",
+        ":vahe_traits",
         "//shell_wrapper:status",
     ],
 )
@@ -114,7 +122,8 @@ rust_library(
         "verifier.rs",
     ],
     deps = [
-        ":common_traits",
+        ":messages",
+        ":vahe_traits",
         "//shell_wrapper:status",
     ],
 )

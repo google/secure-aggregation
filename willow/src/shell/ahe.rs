@@ -21,7 +21,7 @@ use shell_types::{
     create_empty_rns_polynomial, write_rns_polynomial_to_buffer_128,
     write_small_rns_polynomial_to_buffer, RnsContextRef, RnsPolynomial,
 };
-use single_thread_hkdf::{Seed, SingleThreadHkdfPrng};
+use single_thread_hkdf::SingleThreadHkdfPrng;
 
 /// ShellAhe configuration. `log_n` is the number of plaintext bits. `t` is the
 /// plaintext modulus, which must be an odd number. `qs` are the RNS moduli.
@@ -649,7 +649,7 @@ mod test {
         AheBase, AheEncrypt, AheKeygen, ExportCiphertext, ExportEncryptionMetadata,
         ExportPublicParameters, PartialDec, Recover,
     };
-    use googletest::{expect_eq, gtest, matchers::eq, verify_eq, verify_false, verify_that};
+    use googletest::{expect_eq, gtest, matchers::eq, verify_false, verify_that};
     use prng_traits::SecurePrng;
     use shell_testing_parameters::make_ahe_config;
     use single_thread_hkdf::SingleThreadHkdfPrng;

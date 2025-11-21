@@ -21,30 +21,16 @@ package(
 )
 
 rust_library(
-    name = "willow_v1_common",
-    srcs = [
-        "common.rs",
-    ],
-    deps = [
-        "//willow/src/traits:ahe_traits",
-        "//willow/src/traits:common_traits",
-        "//willow/src/traits:kahe_traits",
-        "//willow/src/traits:vahe_traits",
-    ],
-)
-
-rust_library(
     name = "willow_v1_client",
     srcs = [
         "client.rs",
     ],
     deps = [
-        ":willow_v1_common",
         "//shell_wrapper:status",
         "//willow/src/traits:ahe_traits",
         "//willow/src/traits:client_traits",
-        "//willow/src/traits:common_traits",
         "//willow/src/traits:kahe_traits",
+        "//willow/src/traits:messages",
         "//willow/src/traits:prng_traits",
         "//willow/src/traits:vahe_traits",
     ],
@@ -56,8 +42,11 @@ rust_test(
     deps = [
         "@crate_index//:googletest",
         "//willow/src/api:willow_api_common",
+        "//willow/src/shell:kahe_shell",
         "//willow/src/shell:single_thread_hkdf",
+        "//willow/src/shell:vahe_shell",
         "//willow/src/testing_utils",
+        "//willow/src/testing_utils:shell_testing_parameters",
         "//willow/src/traits:prng_traits",
     ],
 )
@@ -68,12 +57,10 @@ rust_library(
         "decryptor.rs",
     ],
     deps = [
-        ":willow_v1_common",
         "//shell_wrapper:status",
         "//willow/src/traits:ahe_traits",
-        "//willow/src/traits:common_traits",
         "//willow/src/traits:decryptor_traits",
-        "//willow/src/traits:kahe_traits",
+        "//willow/src/traits:messages",
         "//willow/src/traits:vahe_traits",
     ],
 )
@@ -84,11 +71,10 @@ rust_library(
         "server.rs",
     ],
     deps = [
-        ":willow_v1_common",
         "//shell_wrapper:status",
         "//willow/src/traits:ahe_traits",
-        "//willow/src/traits:common_traits",
         "//willow/src/traits:kahe_traits",
+        "//willow/src/traits:messages",
         "//willow/src/traits:server_traits",
         "//willow/src/traits:vahe_traits",
     ],
@@ -100,11 +86,10 @@ rust_library(
         "verifier.rs",
     ],
     deps = [
-        ":willow_v1_common",
         "//shell_wrapper:status",
         "//willow/src/traits:ahe_traits",
-        "//willow/src/traits:common_traits",
         "//willow/src/traits:kahe_traits",
+        "//willow/src/traits:messages",
         "//willow/src/traits:vahe_traits",
         "//willow/src/traits:verifier_traits",
     ],
@@ -114,12 +99,16 @@ rust_test(
     name = "willow_v1_verifier_test",
     crate = ":willow_v1_verifier",
     deps = [
+        ":willow_v1_client",
+        ":willow_v1_decryptor",
+        ":willow_v1_server",
         "@crate_index//:googletest",
         "//shell_wrapper:status_matchers_rs",
         "//willow/src/shell:kahe_shell",
         "//willow/src/shell:single_thread_hkdf",
         "//willow/src/shell:vahe_shell",
         "//willow/src/testing_utils",
+        "//willow/src/testing_utils:shell_testing_parameters",
         "//willow/src/traits:ahe_traits",
         "//willow/src/traits:client_traits",
         "//willow/src/traits:decryptor_traits",
@@ -127,9 +116,5 @@ rust_test(
         "//willow/src/traits:prng_traits",
         "//willow/src/traits:server_traits",
         "//willow/src/traits:vahe_traits",
-        "//willow/src/willow_v1:willow_v1_client",
-        "//willow/src/willow_v1:willow_v1_common",
-        "//willow/src/willow_v1:willow_v1_decryptor",
-        "//willow/src/willow_v1:willow_v1_server",
     ],
 )

@@ -12,18 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use ahe_traits::{AheBase, AheKeygen, PartialDec};
+use ahe_traits::{AheKeygen, PartialDec};
 use decryptor_traits::SecureAggregationDecryptor;
-use kahe_traits::KaheBase;
+use messages::{DecryptorPublicKeyShare, PartialDecryptionRequest, PartialDecryptionResponse};
 use vahe_traits::{EncryptVerify, VaheBase};
-use willow_v1_common::{
-    DecryptorPublicKeyShare, PartialDecryptionRequest, PartialDecryptionResponse, WillowCommon,
-};
 
 /// Lightweight decryptor directly exposing KAHE/VAHE types. It verifies only the client proofs,
 /// does not provide verifiable partial decryptions.
-pub struct WillowV1Decryptor<Kahe, Vahe: VaheBase> {
-    pub common: WillowCommon<Kahe, Vahe>,
+pub struct WillowV1Decryptor<Vahe: VaheBase> {
+    pub vahe: Vahe,
     pub prng: Vahe::Rng,
 }
 
@@ -37,15 +34,12 @@ impl<Vahe: VaheBase> Default for DecryptorState<Vahe> {
     }
 }
 
-
 /// Implementation of the `SecureAggregationDecryptor` trait for the generic
 /// KAHE/AHE decryptor, using WillowCommon as the common types (e.g. protocol
 /// messages are directly the AHE public key and ciphertexts).
-impl<Kahe, Vahe> SecureAggregationDecryptor<WillowCommon<Kahe, Vahe>>
-    for WillowV1Decryptor<Kahe, Vahe>
+impl<Vahe> SecureAggregationDecryptor<Vahe> for WillowV1Decryptor<Vahe>
 where
     Vahe: VaheBase + EncryptVerify + PartialDec + AheKeygen,
-    Kahe: KaheBase,
 {
     type DecryptorState = DecryptorState<Vahe>;
 
@@ -55,7 +49,7 @@ where
         &mut self,
         decryptor_state: &mut Self::DecryptorState,
     ) -> Result<DecryptorPublicKeyShare<Vahe>, status::StatusError> {
-        let (sk_share, pk_share, _) = self.common.vahe.key_gen(&mut self.prng)?;
+        let (sk_share, pk_share, _) = self.vahe.key_gen(&mut self.prng)?;
         decryptor_state.sk_share = Some(sk_share);
         Ok(pk_share)
     }
@@ -73,7 +67,7 @@ where
             ));
         };
         // Compute the partial decryption.
-        let pd = self.common.vahe.partial_decrypt(
+        let pd = self.vahe.partial_decrypt(
             &partial_decryption_request.partial_dec_ciphertext,
             sk_share,
             &mut self.prng,

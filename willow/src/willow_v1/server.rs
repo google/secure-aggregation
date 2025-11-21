@@ -12,19 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use ahe_traits::{AheBase, PartialDec};
+use ahe_traits::PartialDec;
 use kahe_traits::{KaheBase, KaheDecrypt, TrySecretKeyFrom};
+use messages::{
+    CiphertextContribution, ClientMessage, DecryptionRequestContribution, DecryptorPublicKey,
+    DecryptorPublicKeyShare, PartialDecryptionResponse,
+};
 use server_traits::SecureAggregationServer;
 use vahe_traits::{EncryptVerify, Recover, VaheBase};
-use willow_v1_common::{
-    CiphertextContribution, DecryptionRequestContribution, DecryptorPublicKey,
-    DecryptorPublicKeyShare, PartialDecryptionResponse, WillowClientMessage, WillowCommon,
-};
 
 /// The server struct, containing a WillowCommon instance. Only the clients messages are verified,
 /// not the key generation or partial decryptions.
 pub struct WillowV1Server<Kahe, Vahe: VaheBase> {
-    pub common: WillowCommon<Kahe, Vahe>,
+    pub kahe: Kahe,
+    pub vahe: Vahe,
 }
 
 /// State for the server.
@@ -50,7 +51,7 @@ impl<Kahe: KaheBase, Vahe: VaheBase + PartialDec> Clone for ServerState<Kahe, Va
     }
 }
 
-impl<Kahe, Vahe> SecureAggregationServer<WillowCommon<Kahe, Vahe>> for WillowV1Server<Kahe, Vahe>
+impl<Kahe, Vahe> SecureAggregationServer<Kahe, Vahe> for WillowV1Server<Kahe, Vahe>
 where
     Vahe: EncryptVerify + PartialDec + Recover,
     Kahe: KaheBase + TrySecretKeyFrom<Vahe::Plaintext> + KaheDecrypt,
@@ -77,25 +78,22 @@ where
         &self,
         server_state: &Self::ServerState,
     ) -> Result<DecryptorPublicKey<Vahe>, status::StatusError> {
-        Ok(self
-            .common
-            .vahe
-            .aggregate_public_key_shares(&server_state.decryptor_public_key_shares)?)
+        Ok(self.vahe.aggregate_public_key_shares(&server_state.decryptor_public_key_shares)?)
     }
 
     /// Splits a client message into the ciphertext contribution and the
     /// decryption request contribution.
     fn split_client_message(
         &self,
-        client_message: WillowClientMessage<Kahe, Vahe>,
+        client_message: ClientMessage<Kahe, Vahe>,
     ) -> Result<
         (CiphertextContribution<Kahe, Vahe>, DecryptionRequestContribution<Vahe>),
         status::StatusError,
     > {
         let partial_dec_ciphertext =
-            self.common.vahe.get_partial_dec_ciphertext(&client_message.ahe_ciphertext)?;
+            self.vahe.get_partial_dec_ciphertext(&client_message.ahe_ciphertext)?;
         let ahe_recover_ciphertext =
-            self.common.vahe.get_recover_ciphertext(&client_message.ahe_ciphertext)?;
+            self.vahe.get_recover_ciphertext(&client_message.ahe_ciphertext)?;
         Ok((
             CiphertextContribution {
                 kahe_ciphertext: client_message.kahe_ciphertext,
@@ -118,10 +116,8 @@ where
         if let Some((ref mut kahe_ciphertext, ref mut ahe_recover_ciphertext)) =
             server_state.client_sum
         {
-            self.common
-                .kahe
-                .add_ciphertexts_in_place(&contribution.kahe_ciphertext, kahe_ciphertext)?;
-            self.common.vahe.add_recover_ciphertexts_in_place(
+            self.kahe.add_ciphertexts_in_place(&contribution.kahe_ciphertext, kahe_ciphertext)?;
+            self.vahe.add_recover_ciphertexts_in_place(
                 &contribution.ahe_recover_ciphertext,
                 ahe_recover_ciphertext,
             )?;
@@ -141,8 +137,7 @@ where
     ) -> Result<(), status::StatusError> {
         let partial_decryption = partial_decryption_response.partial_decryption;
         if let Some(ref mut partial_decryption_sum) = server_state.partial_decryption_sum {
-            self.common
-                .vahe
+            self.vahe
                 .add_partial_decryptions_in_place(&partial_decryption, partial_decryption_sum)?;
         } else {
             server_state.partial_decryption_sum = Some(partial_decryption);
@@ -159,9 +154,9 @@ where
         if let Some((ref kahe_ciphertext, ref recover_ciphertext)) = server_state.client_sum {
             if let Some(ref partial_decryption_sum) = server_state.partial_decryption_sum {
                 let ahe_plaintext =
-                    self.common.vahe.recover(&partial_decryption_sum, &recover_ciphertext, None)?;
-                let kahe_secret_key = self.common.kahe.try_secret_key_from(ahe_plaintext)?;
-                let kahe_plaintext = self.common.kahe.decrypt(kahe_ciphertext, &kahe_secret_key)?;
+                    self.vahe.recover(&partial_decryption_sum, &recover_ciphertext, None)?;
+                let kahe_secret_key = self.kahe.try_secret_key_from(ahe_plaintext)?;
+                let kahe_plaintext = self.kahe.decrypt(kahe_ciphertext, &kahe_secret_key)?;
                 Ok(kahe_plaintext)
             } else {
                 Err(status::failed_precondition(

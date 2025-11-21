@@ -12,11 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use kahe_traits::KaheBase;
+use messages::{
+    CiphertextContribution, ClientMessage, DecryptionRequestContribution, DecryptorPublicKey,
+    DecryptorPublicKeyShare, PartialDecryptionResponse,
+};
 use status::StatusError;
+use vahe_traits::VaheBase;
+
 /// Base trait for the secure aggregation server. Also includes the Coordinator
 /// functionality of the threshold AHE scheme.
 ///
-pub trait SecureAggregationServer<Common: common_traits::SecureAggregationCommon> {
+pub trait SecureAggregationServer<Kahe: KaheBase, Vahe: VaheBase> {
     /// The state held by the server between messages.
     type ServerState: Default + Clone;
     /// The result of the aggregation.
@@ -26,7 +33,7 @@ pub trait SecureAggregationServer<Common: common_traits::SecureAggregationCommon
     /// server state.
     fn handle_decryptor_public_key_share(
         &self,
-        key_share: Common::DecryptorPublicKeyShare,
+        key_share: DecryptorPublicKeyShare<Vahe>,
         server_state: &mut Self::ServerState,
     ) -> Result<(), StatusError>;
 
@@ -35,19 +42,22 @@ pub trait SecureAggregationServer<Common: common_traits::SecureAggregationCommon
     fn create_decryptor_public_key(
         &self,
         server_state: &Self::ServerState,
-    ) -> Result<Common::DecryptorPublicKey, StatusError>;
+    ) -> Result<DecryptorPublicKey<Vahe>, StatusError>;
 
     /// Splits a client message into the ciphertext contribution and the
     /// decryption request contribution.
     fn split_client_message(
         &self,
-        client_message: Common::ClientMessage,
-    ) -> Result<(Common::CiphertextContribution, Common::DecryptionRequestContribution), StatusError>;
+        client_message: ClientMessage<Kahe, Vahe>,
+    ) -> Result<
+        (CiphertextContribution<Kahe, Vahe>, DecryptionRequestContribution<Vahe>),
+        StatusError,
+    >;
 
     /// Handles a single client message, updating the server state.
     fn handle_ciphertext_contribution(
         &self,
-        ciphertext_contribution: Common::CiphertextContribution,
+        ciphertext_contribution: CiphertextContribution<Kahe, Vahe>,
         server_state: &mut Self::ServerState,
     ) -> Result<(), StatusError>;
 
@@ -55,7 +65,7 @@ pub trait SecureAggregationServer<Common: common_traits::SecureAggregationCommon
     /// server state.
     fn handle_partial_decryption(
         &self,
-        partial_decryption_response: Common::PartialDecryptionResponse,
+        partial_decryption_response: PartialDecryptionResponse<Vahe>,
         server_state: &mut Self::ServerState,
     ) -> Result<(), StatusError>;
 

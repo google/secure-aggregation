@@ -13,35 +13,26 @@
 // limitations under the License.
 
 use ahe_traits::AheBase;
-use common_traits::SecureAggregationCommon;
 use kahe_traits::KaheBase;
 use std::fmt::Debug;
 use vahe_traits::VaheBase;
 
-/// Common types for a generic lightweight KAHE/AHE-based implementation of the
-/// `SecureAggregationCommon` trait.
-#[derive(Debug)]
-pub struct WillowCommon<Kahe, Vahe> {
-    pub kahe: Kahe,
-    pub vahe: Vahe,
-}
+pub type DecryptorPublicKeyShare<Vahe: VaheBase> = <Vahe as AheBase>::PublicKeyShare;
 
-pub type DecryptorPublicKeyShare<Vahe> = <Vahe as AheBase>::PublicKeyShare;
-
-pub type DecryptorPublicKey<Vahe> = <Vahe as AheBase>::PublicKey;
+pub type DecryptorPublicKey<Vahe: VaheBase> = <Vahe as AheBase>::PublicKey;
 
 /// Message sent by a generic KAHE/AHE Willow client to the server.
 #[derive(Debug)]
-pub struct WillowClientMessage<Kahe: KaheBase, Vahe: VaheBase> {
+pub struct ClientMessage<Kahe: KaheBase, Vahe: VaheBase> {
     pub kahe_ciphertext: Kahe::Ciphertext,
     pub ahe_ciphertext: Vahe::Ciphertext,
     pub proof: Vahe::EncryptionProof,
     pub nonce: Vec<u8>,
 }
 
-impl<Kahe: KaheBase, Vahe: VaheBase> Clone for WillowClientMessage<Kahe, Vahe> {
-    fn clone(self: &WillowClientMessage<Kahe, Vahe>) -> WillowClientMessage<Kahe, Vahe> {
-        WillowClientMessage {
+impl<Kahe: KaheBase, Vahe: VaheBase> Clone for ClientMessage<Kahe, Vahe> {
+    fn clone(self: &ClientMessage<Kahe, Vahe>) -> ClientMessage<Kahe, Vahe> {
+        ClientMessage {
             kahe_ciphertext: self.kahe_ciphertext.clone(),
             ahe_ciphertext: self.ahe_ciphertext.clone(),
             proof: self.proof.clone(),
@@ -105,22 +96,4 @@ impl<Vahe: VaheBase> Clone for DecryptionRequestContribution<Vahe> {
             nonce: self.nonce.clone(),
         }
     }
-}
-
-impl<Kahe: KaheBase, Vahe: VaheBase> SecureAggregationCommon for WillowCommon<Kahe, Vahe> {
-    type DecryptorPublicKeyShare = DecryptorPublicKeyShare<Vahe>;
-
-    // Server directly sends the public key, without signatures.
-    type DecryptorPublicKey = DecryptorPublicKey<Vahe>;
-
-    type ClientMessage = WillowClientMessage<Kahe, Vahe>;
-
-    type CiphertextContribution = CiphertextContribution<Kahe, Vahe>;
-
-    type DecryptionRequestContribution = DecryptionRequestContribution<Vahe>;
-
-    // Partial decryption request is an aggregated AHE ciphertext.
-    type PartialDecryptionRequest = PartialDecryptionRequest<Vahe>;
-
-    type PartialDecryptionResponse = PartialDecryptionResponse<Vahe>;
 }

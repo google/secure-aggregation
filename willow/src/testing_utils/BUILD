@@ -66,19 +66,19 @@ rust_library(
         "testing_utils.rs",
     ],
     deps = [
+        ":shell_testing_parameters",
         "@crate_index//:rand",
         "//shell_wrapper:status",
         "//willow/src/api:willow_api_common",
         "//willow/src/shell:kahe_shell",
         "//willow/src/shell:single_thread_hkdf",
         "//willow/src/shell:vahe_shell",
-        "//willow/src/testing_utils:shell_testing_parameters",
         "//willow/src/traits:ahe_traits",
         "//willow/src/traits:kahe_traits",
+        "//willow/src/traits:messages",
         "//willow/src/traits:prng_traits",
         "//willow/src/traits:vahe_traits",
         "//willow/src/willow_v1:willow_v1_client",
-        "//willow/src/willow_v1:willow_v1_common",
     ],
 )
 

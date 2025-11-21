@@ -22,20 +22,19 @@ use client_traits::SecureAggregationClient;
 use decryptor_traits::SecureAggregationDecryptor;
 use kahe_shell::ShellKahe;
 use kahe_traits::KaheBase;
+use messages::{
+    CiphertextContribution, DecryptionRequestContribution, DecryptorPublicKey,
+    PartialDecryptionRequest,
+};
 use parameters_shell::create_shell_configs;
 use prng_traits::SecurePrng;
 use server_traits::SecureAggregationServer;
 use single_thread_hkdf::SingleThreadHkdfPrng;
-use testing_utils::{generate_random_unsigned_vector, ShellClient, ShellClientMessage};
+use testing_utils::generate_random_unsigned_vector;
 use vahe_shell::ShellVahe;
-use vahe_traits::VaheBase;
 use verifier_traits::SecureAggregationVerifier;
 use willow_api_common::AggregationConfig;
 use willow_v1_client::WillowV1Client;
-use willow_v1_common::{
-    CiphertextContribution, DecryptionRequestContribution, DecryptorPublicKey,
-    PartialDecryptionRequest, WillowCommon,
-};
 use willow_v1_decryptor::{DecryptorState, WillowV1Decryptor};
 use willow_v1_server::{ServerState, WillowV1Server};
 use willow_v1_verifier::{VerifierState, WillowV1Verifier};
@@ -103,11 +102,11 @@ pub fn match_and_bench(args: &Args) -> Duration {
 
 struct BaseInputs {
     client: WillowV1Client<ShellKahe, ShellVahe>,
-    decryptor: WillowV1Decryptor<ShellKahe, ShellVahe>,
+    decryptor: WillowV1Decryptor<ShellVahe>,
     decryptor_state: DecryptorState<ShellVahe>,
     server: WillowV1Server<ShellKahe, ShellVahe>,
     server_state: ServerState<ShellKahe, ShellVahe>,
-    verifier: WillowV1Verifier<ShellKahe, ShellVahe>,
+    verifier: WillowV1Verifier<ShellVahe>,
     verifier_state: VerifierState<ShellVahe>,
     public_key: DecryptorPublicKey<ShellVahe>,
 }
@@ -128,41 +127,30 @@ fn setup_base(args: &Args) -> BaseInputs {
         willow_version: (1, 0),
     };
     let (kahe_config, ahe_config) = create_shell_configs(&aggregation_config).unwrap();
-    let public_kahe_seed = SingleThreadHkdfPrng::generate_seed().unwrap();
 
     // Create client.
-    let common = WillowCommon {
-        kahe: ShellKahe::new(kahe_config.clone(), CONTEXT_STRING).unwrap(),
-        vahe: ShellVahe::new(ahe_config.clone(), CONTEXT_STRING).unwrap(),
-    };
+    let kahe = ShellKahe::new(kahe_config.clone(), CONTEXT_STRING).unwrap();
+    let vahe = ShellVahe::new(ahe_config.clone(), CONTEXT_STRING).unwrap();
     let seed = SingleThreadHkdfPrng::generate_seed().unwrap();
     let prng = SingleThreadHkdfPrng::create(&seed).unwrap();
-    let client = ShellClient { common, prng };
+    let client = WillowV1Client { kahe, vahe, prng };
 
-    // Create decryptor, which needs its own `common` and `prng`.
-    let common = WillowCommon {
-        kahe: ShellKahe::new(kahe_config.clone(), CONTEXT_STRING).unwrap(),
-        vahe: ShellVahe::new(ahe_config.clone(), CONTEXT_STRING).unwrap(),
-    };
+    // Create decryptor.
+    let vahe = ShellVahe::new(ahe_config.clone(), CONTEXT_STRING).unwrap();
     let seed = SingleThreadHkdfPrng::generate_seed().unwrap();
     let prng = SingleThreadHkdfPrng::create(&seed).unwrap();
     let mut decryptor_state = DecryptorState::default();
-    let mut decryptor = WillowV1Decryptor { common, prng };
+    let mut decryptor = WillowV1Decryptor { vahe, prng };
 
     // Create server.
-    let common = WillowCommon {
-        kahe: ShellKahe::new(kahe_config.clone(), CONTEXT_STRING).unwrap(),
-        vahe: ShellVahe::new(ahe_config.clone(), CONTEXT_STRING).unwrap(),
-    };
-    let server = WillowV1Server { common };
+    let kahe = ShellKahe::new(kahe_config.clone(), CONTEXT_STRING).unwrap();
+    let vahe = ShellVahe::new(ahe_config.clone(), CONTEXT_STRING).unwrap();
+    let server = WillowV1Server { kahe, vahe };
     let mut server_state = ServerState::default();
 
     // Create verifier.
-    let common = WillowCommon {
-        kahe: ShellKahe::new(kahe_config.clone(), CONTEXT_STRING).unwrap(),
-        vahe: ShellVahe::new(ahe_config.clone(), CONTEXT_STRING).unwrap(),
-    };
-    let verifier = WillowV1Verifier { common };
+    let vahe = ShellVahe::new(ahe_config.clone(), CONTEXT_STRING).unwrap();
+    let verifier = WillowV1Verifier { vahe };
     let verifier_state = VerifierState::default();
 
     // Decryptor generates public key share.
@@ -217,7 +205,7 @@ struct ServerInputs {
 }
 
 struct VerifierInputs {
-    verifier: WillowV1Verifier<ShellKahe, ShellVahe>,
+    verifier: WillowV1Verifier<ShellVahe>,
     verifier_state: VerifierState<ShellVahe>,
     decryption_request_contributions: Vec<DecryptionRequestContribution<ShellVahe>>,
 }
@@ -342,7 +330,7 @@ fn run_server_recover_aggregation_result(inputs: &mut ServerRecoverInputs) {
 // Decryptor benchmarks.
 
 struct DecryptorInputs {
-    decryptor: WillowV1Decryptor<ShellKahe, ShellVahe>,
+    decryptor: WillowV1Decryptor<ShellVahe>,
     decryptor_state: DecryptorState<ShellVahe>,
     partial_decryption_request: PartialDecryptionRequest<ShellVahe>,
 }

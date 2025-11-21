@@ -20,7 +20,7 @@ use shell_types::{
     add_in_place, add_in_place_vec, read_small_rns_polynomial_from_buffer,
     write_small_rns_polynomial_to_buffer, RnsPolynomial, RnsPolynomialVec,
 };
-use single_thread_hkdf::{Seed, SingleThreadHkdfPrng};
+use single_thread_hkdf::SingleThreadHkdfPrng;
 use std::collections::HashMap;
 
 /// Number of bits supported by the C++ big integer type used for KAHE

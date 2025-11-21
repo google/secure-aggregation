@@ -12,15 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use kahe_traits::KaheBase;
+use messages::{DecryptionRequestContribution, PartialDecryptionRequest};
 use std::fmt::Debug;
 use vahe_traits::{EncryptVerify, VaheBase};
 use verifier_traits::SecureAggregationVerifier;
-use willow_v1_common::{DecryptionRequestContribution, PartialDecryptionRequest, WillowCommon};
 
 /// The verifier struct, containing a WillowCommon instance.
-pub struct WillowV1Verifier<Kahe: KaheBase, Vahe: VaheBase> {
-    pub common: WillowCommon<Kahe, Vahe>,
+pub struct WillowV1Verifier<Vahe: VaheBase> {
+    pub vahe: Vahe,
 }
 
 // State for the verifier after the first contribution is received.
@@ -91,11 +90,9 @@ impl<Vahe: VaheBase> Clone for VerifierState<Vahe> {
     }
 }
 
-impl<Kahe, Vahe> SecureAggregationVerifier<WillowCommon<Kahe, Vahe>>
-    for WillowV1Verifier<Kahe, Vahe>
+impl<Vahe> SecureAggregationVerifier<Vahe> for WillowV1Verifier<Vahe>
 where
     Vahe: EncryptVerify,
-    Kahe: KaheBase,
 {
     type VerifierState = VerifierState<Vahe>;
 
@@ -107,7 +104,7 @@ where
         contribution: DecryptionRequestContribution<Vahe>,
         state: &mut Self::VerifierState,
     ) -> Result<(), status::StatusError> {
-        self.common.vahe.verify_encrypt(
+        self.vahe.verify_encrypt(
             &contribution.proof,
             &contribution.partial_dec_ciphertext,
             &contribution.nonce,
@@ -123,7 +120,7 @@ where
             } else {
                 return Err(status::failed_precondition("`contribution.nonce` lies within the interval of nonces already processed. To avoid this, sort contributions by nonce."))?;
             }
-            self.common.vahe.add_pd_ciphertexts_in_place(
+            self.vahe.add_pd_ciphertexts_in_place(
                 &contribution.partial_dec_ciphertext,
                 &mut state.partial_dec_ciphertext_sum,
             )?;
@@ -161,8 +158,7 @@ where
                     (state2.nonce_bounds.0.clone(), state1.nonce_bounds.1.clone())
                 };
                 let mut sum = state1.partial_dec_ciphertext_sum.clone();
-                self.common
-                    .vahe
+                self.vahe
                     .add_pd_ciphertexts_in_place(&state2.partial_dec_ciphertext_sum, &mut sum)?;
                 Ok(VerifierState(Some(NonemptyVerifierState {
                     partial_dec_ciphertext_sum: sum,
@@ -199,18 +195,21 @@ where
 mod tests {
     use super::*;
 
+    use ahe_traits::AheBase;
     use client_traits::SecureAggregationClient;
     use decryptor_traits::SecureAggregationDecryptor;
     use googletest::prelude::{
         contains_substring, eq, err, gtest, verify_eq, verify_that, verify_true,
     };
     use kahe_shell::ShellKahe;
+    use kahe_traits::KaheBase;
     use prng_traits::SecurePrng;
     use server_traits::SecureAggregationServer;
+    use shell_testing_parameters::{make_ahe_config, make_kahe_config};
     use single_thread_hkdf::SingleThreadHkdfPrng;
     use status_matchers_rs::status_is;
     use std::collections::HashMap;
-    use testing_utils::{create_willow_common, generate_aggregation_config};
+    use testing_utils::generate_aggregation_config;
     use vahe_shell::ShellVahe;
     use willow_v1_client::WillowV1Client;
     use willow_v1_decryptor::{DecryptorState, WillowV1Decryptor};
@@ -220,37 +219,38 @@ mod tests {
     const DEFAULT_VECTOR_ID: &str = "default";
 
     struct VerifierTestSetup {
-        verifier: WillowV1Verifier<ShellKahe, ShellVahe>,
+        verifier: WillowV1Verifier<ShellVahe>,
         decryption_request_contribution: DecryptionRequestContribution<ShellVahe>,
     }
 
     fn setup() -> Result<VerifierTestSetup, status::StatusError> {
         let aggregation_config =
             generate_aggregation_config(DEFAULT_VECTOR_ID.to_string(), 16, 10, 1, 1);
-        let public_kahe_seed = SingleThreadHkdfPrng::generate_seed()?;
 
         // Create client.
-        let common = create_willow_common(&aggregation_config, CONTEXT_STRING);
+        let kahe = ShellKahe::new(make_kahe_config(&aggregation_config), CONTEXT_STRING).unwrap();
+        let vahe = ShellVahe::new(make_ahe_config(), CONTEXT_STRING).unwrap();
         let seed = SingleThreadHkdfPrng::generate_seed()?;
         let prng = SingleThreadHkdfPrng::create(&seed)?;
-        let mut client = WillowV1Client { common, prng };
+        let mut client = WillowV1Client { kahe, vahe, prng };
 
-        // Create decryptor, which needs its own `common` (with same public polynomials
+        // Create decryptor, which needs its own `vahe` (with same public polynomials
         // generated from the seeds) and `prng`.
-        let common = create_willow_common(&aggregation_config, CONTEXT_STRING);
+        let vahe = ShellVahe::new(make_ahe_config(), CONTEXT_STRING).unwrap();
         let seed = SingleThreadHkdfPrng::generate_seed()?;
         let prng = SingleThreadHkdfPrng::create(&seed)?;
         let mut decryptor_state = DecryptorState::default();
-        let mut decryptor = WillowV1Decryptor { common, prng };
+        let mut decryptor = WillowV1Decryptor { vahe, prng };
 
         // Create server.
-        let common = create_willow_common(&aggregation_config, CONTEXT_STRING);
-        let server = WillowV1Server { common };
+        let kahe = ShellKahe::new(make_kahe_config(&aggregation_config), CONTEXT_STRING).unwrap();
+        let vahe = ShellVahe::new(make_ahe_config(), CONTEXT_STRING).unwrap();
+        let server = WillowV1Server { kahe, vahe };
         let mut server_state = ServerState::default();
 
         // Create verifier.
-        let common = create_willow_common(&aggregation_config, CONTEXT_STRING);
-        let verifier = WillowV1Verifier { common };
+        let vahe = ShellVahe::new(make_ahe_config(), CONTEXT_STRING).unwrap();
+        let verifier = WillowV1Verifier { vahe };
 
         // Decryptor generates public key share.
         let public_key_share = decryptor.create_public_key_share(&mut decryptor_state)?;
