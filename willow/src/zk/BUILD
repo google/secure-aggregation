@@ -13,8 +13,6 @@
 # limitations under the License.
 
 load("@rules_rust//rust:defs.bzl", "rust_library", "rust_test")
-load("@protobuf//bazel:proto_library.bzl", "proto_library")
-load("@protobuf//rust:defs.bzl", "rust_proto_library")
 
 package(
     default_applicable_licenses = [
@@ -26,8 +24,6 @@ rust_library(
     name = "linear_innerproduct",
     srcs = ["linear_ip.rs"],
     deps = [
-        ":proofs_rust_proto",
-        "@protobuf//rust:protobuf",
         "@crate_index//:curve25519-dalek",
         "@crate_index//:merlin",
         "@crate_index//:rand",
@@ -45,6 +41,31 @@ rust_test(
     deps = [
         "@crate_index//:googletest",
         "//shell_wrapper:status_matchers_rs",
+    ],
+)
+
+rust_library(
+    name = "linear_ip_serialization",
+    srcs = ["linear_ip_serialization.rs"],
+    deps = [
+        ":linear_innerproduct",
+        "@protobuf//rust:protobuf",
+        "@crate_index//:curve25519-dalek",
+        "//shell_wrapper:status",
+        "//willow/proto/zk:proofs_rust_proto",
+    ],
+)
+
+rust_test(
+    name = "linear_ip_serialization_test",
+    crate = ":linear_ip_serialization",
+    deps = [
+        ":linear_innerproduct",
+        "@crate_index//:googletest",
+        "@crate_index//:curve25519-dalek",
+        "@crate_index//:merlin",
+        "@crate_index//:rand",
+        "//willow/src/traits:zk_traits",
     ],
 )
 
@@ -80,8 +101,6 @@ rust_library(
     srcs = ["rlwe_relation.rs"],
     deps = [
         ":linear_innerproduct",
-        ":proofs_rust_proto",
-        "@protobuf//rust:protobuf",
         "@crate_index//:curve25519-dalek",
         "@crate_index//:merlin",
         "@crate_index//:rand",
@@ -107,12 +126,39 @@ rust_test(
     ],
 )
 
-proto_library(
-    name = "proofs_proto",
-    srcs = ["proofs.proto"],
+rust_library(
+    name = "rlwe_relation_serialization",
+    srcs = ["rlwe_relation_serialization.rs"],
+    deps = [
+        ":linear_innerproduct",
+        ":linear_ip_serialization",
+        ":rlwe_relation",
+        "@protobuf//rust:protobuf",
+        "@crate_index//:curve25519-dalek",
+        "//shell_wrapper:status",
+        "//willow/proto/zk:proofs_rust_proto",
+    ],
 )
 
-rust_proto_library(
-    name = "proofs_rust_proto",
-    deps = [":proofs_proto"],
+rust_test(
+    name = "rlwe_relation_serialization_test",
+    crate = ":rlwe_relation_serialization",
+    deps = [
+        ":rlwe_relation_serialization",
+        "@crate_index//:googletest",
+        "@protobuf//rust:protobuf",
+        "@crate_index//:curve25519-dalek",
+        "@crate_index//:merlin",
+        "@crate_index//:sha3",
+        "//shell_wrapper:ahe",
+        "//shell_wrapper:ahe_cxx",  # fixdeps: keep
+        "//shell_wrapper:shell_types",
+        "//shell_wrapper:single_thread_hkdf",
+        "//shell_wrapper:single_thread_hkdf_cxx",
+        "//shell_wrapper:status_matchers_rs",
+        "//willow/proto/zk:proofs_rust_proto",
+        "//willow/src/shell:ahe_shell",
+        "//willow/src/testing_utils:shell_testing_parameters",
+        "//willow/src/traits:zk_traits",
+    ],
 )

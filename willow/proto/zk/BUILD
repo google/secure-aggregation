@@ -12,43 +12,21 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-load("@protobuf//bazel:cc_proto_library.bzl", "cc_proto_library")
 load("@protobuf//bazel:proto_library.bzl", "proto_library")
 load("@protobuf//rust:defs.bzl", "rust_proto_library")
 
 package(
+    default_applicable_licenses = [
+    ],
     default_visibility = ["//visibility:public"],
 )
 
-# Parameters proto
 proto_library(
-    name = "shell_parameters_proto",
-    srcs = ["parameters.proto"],
-)
-
-cc_proto_library(
-    name = "shell_parameters_cc_proto",
-    deps = [":shell_parameters_proto"],
+    name = "proofs_proto",
+    srcs = ["proofs.proto"],
 )
 
 rust_proto_library(
-    name = "shell_parameters_rust_proto",
-    deps = [":shell_parameters_proto"],
-)
-
-# Ciphertexts proto
-proto_library(
-    name = "shell_ciphertexts_proto",
-    srcs = ["ciphertexts.proto"],
-    deps = ["@shell-encryption//shell_encryption/rns:rns_serialization_proto"],
-)
-
-cc_proto_library(
-    name = "shell_ciphertexts_cc_proto",
-    deps = [":shell_ciphertexts_proto"],
-)
-
-rust_proto_library(
-    name = "shell_ciphertexts_rust_proto",
-    deps = [":shell_ciphertexts_proto"],
+    name = "proofs_rust_proto",
+    deps = [":proofs_proto"],
 )

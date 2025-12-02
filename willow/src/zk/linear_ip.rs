@@ -15,8 +15,6 @@
 use curve25519_dalek::ristretto::{CompressedRistretto, RistrettoPoint};
 use curve25519_dalek::scalar::Scalar;
 use curve25519_dalek::traits::VartimeMultiscalarMul;
-use proofs_rust_proto::LinearInnerProductProofProto;
-use protobuf::proto;
 use rand;
 use std::iter;
 use zk_traits::{
@@ -27,53 +25,10 @@ use zk_traits::{
 // Inner product proof for <a,b> = c, with public b,c with O(|a|) proof size.
 #[derive(Clone)]
 pub struct LinearInnerProductProof {
-    a_: Vec<Scalar>,
-    delta_: Scalar,
-    c_: Scalar,
-    R: CompressedRistretto,
-}
-impl LinearInnerProductProof {
-    pub fn to_proto(&self) -> LinearInnerProductProofProto {
-        proto!(LinearInnerProductProofProto {
-            a: self.a_.iter().map(|s| s.as_bytes().to_vec()),
-            delta: self.delta_.as_bytes().to_vec(),
-            c: self.c_.as_bytes().to_vec(),
-            r: self.R.to_bytes().to_vec(),
-        })
-    }
-
-    pub fn from_proto(proto: &LinearInnerProductProofProto) -> Result<Self, status::StatusError> {
-        let a_: Result<Vec<Scalar>, _> = proto
-            .a()
-            .iter()
-            .map(|bytes| {
-                let array: [u8; 32] = bytes
-                    .try_into()
-                    .map_err(|_| status::invalid_argument("a_ element has incorrect length"))?;
-                Ok(Scalar::from_bytes_mod_order(array))
-            })
-            .collect();
-
-        let delta_ = Scalar::from_bytes_mod_order(
-            proto
-                .delta()
-                .try_into()
-                .map_err(|_| status::invalid_argument("delta_ has incorrect length"))?,
-        );
-
-        let c_ = Scalar::from_bytes_mod_order(
-            proto
-                .c()
-                .try_into()
-                .map_err(|_| status::invalid_argument("c_ has incorrect length"))?,
-        );
-
-        let R = CompressedRistretto(
-            proto.r().try_into().map_err(|_| status::invalid_argument("R has incorrect length"))?,
-        );
-
-        Ok(LinearInnerProductProof { a_: a_?, delta_, c_, R })
-    }
+    pub a_: Vec<Scalar>,
+    pub delta_: Scalar,
+    pub c_: Scalar,
+    pub R: CompressedRistretto,
 }
 
 pub struct LinearInnerProductParameters {
@@ -405,34 +360,5 @@ mod tests {
             verifier.verify(&statement, &proof, &mut transcript),
             status_is(status::StatusErrorCode::PermissionDenied)
         )
-    }
-
-    #[gtest]
-    fn test_proof_proto_roundtrip() -> googletest::Result<()> {
-        let a: Vec<Scalar> = (1..5).map(|x| Scalar::from(x as u64)).collect();
-        let mut rng = rand::thread_rng();
-
-        let prover = LinearInnerProductProver::new(b"42", a.len());
-        let delta_a = Scalar::random(&mut rng);
-        let comm_a = prover.commit(&a, delta_a)?;
-        let b: Vec<Scalar> = (5..9).map(|x| Scalar::from(x as u64)).collect();
-        let c: Scalar = Scalar::from(5 + 12 + 21 + 32 as u64);
-        let mut transcript = MerlinTranscript::new(b"linear_ip_zkp_test");
-
-        let verifier = LinearInnerProductVerifier::new(b"42", a.len());
-        let statement = LinearInnerProductProofStatement { n: a.len(), b: b, c: c, comm_a: comm_a };
-        let proof = prover.prove(
-            &statement,
-            &LinearInnerProductProofWitness { a: a, delta_a: delta_a },
-            &mut transcript,
-        )?;
-
-        // Test the proto roundtrip
-        let proto = proof.to_proto();
-        let proof_from_proto = LinearInnerProductProof::from_proto(&proto)?;
-
-        let mut transcript = MerlinTranscript::new(b"linear_ip_zkp_test");
-        verifier.verify(&statement, &proof_from_proto, &mut transcript)?;
-        Ok(())
     }
 }

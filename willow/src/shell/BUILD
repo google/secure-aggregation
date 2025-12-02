@@ -13,9 +13,6 @@
 # limitations under the License.
 
 load("@rules_rust//rust:defs.bzl", "rust_library", "rust_test")
-load("@protobuf//bazel:cc_proto_library.bzl", "cc_proto_library")
-load("@protobuf//bazel:proto_library.bzl", "proto_library")
-load("@protobuf//rust:defs.bzl", "rust_proto_library")
 
 package(
     default_applicable_licenses = [
@@ -122,23 +119,6 @@ rust_test(
         "@protobuf//rust:protobuf_gtest_matchers",
         "//shell_wrapper:status",
     ],
-)
-
-# Ciphertexts proto
-proto_library(
-    name = "shell_ciphertexts_proto",
-    srcs = ["ciphertexts.proto"],
-    deps = ["@shell-encryption//shell_encryption/rns:rns_serialization_proto"],
-)
-
-cc_proto_library(
-    name = "shell_ciphertexts_cc_proto",
-    deps = [":shell_ciphertexts_proto"],
-)
-
-rust_proto_library(
-    name = "shell_ciphertexts_rust_proto",
-    deps = [":shell_ciphertexts_proto"],
 )
 
 # Parameter generation

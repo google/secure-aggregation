@@ -86,8 +86,8 @@ proto_library(
     name = "willow_api_common_proto",
     srcs = ["common.proto"],
     deps = [
-        "//willow/src/shell:shell_ciphertexts_proto",
-        "//willow/src/zk:proofs_proto",
+        "//willow/proto/shell:shell_ciphertexts_proto",
+        "//willow/proto/zk:proofs_proto",
     ],
 )
 

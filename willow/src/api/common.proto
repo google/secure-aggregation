@@ -16,8 +16,8 @@ edition = "2023";
 
 package secure_aggregation.willow;
 
-import "willow/src/shell/ciphertexts.proto";
-import "willow/src/zk/proofs.proto";
+import "willow/proto/shell/ciphertexts.proto";
+import "willow/proto/zk/proofs.proto";
 
 option java_multiple_files = true;
 option java_outer_classname = "CommonProto";
