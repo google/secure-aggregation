@@ -26,7 +26,7 @@ use messages::{
     CiphertextContribution, DecryptionRequestContribution, DecryptorPublicKey,
     PartialDecryptionRequest,
 };
-use parameters_shell::create_shell_configs;
+use parameters_shell::{create_shell_ahe_config, create_shell_kahe_config};
 use prng_traits::SecurePrng;
 use server_traits::SecureAggregationServer;
 use single_thread_hkdf::SingleThreadHkdfPrng;
@@ -125,7 +125,8 @@ fn setup_base(args: &Args) -> BaseInputs {
         max_decryptor_dropouts: 0,
         session_id: String::from("benchmark"),
     };
-    let (kahe_config, ahe_config) = create_shell_configs(&aggregation_config).unwrap();
+    let ahe_config = create_shell_ahe_config(aggregation_config.max_number_of_decryptors).unwrap();
+    let kahe_config = create_shell_kahe_config(&aggregation_config).unwrap();
 
     // Create client.
     let kahe = ShellKahe::new(kahe_config.clone(), CONTEXT_STRING).unwrap();

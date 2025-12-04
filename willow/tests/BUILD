@@ -33,7 +33,6 @@ rust_test(
         "//willow/src/shell:single_thread_hkdf",
         "//willow/src/shell:vahe_shell",
         "//willow/src/testing_utils",
-        "//willow/src/testing_utils:shell_testing_parameters",
         "//willow/src/traits:ahe_traits",
         "//willow/src/traits:client_traits",
         "//willow/src/traits:decryptor_traits",

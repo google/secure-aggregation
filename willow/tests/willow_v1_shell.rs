@@ -19,10 +19,9 @@ use googletest::prelude::container_eq;
 use googletest::{gtest, verify_eq, verify_that};
 use kahe_shell::ShellKahe;
 use kahe_traits::KaheBase;
-use parameters_shell::create_shell_configs;
+use parameters_shell::{create_shell_ahe_config, create_shell_kahe_config};
 use prng_traits::SecurePrng;
 use server_traits::SecureAggregationServer;
-use shell_testing_parameters::{make_ahe_config, make_kahe_config};
 use single_thread_hkdf::SingleThreadHkdfPrng;
 use status::StatusErrorCode;
 use status_matchers_rs::status_is;
@@ -42,30 +41,35 @@ const CONTEXT_STRING: &[u8] = b"testing_context_string";
 fn encrypt_decrypt_one() -> googletest::Result<()> {
     let default_id = String::from("default");
     let aggregation_config = generate_aggregation_config(default_id.clone(), 16, 10, 1, 1);
+    let max_number_of_decryptors = aggregation_config.max_number_of_decryptors;
 
     // Create client.
-    let kahe = ShellKahe::new(make_kahe_config(&aggregation_config), CONTEXT_STRING).unwrap();
-    let vahe = ShellVahe::new(make_ahe_config(), CONTEXT_STRING).unwrap();
+    let vahe = ShellVahe::new(create_shell_ahe_config(max_number_of_decryptors).unwrap(), CONTEXT_STRING).unwrap();
+    let kahe =
+        ShellKahe::new(create_shell_kahe_config(&aggregation_config).unwrap(), CONTEXT_STRING)
+            .unwrap();
     let seed = SingleThreadHkdfPrng::generate_seed().unwrap();
     let prng = SingleThreadHkdfPrng::create(&seed).unwrap();
     let mut client = WillowV1Client { kahe, vahe, prng };
 
     // Create decryptor, which needs its own `vahe` (with same public polynomials
     // generated from the seeds) and `prng`.
-    let vahe = ShellVahe::new(make_ahe_config(), CONTEXT_STRING).unwrap();
+    let vahe = ShellVahe::new(create_shell_ahe_config(max_number_of_decryptors).unwrap(), CONTEXT_STRING).unwrap();
     let seed = SingleThreadHkdfPrng::generate_seed().unwrap();
     let prng = SingleThreadHkdfPrng::create(&seed).unwrap();
     let mut decryptor_state = DecryptorState::default();
     let mut decryptor = WillowV1Decryptor { vahe, prng };
 
     // Create server.
-    let kahe = ShellKahe::new(make_kahe_config(&aggregation_config), CONTEXT_STRING).unwrap();
-    let vahe = ShellVahe::new(make_ahe_config(), CONTEXT_STRING).unwrap();
+    let vahe = ShellVahe::new(create_shell_ahe_config(max_number_of_decryptors).unwrap(), CONTEXT_STRING).unwrap();
+    let kahe =
+        ShellKahe::new(create_shell_kahe_config(&aggregation_config).unwrap(), CONTEXT_STRING)
+            .unwrap();
     let server = WillowV1Server { kahe, vahe };
     let mut server_state = ServerState::default();
 
     // Create verifier.
-    let vahe = ShellVahe::new(make_ahe_config(), CONTEXT_STRING).unwrap();
+    let vahe = ShellVahe::new(create_shell_ahe_config(max_number_of_decryptors).unwrap(), CONTEXT_STRING).unwrap();
     let verifier = WillowV1Verifier { vahe };
     let mut verifier_state = VerifierState::default();
 
@@ -119,12 +123,15 @@ fn encrypt_decrypt_multiple_clients() -> googletest::Result<()> {
     let default_id = String::from("default");
     let aggregation_config =
         generate_aggregation_config(default_id.clone(), 16, 10, 1, NUM_CLIENTS);
+    let max_number_of_decryptors = aggregation_config.max_number_of_decryptors;
 
     // Create clients.
     let mut clients = vec![];
     for _ in 0..NUM_CLIENTS {
-        let kahe = ShellKahe::new(make_kahe_config(&aggregation_config), CONTEXT_STRING).unwrap();
-        let vahe = ShellVahe::new(make_ahe_config(), CONTEXT_STRING).unwrap();
+        let vahe = ShellVahe::new(create_shell_ahe_config(max_number_of_decryptors).unwrap(), CONTEXT_STRING).unwrap();
+        let kahe =
+            ShellKahe::new(create_shell_kahe_config(&aggregation_config).unwrap(), CONTEXT_STRING)
+                .unwrap();
         let seed = SingleThreadHkdfPrng::generate_seed().unwrap();
         let prng = SingleThreadHkdfPrng::create(&seed).unwrap();
         let client = WillowV1Client { kahe, vahe, prng };
@@ -133,20 +140,22 @@ fn encrypt_decrypt_multiple_clients() -> googletest::Result<()> {
 
     // Create decryptor, which needs its own `vahe` (with same public polynomials
     // generated from the seeds) and `prng`.
-    let vahe = ShellVahe::new(make_ahe_config(), CONTEXT_STRING).unwrap();
+    let vahe = ShellVahe::new(create_shell_ahe_config(max_number_of_decryptors).unwrap(), CONTEXT_STRING).unwrap();
     let seed = SingleThreadHkdfPrng::generate_seed().unwrap();
     let prng = SingleThreadHkdfPrng::create(&seed).unwrap();
     let mut decryptor_state = DecryptorState::default();
     let mut decryptor = WillowV1Decryptor { vahe, prng };
 
     // Create server.
-    let kahe = ShellKahe::new(make_kahe_config(&aggregation_config), CONTEXT_STRING).unwrap();
-    let vahe = ShellVahe::new(make_ahe_config(), CONTEXT_STRING).unwrap();
+    let vahe = ShellVahe::new(create_shell_ahe_config(max_number_of_decryptors).unwrap(), CONTEXT_STRING).unwrap();
+    let kahe =
+        ShellKahe::new(create_shell_kahe_config(&aggregation_config).unwrap(), CONTEXT_STRING)
+            .unwrap();
     let server = WillowV1Server { kahe, vahe };
     let mut server_state = ServerState::default();
 
     // Create verifier.
-    let vahe = ShellVahe::new(make_ahe_config(), CONTEXT_STRING).unwrap();
+    let vahe = ShellVahe::new(create_shell_ahe_config(max_number_of_decryptors).unwrap(), CONTEXT_STRING).unwrap();
     let verifier = WillowV1Verifier { vahe };
     let mut verifier_state = VerifierState::default();
 
@@ -235,12 +244,15 @@ fn encrypt_decrypt_multiple_clients_including_invalid_proofs() -> googletest::Re
     let default_id = String::from("default");
     let aggregation_config =
         generate_aggregation_config(default_id.clone(), 16, 10, 1, NUM_MAX_CLIENTS);
+    let max_number_of_decryptors = aggregation_config.max_number_of_decryptors;
 
     // Create clients.
     let mut good_clients = vec![];
     for _ in 0..NUM_GOOD_CLIENTS {
-        let kahe = ShellKahe::new(make_kahe_config(&aggregation_config), CONTEXT_STRING).unwrap();
-        let vahe = ShellVahe::new(make_ahe_config(), CONTEXT_STRING).unwrap();
+        let vahe = ShellVahe::new(create_shell_ahe_config(max_number_of_decryptors).unwrap(), CONTEXT_STRING).unwrap();
+        let kahe =
+            ShellKahe::new(create_shell_kahe_config(&aggregation_config).unwrap(), CONTEXT_STRING)
+                .unwrap();
         let seed = SingleThreadHkdfPrng::generate_seed().unwrap();
         let prng = SingleThreadHkdfPrng::create(&seed).unwrap();
         let client = WillowV1Client { kahe, vahe, prng };
@@ -250,8 +262,10 @@ fn encrypt_decrypt_multiple_clients_including_invalid_proofs() -> googletest::Re
     // Create bad clients.
     let mut bad_clients = vec![];
     for _ in 0..NUM_BAD_CLIENTS {
-        let kahe = ShellKahe::new(make_kahe_config(&aggregation_config), CONTEXT_STRING).unwrap();
-        let vahe = ShellVahe::new(make_ahe_config(), CONTEXT_STRING).unwrap();
+        let vahe = ShellVahe::new(create_shell_ahe_config(max_number_of_decryptors).unwrap(), CONTEXT_STRING).unwrap();
+        let kahe =
+            ShellKahe::new(create_shell_kahe_config(&aggregation_config).unwrap(), CONTEXT_STRING)
+                .unwrap();
         let seed = SingleThreadHkdfPrng::generate_seed().unwrap();
         let prng = SingleThreadHkdfPrng::create(&seed).unwrap();
         let client = WillowV1Client { kahe, vahe, prng };
@@ -260,20 +274,22 @@ fn encrypt_decrypt_multiple_clients_including_invalid_proofs() -> googletest::Re
 
     // Create decryptor, which needs its own `vahe` (with same public polynomials
     // generated from the seeds) and `prng`.
-    let vahe = ShellVahe::new(make_ahe_config(), CONTEXT_STRING).unwrap();
+    let vahe = ShellVahe::new(create_shell_ahe_config(max_number_of_decryptors).unwrap(), CONTEXT_STRING).unwrap();
     let seed = SingleThreadHkdfPrng::generate_seed().unwrap();
     let prng = SingleThreadHkdfPrng::create(&seed).unwrap();
     let mut decryptor_state = DecryptorState::default();
     let mut decryptor = WillowV1Decryptor { vahe, prng };
 
     // Create server.
-    let kahe = ShellKahe::new(make_kahe_config(&aggregation_config), CONTEXT_STRING).unwrap();
-    let vahe = ShellVahe::new(make_ahe_config(), CONTEXT_STRING).unwrap();
+    let vahe = ShellVahe::new(create_shell_ahe_config(max_number_of_decryptors).unwrap(), CONTEXT_STRING).unwrap();
+    let kahe =
+        ShellKahe::new(create_shell_kahe_config(&aggregation_config).unwrap(), CONTEXT_STRING)
+            .unwrap();
     let server = WillowV1Server { kahe, vahe };
     let mut server_state = ServerState::default();
 
     // Create verifier.
-    let vahe = ShellVahe::new(make_ahe_config(), CONTEXT_STRING).unwrap();
+    let vahe = ShellVahe::new(create_shell_ahe_config(max_number_of_decryptors).unwrap(), CONTEXT_STRING).unwrap();
     let verifier = WillowV1Verifier { vahe };
     let mut verifier_state = VerifierState::default();
 
@@ -383,16 +399,21 @@ fn encrypt_decrypt_many_clients_decryptors() -> googletest::Result<()> {
         MAX_NUM_DECRYPTORS,
         MAX_NUM_CLIENTS,
     );
+    // The parameters used by `create_shell_ahe_config` below is secure for only a single
+    // decryptor when assuming all clients are corrupted. As we are testing functionality
+    // here anyway, we set `max_number_of_decryptors` to 1 just to obtain the AHE parameters.
+    let max_number_of_decryptors = 1;
 
     // Create server.
-    let (kahe_config, ahe_config) = create_shell_configs(&aggregation_config).unwrap();
-    let kahe = ShellKahe::new(kahe_config.clone(), CONTEXT_STRING).unwrap();
-    let vahe = ShellVahe::new(ahe_config.clone(), CONTEXT_STRING).unwrap();
+    let vahe = ShellVahe::new(create_shell_ahe_config(max_number_of_decryptors).unwrap(), CONTEXT_STRING).unwrap();
+    let kahe =
+        ShellKahe::new(create_shell_kahe_config(&aggregation_config).unwrap(), CONTEXT_STRING)
+            .unwrap();
     let server = WillowV1Server { kahe, vahe };
     let mut server_state = ServerState::default();
 
     // Create verifier.
-    let vahe = ShellVahe::new(ahe_config.clone(), CONTEXT_STRING).unwrap();
+    let vahe = ShellVahe::new(create_shell_ahe_config(max_number_of_decryptors).unwrap(), CONTEXT_STRING).unwrap();
     let verifier = WillowV1Verifier { vahe };
     let mut verifier_state = VerifierState::default();
 
@@ -401,7 +422,7 @@ fn encrypt_decrypt_many_clients_decryptors() -> googletest::Result<()> {
     let mut decryptors = vec![];
     let mut decryptor_states = vec![];
     for i in 0..NUM_DECRYPTORS {
-        let vahe = ShellVahe::new(ahe_config.clone(), CONTEXT_STRING).unwrap();
+        let vahe = ShellVahe::new(create_shell_ahe_config(max_number_of_decryptors).unwrap(), CONTEXT_STRING).unwrap();
         let seed = SingleThreadHkdfPrng::generate_seed().unwrap();
         let prng = SingleThreadHkdfPrng::create(&seed).unwrap();
         let mut decryptor_state = DecryptorState::default();
@@ -430,8 +451,10 @@ fn encrypt_decrypt_many_clients_decryptors() -> googletest::Result<()> {
     let mut expected_output = vec![0; INPUT_LENGTH as usize];
     let mut client_messages = vec![];
     for _ in 0..NUM_CLIENTS {
-        let kahe = ShellKahe::new(kahe_config.clone(), CONTEXT_STRING).unwrap();
-        let vahe = ShellVahe::new(ahe_config.clone(), CONTEXT_STRING).unwrap();
+        let vahe = ShellVahe::new(create_shell_ahe_config(max_number_of_decryptors).unwrap(), CONTEXT_STRING).unwrap();
+        let kahe =
+            ShellKahe::new(create_shell_kahe_config(&aggregation_config).unwrap(), CONTEXT_STRING)
+                .unwrap();
         let seed = SingleThreadHkdfPrng::generate_seed().unwrap();
         let prng = SingleThreadHkdfPrng::create(&seed).unwrap();
         let mut client = WillowV1Client { kahe, vahe, prng };
@@ -491,12 +514,18 @@ fn encrypt_decrypt_no_dropout() -> googletest::Result<()> {
     let default_id = String::from("default");
     let aggregation_config =
         generate_aggregation_config(default_id.clone(), 16, 10, NUM_DECRYPTORS, NUM_CLIENTS);
+    // The parameters used by `create_shell_ahe_config` below is secure for only a single
+    // decryptor when assuming all clients are corrupted. As we are testing functionality
+    // here anyway, we set `max_number_of_decryptors` to 1 just to obtain the AHE parameters.
+    let max_number_of_decryptors = 1;
 
     // Create clients.
     let mut clients = vec![];
     for _ in 0..NUM_CLIENTS {
-        let kahe = ShellKahe::new(make_kahe_config(&aggregation_config), CONTEXT_STRING).unwrap();
-        let vahe = ShellVahe::new(make_ahe_config(), CONTEXT_STRING).unwrap();
+        let vahe = ShellVahe::new(create_shell_ahe_config(max_number_of_decryptors).unwrap(), CONTEXT_STRING).unwrap();
+        let kahe =
+            ShellKahe::new(create_shell_kahe_config(&aggregation_config).unwrap(), CONTEXT_STRING)
+                .unwrap();
         let seed = SingleThreadHkdfPrng::generate_seed().unwrap();
         let prng = SingleThreadHkdfPrng::create(&seed).unwrap();
         let client = WillowV1Client { kahe, vahe, prng };
@@ -508,7 +537,7 @@ fn encrypt_decrypt_no_dropout() -> googletest::Result<()> {
     let mut decryptor_states = vec![];
     let mut decryptors = vec![];
     for _ in 0..NUM_DECRYPTORS {
-        let vahe = ShellVahe::new(make_ahe_config(), CONTEXT_STRING).unwrap();
+        let vahe = ShellVahe::new(create_shell_ahe_config(max_number_of_decryptors).unwrap(), CONTEXT_STRING).unwrap();
         let seed = SingleThreadHkdfPrng::generate_seed().unwrap();
         let prng = SingleThreadHkdfPrng::create(&seed).unwrap();
         let decryptor_state = DecryptorState::default();
@@ -518,13 +547,15 @@ fn encrypt_decrypt_no_dropout() -> googletest::Result<()> {
     }
 
     // Create server.
-    let kahe = ShellKahe::new(make_kahe_config(&aggregation_config), CONTEXT_STRING).unwrap();
-    let vahe = ShellVahe::new(make_ahe_config(), CONTEXT_STRING).unwrap();
+    let vahe = ShellVahe::new(create_shell_ahe_config(max_number_of_decryptors).unwrap(), CONTEXT_STRING).unwrap();
+    let kahe =
+        ShellKahe::new(create_shell_kahe_config(&aggregation_config).unwrap(), CONTEXT_STRING)
+            .unwrap();
     let server = WillowV1Server { kahe, vahe };
     let mut server_state = ServerState::default();
 
     // Create verifier.
-    let vahe = ShellVahe::new(make_ahe_config(), CONTEXT_STRING).unwrap();
+    let vahe = ShellVahe::new(create_shell_ahe_config(max_number_of_decryptors).unwrap(), CONTEXT_STRING).unwrap();
     let verifier = WillowV1Verifier { vahe };
     let mut verifier_state = VerifierState::default();
 
