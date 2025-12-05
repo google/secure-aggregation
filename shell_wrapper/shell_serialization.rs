@@ -68,10 +68,10 @@ pub fn rns_polynomial_to_proto(
 
 // Deserialize a SerializedRnsPolynomial proto to a RnsPolynomial.
 pub fn rns_polynomial_from_proto(
-    serialized: SerializedRnsPolynomial,
+    serialized: impl protobuf::AsView<Proxied = SerializedRnsPolynomial>,
     moduli: &Moduli,
 ) -> Result<RnsPolynomial, status::StatusError> {
-    let serialized_bytes = serialized.serialize().map_err(|serialize_error| {
+    let serialized_bytes = serialized.as_view().serialize().map_err(|serialize_error| {
         StatusError::new_with_current_location(
             StatusErrorCode::Internal,
             format!("{serialize_error:?}"),
