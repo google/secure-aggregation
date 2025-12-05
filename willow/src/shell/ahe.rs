@@ -17,6 +17,13 @@ use ahe_traits::{
     AheBase, AheEncrypt, AheKeygen, ExportCiphertext, ExportEncryptionMetadata,
     ExportPublicParameters, PartialDec, Recover,
 };
+use proto_serialization_traits::{FromProto, ToProto};
+use protobuf::proto;
+use shell_ciphertexts_rust_proto::{
+    ShellAheCiphertext, ShellAhePartialDecCiphertext, ShellAhePartialDecryption, ShellAhePublicKey,
+    ShellAhePublicKeyShare, ShellAheRecoverCiphertext, ShellAheSecretKeyShare,
+};
+use shell_serialization::{rns_polynomial_from_proto, rns_polynomial_to_proto};
 use shell_types::{
     create_empty_rns_polynomial, write_rns_polynomial_to_buffer_128,
     write_small_rns_polynomial_to_buffer, RnsContextRef, RnsPolynomial,
@@ -382,6 +389,108 @@ pub struct PartialDecryptionMetadata {
     pub wraparounds: Vec<RnsPolynomial>,
 }
 
+macro_rules! impl_proto_traits_single_poly {
+    ($type:ty, $proto:ty) => {
+        impl ToProto for $type {
+            type Proto = $proto;
+            type Context = ShellAhe;
+
+            fn to_proto(&self, ctx: &Self::Context) -> Result<Self::Proto, status::StatusError> {
+                let moduli = ahe::get_moduli(&ctx.public_ahe_parameters);
+                let poly_proto = rns_polynomial_to_proto(&self.0, &moduli)?;
+                Ok(proto!($proto { poly: poly_proto }))
+            }
+        }
+
+        impl FromProto for $type {
+            type Proto = $proto;
+            type Context = ShellAhe;
+
+            fn from_proto(
+                proto: impl protobuf::AsView<Proxied = Self::Proto>,
+                ctx: &Self::Context,
+            ) -> Result<Self, status::StatusError> {
+                let moduli = ahe::get_moduli(&ctx.public_ahe_parameters);
+                let poly = rns_polynomial_from_proto(proto.as_view().poly(), &moduli)?;
+                Ok(Self(poly))
+            }
+        }
+    };
+}
+
+impl_proto_traits_single_poly!(SecretKeyShare, ShellAheSecretKeyShare);
+impl_proto_traits_single_poly!(PublicKeyShare, ShellAhePublicKeyShare);
+impl_proto_traits_single_poly!(PublicKey, ShellAhePublicKey);
+
+macro_rules! impl_proto_traits_vec_poly {
+    ($type:ty, $proto:ty) => {
+        impl ToProto for $type {
+            type Proto = $proto;
+            type Context = ShellAhe;
+
+            fn to_proto(&self, ctx: &Self::Context) -> Result<Self::Proto, status::StatusError> {
+                let moduli = ahe::get_moduli(&ctx.public_ahe_parameters);
+                let mut result = proto!($proto {});
+                for poly in &self.0 {
+                    result.poly_mut().push(rns_polynomial_to_proto(&poly, &moduli)?);
+                }
+                Ok(result)
+            }
+        }
+
+        impl FromProto for $type {
+            type Proto = $proto;
+            type Context = ShellAhe;
+
+            fn from_proto(
+                proto: impl protobuf::AsView<Proxied = Self::Proto>,
+                ctx: &Self::Context,
+            ) -> Result<Self, status::StatusError> {
+                let moduli = ahe::get_moduli(&ctx.public_ahe_parameters);
+                let polys: Result<Vec<_>, _> = proto
+                    .as_view()
+                    .poly()
+                    .iter()
+                    .map(|p| rns_polynomial_from_proto(p, &moduli))
+                    .collect();
+                Ok(Self(polys?))
+            }
+        }
+    };
+}
+
+impl_proto_traits_vec_poly!(PartialDecryption, ShellAhePartialDecryption);
+impl_proto_traits_vec_poly!(PartialDecCiphertext, ShellAhePartialDecCiphertext);
+impl_proto_traits_vec_poly!(RecoverCiphertext, ShellAheRecoverCiphertext);
+
+impl ToProto for Ciphertext {
+    type Proto = ShellAheCiphertext;
+    type Context = ShellAhe;
+
+    fn to_proto(&self, ctx: &Self::Context) -> Result<Self::Proto, status::StatusError> {
+        Ok(proto!(ShellAheCiphertext {
+            component_b: self.component_b.to_proto(ctx)?,
+            component_a: self.component_a.to_proto(ctx)?,
+        }))
+    }
+}
+
+impl FromProto for Ciphertext {
+    type Proto = ShellAheCiphertext;
+    type Context = ShellAhe;
+
+    fn from_proto(
+        proto: impl protobuf::AsView<Proxied = Self::Proto>,
+        ctx: &Self::Context,
+    ) -> Result<Self, status::StatusError> {
+        let proto_view = proto.as_view();
+        Ok(Ciphertext {
+            component_b: RecoverCiphertext::from_proto(proto_view.component_b(), ctx)?,
+            component_a: PartialDecCiphertext::from_proto(proto_view.component_a(), ctx)?,
+        })
+    }
+}
+
 impl AheBase for ShellAhe {
     type SecretKeyShare = SecretKeyShare;
     type PublicKeyShare = PublicKeyShare;
@@ -664,6 +773,7 @@ mod test {
     };
     use googletest::{expect_eq, gtest, matchers::eq, verify_false, verify_that};
     use prng_traits::SecurePrng;
+    use proto_serialization_traits::{FromProto, ToProto};
     use shell_testing_parameters::make_ahe_config;
     use single_thread_hkdf::SingleThreadHkdfPrng;
     use status::StatusErrorCode;
@@ -691,6 +801,45 @@ mod test {
 
         let ct_1 = ahe.get_partial_dec_ciphertext(&ciphertext)?;
         let ct_0 = ahe.get_recover_ciphertext(&ciphertext)?;
+
+        let partial_decryption = ahe.partial_decrypt(&ct_1, &sk_share, &mut prng)?;
+        let decrypted = ahe.recover(&partial_decryption, &ct_0, Some(NUM_VALUES))?;
+        verify_that!(&pt, eq(&decrypted[..pt.len()]))
+    }
+
+    #[gtest]
+    fn test_encrypt_decrypt_serialized() -> googletest::Result<()> {
+        const NUM_VALUES: usize = 100;
+
+        let ahe = ShellAhe::new(make_ahe_config(), CONTEXT_STRING)?;
+
+        let pt = vec![1, 2, 3, 4, 5, 6, 7, 8];
+        let seed = SingleThreadHkdfPrng::generate_seed()?;
+        let mut prng = SingleThreadHkdfPrng::create(&seed)?;
+
+        let (sk_share, pk_share, _) = ahe.key_gen(&mut prng)?;
+
+        // Serialize and deserialize the key shares.
+        let sk_share_proto = sk_share.to_proto(&ahe)?;
+        let pk_share_proto = pk_share.to_proto(&ahe)?;
+        let sk_share = <ShellAhe as AheBase>::SecretKeyShare::from_proto(sk_share_proto, &ahe)?;
+        let pk_share = <ShellAhe as AheBase>::PublicKeyShare::from_proto(pk_share_proto, &ahe)?;
+
+        let pk = ahe.aggregate_public_key_shares(&[pk_share])?;
+        let (ciphertext, _) = ahe.encrypt(&pt, &pk, &mut prng)?;
+
+        // Serialize and deserialize the ciphertext.
+        let ciphertext_proto = ciphertext.to_proto(&ahe)?;
+        let ciphertext = <ShellAhe as AheBase>::Ciphertext::from_proto(ciphertext_proto, &ahe)?;
+
+        let ct_1 = ahe.get_partial_dec_ciphertext(&ciphertext)?;
+        let ct_0 = ahe.get_recover_ciphertext(&ciphertext)?;
+
+        // Serialize an deserialize the individual ciphertext components.
+        let ct_1_proto = ct_1.to_proto(&ahe)?;
+        let ct_0_proto = ct_0.to_proto(&ahe)?;
+        let ct_1 = <ShellAhe as AheBase>::PartialDecCiphertext::from_proto(ct_1_proto, &ahe)?;
+        let ct_0 = <ShellAhe as AheBase>::RecoverCiphertext::from_proto(ct_0_proto, &ahe)?;
 
         let partial_decryption = ahe.partial_decrypt(&ct_1, &sk_share, &mut prng)?;
         let decrypted = ahe.recover(&partial_decryption, &ct_0, Some(NUM_VALUES))?;

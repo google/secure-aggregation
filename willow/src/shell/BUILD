@@ -29,12 +29,17 @@ rust_library(
     crate_root = "ahe.rs",
     deps = [
         ":single_thread_hkdf",
+        "@protobuf//rust:protobuf",
         "//shell_wrapper:ahe",
         "//shell_wrapper:ahe_cxx",  # fixdeps: keep
+        "//shell_wrapper:shell_serialization",
+        "//shell_wrapper:shell_serialization_cxx",  # fixdeps: keep
         "//shell_wrapper:shell_types",
         "//shell_wrapper:status",
+        "//willow/proto/shell:shell_ciphertexts_rust_proto",
         "//willow/src/traits:ahe_traits",
         "//willow/src/traits:prng_traits",
+        "//willow/src/traits:proto_serialization_traits",
     ],
 )
 

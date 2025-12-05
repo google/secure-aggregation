@@ -21,22 +21,35 @@ import "shell_encryption/rns/rns_serialization.proto";
 option java_multiple_files = true;
 option java_outer_classname = "CiphertextsProto";
 
-message AhePublicKey {
-  rlwe.SerializedRnsPolynomial ahe_public_key = 1;
+message ShellAheSecretKeyShare {
+  rlwe.SerializedRnsPolynomial poly = 1;
 }
 
-message AheRecoveryCiphertext {
-  repeated rlwe.SerializedRnsPolynomial ciphertext = 1;
+message ShellAhePublicKeyShare {
+  rlwe.SerializedRnsPolynomial poly = 1;
 }
 
-message AhePartialDecCiphertext {
-  repeated rlwe.SerializedRnsPolynomial ciphertext = 1;
+message ShellAhePublicKey {
+  rlwe.SerializedRnsPolynomial poly = 1;
 }
 
-message KaheCiphertext {
-  repeated rlwe.SerializedRnsPolynomial ciphertext = 1;
+message ShellAhePartialDecryption {
+  repeated rlwe.SerializedRnsPolynomial poly = 1;
 }
 
-message AhePartialDecryption {
-  repeated rlwe.SerializedRnsPolynomial partial_decryption = 1;
+message ShellAhePartialDecCiphertext {
+  repeated rlwe.SerializedRnsPolynomial poly = 1;
+}
+
+message ShellAheRecoverCiphertext {
+  repeated rlwe.SerializedRnsPolynomial poly = 1;
+}
+
+message ShellAheCiphertext {
+  ShellAheRecoverCiphertext component_b = 1;
+  ShellAhePartialDecCiphertext component_a = 2;
+}
+
+message ShellKaheCiphertext {
+  repeated rlwe.SerializedRnsPolynomial poly = 1;
 }

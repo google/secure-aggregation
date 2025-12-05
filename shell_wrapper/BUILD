@@ -153,6 +153,7 @@ cc_library(
         "shell_serialization.h",
     ],
     deps = [
+        ":shell_serialization",
         ":shell_serialization_cxx/include",
         ":shell_types_cc",
         ":shell_types_cxx",
@@ -188,7 +189,6 @@ rust_library(
     name = "shell_serialization",
     srcs = ["shell_serialization.rs"],
     deps = [
-        ":shell_serialization_cc",
         ":shell_types",
         ":status",
         "@protobuf//rust:protobuf",
