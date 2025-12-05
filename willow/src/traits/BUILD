@@ -23,6 +23,17 @@ package(
 # Cryptographic primitives traits: PRNG, AHE, KAHE.
 
 rust_library(
+    name = "proto_serialization_traits",
+    srcs = [
+        "proto_serialization.rs",
+    ],
+    deps = [
+        "@protobuf//rust:protobuf",
+        "//shell_wrapper:status",
+    ],
+)
+
+rust_library(
     name = "prng_traits",
     srcs = [
         "prng.rs",
