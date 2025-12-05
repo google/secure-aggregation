@@ -147,12 +147,12 @@ impl ShellAhe {
             &mut pk_share_error,
             wraparound,
         )?;
-        Ok((sk_share, pk_share_b, pk_share_error))
+        Ok((SecretKeyShare(sk_share), PublicKeyShare(pk_share_b), KeyGenMetadata(pk_share_error)))
     }
 
     pub fn key_gen_with_verification_metadata(
         &self,
-        prng: &mut <ShellAhe as AheBase>::Rng,
+        prng: &mut <Self as AheBase>::Rng,
     ) -> Result<
         (
             <ShellAhe as AheBase>::SecretKeyShare,
@@ -171,7 +171,7 @@ impl ShellAhe {
     fn encrypt_impl(
         &self,
         plaintext: &<Self as AheBase>::Plaintext,
-        pk: &<Self as AheBase>::PublicKey,
+        pk: &RnsPolynomial,
         prng: &mut <Self as AheBase>::Rng,
         compute_wraparounds: bool,
     ) -> Result<
@@ -252,7 +252,8 @@ impl ShellAhe {
         (<Self as AheBase>::Ciphertext, <Self as AheBase>::EncryptionMetadata, Vec<RnsPolynomial>),
         status::StatusError,
     > {
-        let (ciphertext, metadata, wraparounds) = self.encrypt_impl(plaintext, pk, prng, true)?;
+        let (ciphertext, metadata, wraparounds) =
+            self.encrypt_impl(plaintext, &pk.0, prng, true)?;
         if !wraparounds.is_some() {
             return Err(status::internal("Failed to compute wraparounds."));
         }
@@ -262,13 +263,10 @@ impl ShellAhe {
     fn partial_decrypt_impl(
         &self,
         ct_a: &<Self as AheBase>::PartialDecCiphertext,
-        sk_share: &<Self as AheBase>::SecretKeyShare,
+        sk_share: &RnsPolynomial,
         prng: &mut <Self as AheBase>::Rng,
         compute_metadata: bool,
-    ) -> Result<
-        (<Self as AheBase>::PartialDecryption, Option<PartialDecryptionMetadata>),
-        status::StatusError,
-    > {
+    ) -> Result<(Vec<RnsPolynomial>, Option<PartialDecryptionMetadata>), status::StatusError> {
         let mut pd = vec![];
         let mut errors = vec![];
         let mut wraparounds = vec![];
@@ -313,11 +311,11 @@ impl ShellAhe {
         status::StatusError,
     > {
         let (pd, metadata) =
-            self.partial_decrypt_impl(ct_a, sk_share, prng, /*compute_metadata=*/ true)?;
+            self.partial_decrypt_impl(ct_a, &sk_share.0, prng, /*compute_metadata=*/ true)?;
         if !metadata.is_some() {
             return Err(status::internal("Failed to compute metadata."));
         }
-        Ok((pd, metadata.unwrap()))
+        Ok((PartialDecryption(pd), metadata.unwrap()))
     }
 
     pub fn num_coeffs(&self) -> usize {
@@ -346,6 +344,21 @@ impl ShellAhe {
 }
 
 #[derive(Clone)]
+pub struct SecretKeyShare(pub RnsPolynomial);
+
+#[derive(Clone)]
+pub struct PublicKeyShare(pub RnsPolynomial);
+
+#[derive(Clone)]
+pub struct KeyGenMetadata(pub RnsPolynomial);
+
+#[derive(Clone)]
+pub struct PublicKey(pub RnsPolynomial);
+
+#[derive(Clone)]
+pub struct PartialDecryption(pub Vec<RnsPolynomial>);
+
+#[derive(Clone)]
 pub struct PartialDecCiphertext(pub Vec<RnsPolynomial>);
 #[derive(Clone)]
 pub struct RecoverCiphertext(pub Vec<RnsPolynomial>);
@@ -370,10 +383,10 @@ pub struct PartialDecryptionMetadata {
 }
 
 impl AheBase for ShellAhe {
-    type SecretKeyShare = RnsPolynomial;
-    type PublicKeyShare = RnsPolynomial;
-    type KeyGenMetadata = RnsPolynomial;
-    type PublicKey = RnsPolynomial;
+    type SecretKeyShare = SecretKeyShare;
+    type PublicKeyShare = PublicKeyShare;
+    type KeyGenMetadata = KeyGenMetadata;
+    type PublicKey = PublicKey;
 
     type Plaintext = Vec<i64>;
 
@@ -382,7 +395,7 @@ impl AheBase for ShellAhe {
     type PartialDecryptionMetadata = PartialDecryptionMetadata;
     type PartialDecCiphertext = PartialDecCiphertext;
     type RecoverCiphertext = RecoverCiphertext;
-    type PartialDecryption = Vec<RnsPolynomial>;
+    type PartialDecryption = PartialDecryption;
 
     type Rng = SingleThreadHkdfPrng;
 
@@ -417,9 +430,9 @@ impl AheBase for ShellAhe {
 
         let mut public_key = ahe::create_zero_rns_polynomial(&self.public_ahe_parameters)?;
         for public_key_share in public_key_shares.into_iter() {
-            shell_types::add_in_place(&moduli, &public_key_share, &mut public_key)?;
+            shell_types::add_in_place(&moduli, &public_key_share.0, &mut public_key)?;
         }
-        Ok(public_key)
+        Ok(PublicKey(public_key))
     }
 
     fn add_plaintexts_in_place(
@@ -481,7 +494,7 @@ impl AheBase for ShellAhe {
         left: &Self::PartialDecryption,
         right: &mut Self::PartialDecryption,
     ) -> status::Status {
-        self.add_vec_rns_polynomial_in_place(left, right)
+        self.add_vec_rns_polynomial_in_place(&left.0, &mut right.0)
     }
 }
 
@@ -505,7 +518,7 @@ impl AheEncrypt for ShellAhe {
         pk: &Self::PublicKey,
         prng: &mut Self::Rng,
     ) -> Result<(Self::Ciphertext, Self::EncryptionMetadata), status::StatusError> {
-        let (ciphertext, metadata, _) = self.encrypt_impl(plaintext, pk, prng, false)?;
+        let (ciphertext, metadata, _) = self.encrypt_impl(plaintext, &pk.0, prng, false)?;
         Ok((ciphertext, metadata))
     }
 }
@@ -518,8 +531,8 @@ impl PartialDec for ShellAhe {
         prng: &mut Self::Rng,
     ) -> Result<Self::PartialDecryption, status::StatusError> {
         let (pd, _) =
-            self.partial_decrypt_impl(&ct_a, sk_share, prng, /*compute_metadata=*/ false)?;
-        Ok(pd)
+            self.partial_decrypt_impl(&ct_a, &sk_share.0, prng, /*compute_metadata=*/ false)?;
+        Ok(PartialDecryption(pd))
     }
 }
 
@@ -530,12 +543,12 @@ impl Recover for ShellAhe {
         ct_b: &Self::RecoverCiphertext,
         plaintext_len: Option<usize>,
     ) -> Result<Self::Plaintext, status::StatusError> {
-        check_vec_len(&pd, &ct_b.0)?;
+        check_vec_len(&pd.0, &ct_b.0)?;
 
         // Allow the buffer to be shorter, in case the last polynomial is padded.
         let buffer_len;
         if let Some(l) = plaintext_len {
-            let min_buffer_len = (pd.len() - 1) * self.num_coeffs;
+            let min_buffer_len = (pd.0.len() - 1) * self.num_coeffs;
             if l < min_buffer_len {
                 return Err(status::invalid_argument(format!(
                     "received plaintext_len = {}, but the ciphertexts contain at least {} values",
@@ -544,18 +557,18 @@ impl Recover for ShellAhe {
             }
             buffer_len = l;
         } else {
-            buffer_len = pd.len() * self.num_coeffs;
+            buffer_len = pd.0.len() * self.num_coeffs;
         }
 
         let mut unsigned_values = vec![0; buffer_len];
-        for i in 0..pd.len() {
+        for i in 0..pd.0.len() {
             let start = i * self.num_coeffs;
             // Last polynomial might be incomplete.
             let end = std::cmp::min(start + self.num_coeffs, buffer_len);
 
             let n_written = ahe::recover_messages(
                 &ct_b.0[i],
-                &pd[i],
+                &pd.0[i],
                 &self.public_ahe_parameters,
                 &mut unsigned_values[start..end],
             )?;

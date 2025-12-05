@@ -88,12 +88,18 @@ impl ShellKahe {
     }
 }
 
+#[derive(Clone)]
+pub struct SecretKey(pub RnsPolynomial);
+
+#[derive(Clone)]
+pub struct Ciphertext(pub RnsPolynomialVec);
+
 impl KaheBase for ShellKahe {
-    type SecretKey = RnsPolynomial;
+    type SecretKey = SecretKey;
 
     type Plaintext = HashMap<String, Vec<u64>>;
 
-    type Ciphertext = RnsPolynomialVec;
+    type Ciphertext = Ciphertext;
 
     type Rng = SingleThreadHkdfPrng;
 
@@ -129,7 +135,7 @@ impl KaheBase for ShellKahe {
         // NOTE: This is just calling `MakeSpan` on an existing vector of raw pointers
         // that lives in `public_kahe_parameters`.
         let moduli = kahe::get_moduli(&self.public_kahe_parameters);
-        add_in_place(&moduli, left, right)?;
+        add_in_place(&moduli, &left.0, &mut right.0)?;
         Ok(())
     }
 
@@ -171,14 +177,15 @@ impl KaheBase for ShellKahe {
         right: &mut Self::Ciphertext,
     ) -> Result<(), status::StatusError> {
         let moduli = kahe::get_moduli(&self.public_kahe_parameters);
-        add_in_place_vec(&moduli, left, right)?;
+        add_in_place_vec(&moduli, &left.0, &mut right.0)?;
         Ok(())
     }
 }
 
 impl KaheKeygen for ShellKahe {
     fn key_gen(&self, r: &mut Self::Rng) -> Result<Self::SecretKey, status::StatusError> {
-        kahe::generate_secret_key(&self.public_kahe_parameters, &mut r.0)
+        let sk = kahe::generate_secret_key(&self.public_kahe_parameters, &mut r.0)?;
+        Ok(SecretKey(sk))
     }
 }
 
@@ -217,13 +224,14 @@ impl KaheEncrypt for ShellKahe {
             }
         }
 
-        kahe::encrypt(
+        let ct = kahe::encrypt(
             &pt,
             &self.config.packed_vector_configs,
-            &sk,
+            &sk.0,
             &self.public_kahe_parameters,
             &mut r.0,
-        )
+        )?;
+        Ok(Ciphertext(ct))
     }
 }
 
@@ -233,7 +241,12 @@ impl KaheDecrypt for ShellKahe {
         ct: &Self::Ciphertext,
         sk: &Self::SecretKey,
     ) -> Result<Self::Plaintext, status::StatusError> {
-        kahe::decrypt(&ct, &sk, &self.public_kahe_parameters, &self.config.packed_vector_configs)
+        kahe::decrypt(
+            &ct.0,
+            &sk.0,
+            &self.public_kahe_parameters,
+            &self.config.packed_vector_configs,
+        )
     }
 }
 
@@ -241,7 +254,8 @@ impl TrySecretKeyInto<Vec<i64>> for ShellKahe {
     fn try_secret_key_into(&self, sk: Self::SecretKey) -> Result<Vec<i64>, status::StatusError> {
         let mut signed_values: Vec<i64> = vec![0; self.num_coeffs];
         let moduli = kahe::get_moduli(&self.public_kahe_parameters);
-        let n_written = write_small_rns_polynomial_to_buffer(&sk, &moduli, &mut signed_values[..])?;
+        let n_written =
+            write_small_rns_polynomial_to_buffer(&sk.0, &moduli, &mut signed_values[..])?;
         if n_written != self.num_coeffs {
             return Err(status::internal(format!(
                 "Expected {} coefficients, but got {}.",
@@ -272,7 +286,7 @@ impl TrySecretKeyFrom<Vec<i64>> for ShellKahe {
             self.num_coeffs as u64,
             &moduli,
         )?;
-        Ok(poly)
+        Ok(SecretKey(poly))
     }
 }
 
