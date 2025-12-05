@@ -85,7 +85,13 @@ rust_library(
     deps = [
         ":ahe_traits",
         ":kahe_traits",
+        ":proto_serialization_traits",
         ":vahe_traits",
+        "@protobuf//rust:protobuf",
+        "//shell_wrapper:status",
+        "//willow/proto/shell:shell_ciphertexts_rust_proto",
+        "//willow/proto/willow:messages_rust_proto",
+        "//willow/proto/zk:proofs_rust_proto",
     ],
 )
 

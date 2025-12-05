@@ -13,20 +13,34 @@
 // limitations under the License.
 
 use ahe_traits::PartialDec;
-use kahe_traits::{KaheBase, KaheDecrypt, TrySecretKeyFrom};
+use kahe_traits::{HasKahe, KaheBase, KaheDecrypt, TrySecretKeyFrom};
 use messages::{
     CiphertextContribution, ClientMessage, DecryptionRequestContribution, DecryptorPublicKey,
     DecryptorPublicKeyShare, PartialDecryptionResponse,
 };
 use server_traits::SecureAggregationServer;
 use std::collections::HashMap;
-use vahe_traits::{EncryptVerify, Recover, VaheBase};
+use vahe_traits::{EncryptVerify, HasVahe, Recover, VaheBase};
 
 /// The server struct, containing a WillowCommon instance. Only the clients messages are verified,
 /// not the key generation or partial decryptions.
-pub struct WillowV1Server<Kahe, Vahe: VaheBase> {
+pub struct WillowV1Server<Kahe: KaheBase, Vahe: VaheBase> {
     pub kahe: Kahe,
     pub vahe: Vahe,
+}
+
+impl<Kahe: KaheBase, Vahe: VaheBase> HasKahe for WillowV1Server<Kahe, Vahe> {
+    type Kahe = Kahe;
+    fn kahe(&self) -> &Self::Kahe {
+        &self.kahe
+    }
+}
+
+impl<Kahe: KaheBase, Vahe: VaheBase> HasVahe for WillowV1Server<Kahe, Vahe> {
+    type Vahe = Vahe;
+    fn vahe(&self) -> &Self::Vahe {
+        &self.vahe
+    }
 }
 
 /// State for the server.
@@ -59,7 +73,7 @@ impl<Kahe: KaheBase, Vahe: VaheBase + PartialDec> Clone for ServerState<Kahe, Va
     }
 }
 
-impl<Kahe, Vahe> SecureAggregationServer<Kahe, Vahe> for WillowV1Server<Kahe, Vahe>
+impl<Kahe, Vahe> SecureAggregationServer for WillowV1Server<Kahe, Vahe>
 where
     Vahe: EncryptVerify + PartialDec + Recover,
     Kahe: KaheBase + TrySecretKeyFrom<Vahe::Plaintext> + KaheDecrypt,
@@ -228,17 +242,18 @@ where
                 (None, None) => None,
             };
 
-        merged_server_state.partial_decryption_sum =
-            match (&server_state_1.partial_decryption_sum, &server_state_2.partial_decryption_sum)
-            {
-                (Some(sum1), Some(sum2)) => {
-                    let mut merged_sum = sum1.clone();
-                    self.vahe.add_partial_decryptions_in_place(sum2, &mut merged_sum)?;
-                    Some(merged_sum)
-                }
-                (Some(s), None) | (None, Some(s)) => Some(s.clone()),
-                (None, None) => None,
-            };
+        merged_server_state.partial_decryption_sum = match (
+            &server_state_1.partial_decryption_sum,
+            &server_state_2.partial_decryption_sum,
+        ) {
+            (Some(sum1), Some(sum2)) => {
+                let mut merged_sum = sum1.clone();
+                self.vahe.add_partial_decryptions_in_place(sum2, &mut merged_sum)?;
+                Some(merged_sum)
+            }
+            (Some(s), None) | (None, Some(s)) => Some(s.clone()),
+            (None, None) => None,
+        };
 
         Ok(merged_server_state)
     }

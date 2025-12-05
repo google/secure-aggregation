@@ -21,6 +21,12 @@ pub trait VaheBase: AheBase + Sized {
     type PartialDecProof;
 }
 
+/// Accessor trait for composition.
+pub trait HasVahe {
+    type Vahe: VaheBase;
+    fn vahe(&self) -> &Self::Vahe;
+}
+
 pub trait VerifiableKeyGen: VaheBase {
     /// Generate a secret key and a public key.
     ///

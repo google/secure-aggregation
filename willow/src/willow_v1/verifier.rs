@@ -14,12 +14,19 @@
 
 use messages::{DecryptionRequestContribution, PartialDecryptionRequest};
 use std::fmt::Debug;
-use vahe_traits::{EncryptVerify, VaheBase};
+use vahe_traits::{EncryptVerify, HasVahe, VaheBase};
 use verifier_traits::SecureAggregationVerifier;
 
 /// The verifier struct, containing a WillowCommon instance.
 pub struct WillowV1Verifier<Vahe: VaheBase> {
     pub vahe: Vahe,
+}
+
+impl<Vahe: VaheBase> HasVahe for WillowV1Verifier<Vahe> {
+    type Vahe = Vahe;
+    fn vahe(&self) -> &Self::Vahe {
+        &self.vahe
+    }
 }
 
 // State for the verifier after the first contribution is received.
@@ -90,7 +97,7 @@ impl<Vahe: VaheBase> Clone for VerifierState<Vahe> {
     }
 }
 
-impl<Vahe> SecureAggregationVerifier<Vahe> for WillowV1Verifier<Vahe>
+impl<Vahe> SecureAggregationVerifier for WillowV1Verifier<Vahe>
 where
     Vahe: EncryptVerify,
 {

@@ -14,10 +14,10 @@
 
 use messages::{DecryptorPublicKeyShare, PartialDecryptionRequest, PartialDecryptionResponse};
 use status::StatusError;
-use vahe_traits::VaheBase;
+use vahe_traits::HasVahe;
 
 /// Base trait for the Decryptor.
-pub trait SecureAggregationDecryptor<Vahe: VaheBase> {
+pub trait SecureAggregationDecryptor: HasVahe {
     /// The state held by the Decryptor between messages.
     type DecryptorState: Default;
 
@@ -26,13 +26,13 @@ pub trait SecureAggregationDecryptor<Vahe: VaheBase> {
     fn create_public_key_share(
         &mut self,
         decryptor_state: &mut Self::DecryptorState,
-    ) -> Result<DecryptorPublicKeyShare<Vahe>, StatusError>;
+    ) -> Result<DecryptorPublicKeyShare<<Self as HasVahe>::Vahe>, StatusError>;
 
     /// Handles a partial decryption request received from the Server. Returns a
     /// partial decryption to the Server.
     fn handle_partial_decryption_request(
         &mut self,
-        partial_decryption_request: PartialDecryptionRequest<Vahe>,
+        partial_decryption_request: PartialDecryptionRequest<<Self as HasVahe>::Vahe>,
         decryptor_state: &Self::DecryptorState,
-    ) -> Result<PartialDecryptionResponse<Vahe>, StatusError>;
+    ) -> Result<PartialDecryptionResponse<<Self as HasVahe>::Vahe>, StatusError>;
 }

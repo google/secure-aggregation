@@ -183,15 +183,19 @@ rust_library(
     deps = [
         ":ahe_shell",
         ":single_thread_hkdf",
+        "@protobuf//rust:protobuf",
         "@crate_index//:merlin",
         "//shell_wrapper:ahe",
         "//shell_wrapper:ahe_cxx",  # fixdeps: keep
         "//shell_wrapper:shell_types",
         "//shell_wrapper:status",
+        "//willow/proto/zk:proofs_rust_proto",
         "//willow/src/traits:ahe_traits",
+        "//willow/src/traits:proto_serialization_traits",
         "//willow/src/traits:vahe_traits",
         "//willow/src/traits:zk_traits",
         "//willow/src/zk:rlwe_relation",
+        "//willow/src/zk:rlwe_relation_serialization",
     ],
 )
 
@@ -207,6 +211,7 @@ rust_test(
         "//willow/src/testing_utils:shell_testing_parameters",
         "//willow/src/traits:ahe_traits",
         "//willow/src/traits:prng_traits",
+        "//willow/src/traits:proto_serialization_traits",
         "//willow/src/traits:vahe_traits",
         "//willow/src/traits:zk_traits",
         "//willow/src/zk:rlwe_relation",

@@ -12,13 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use kahe_traits::KaheBase;
+use kahe_traits::HasKahe;
 use messages::{ClientMessage, DecryptorPublicKey};
 use status::StatusError;
-use vahe_traits::VaheBase;
+use vahe_traits::HasVahe;
 
 /// Base trait for the secure aggregation Client.
-pub trait SecureAggregationClient<Kahe: KaheBase, Vahe: VaheBase> {
+pub trait SecureAggregationClient: HasKahe + HasVahe {
     /// The plaintext to be aggregated.
     type Plaintext;
     type PlaintextSlice<'a>;
@@ -28,7 +28,7 @@ pub trait SecureAggregationClient<Kahe: KaheBase, Vahe: VaheBase> {
     fn create_client_message(
         &mut self,
         plaintext: &Self::PlaintextSlice<'_>,
-        signed_public_key: &DecryptorPublicKey<Vahe>,
+        signed_public_key: &DecryptorPublicKey<<Self as HasVahe>::Vahe>,
         nonce: &[u8],
-    ) -> Result<ClientMessage<Kahe, Vahe>, StatusError>;
+    ) -> Result<ClientMessage<<Self as HasKahe>::Kahe, <Self as HasVahe>::Vahe>, StatusError>;
 }

@@ -110,37 +110,34 @@ pub struct SecretKey(pub RnsPolynomial);
 #[derive(Clone)]
 pub struct Ciphertext(pub RnsPolynomialVec);
 
-impl ToProto for SecretKey {
+impl<Context: AsRef<ShellKahe>> ToProto<Context> for SecretKey {
     type Proto = ShellKaheSecretKey;
-    type Context = ShellKahe;
 
-    fn to_proto(&self, ctx: &Self::Context) -> Result<Self::Proto, status::StatusError> {
-        let moduli = kahe::get_moduli(&ctx.public_kahe_parameters);
+    fn to_proto(&self, ctx: Context) -> Result<Self::Proto, status::StatusError> {
+        let moduli = kahe::get_moduli(&ctx.as_ref().public_kahe_parameters);
         let poly_proto = rns_polynomial_to_proto(&self.0, &moduli)?;
         Ok(proto!(ShellKaheSecretKey { poly: poly_proto }))
     }
 }
 
-impl FromProto for SecretKey {
+impl<Context: AsRef<ShellKahe>> FromProto<Context> for SecretKey {
     type Proto = ShellKaheSecretKey;
-    type Context = ShellKahe;
 
     fn from_proto(
         proto: impl protobuf::AsView<Proxied = Self::Proto>,
-        ctx: &Self::Context,
+        ctx: Context,
     ) -> Result<Self, status::StatusError> {
-        let moduli = kahe::get_moduli(&ctx.public_kahe_parameters);
+        let moduli = kahe::get_moduli(&ctx.as_ref().public_kahe_parameters);
         let poly = rns_polynomial_from_proto(proto.as_view().poly(), &moduli)?;
         Ok(Self(poly))
     }
 }
 
-impl ToProto for Ciphertext {
+impl<Context: AsRef<ShellKahe>> ToProto<Context> for Ciphertext {
     type Proto = ShellKaheCiphertext;
-    type Context = ShellKahe;
 
-    fn to_proto(&self, ctx: &Self::Context) -> Result<Self::Proto, status::StatusError> {
-        let moduli = kahe::get_moduli(&ctx.public_kahe_parameters);
+    fn to_proto(&self, ctx: Context) -> Result<Self::Proto, status::StatusError> {
+        let moduli = kahe::get_moduli(&ctx.as_ref().public_kahe_parameters);
         let mut result = proto!(ShellKaheCiphertext {});
         for poly in self.0.iter() {
             result.poly_mut().push(rns_polynomial_to_proto(&poly, &moduli)?);
@@ -149,18 +146,23 @@ impl ToProto for Ciphertext {
     }
 }
 
-impl FromProto for Ciphertext {
+impl<Context: AsRef<ShellKahe>> FromProto<Context> for Ciphertext {
     type Proto = ShellKaheCiphertext;
-    type Context = ShellKahe;
 
     fn from_proto(
         proto: impl protobuf::AsView<Proxied = Self::Proto>,
-        ctx: &Self::Context,
+        ctx: Context,
     ) -> Result<Self, status::StatusError> {
-        let moduli = kahe::get_moduli(&ctx.public_kahe_parameters);
+        let moduli = kahe::get_moduli(&ctx.as_ref().public_kahe_parameters);
         let polys: Result<Vec<_>, _> =
             proto.as_view().poly().iter().map(|p| rns_polynomial_from_proto(p, &moduli)).collect();
         Ok(Ciphertext(rust_vec_to_rns_polynomial_vec(polys?)))
+    }
+}
+
+impl AsRef<ShellKahe> for ShellKahe {
+    fn as_ref(&self) -> &ShellKahe {
+        self
     }
 }
 
