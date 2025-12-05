@@ -390,7 +390,6 @@ FfiStatus Encrypt(const BigIntVectorWrapper& packed_values,
   if (!ciphertext_vec.ok()) {
     return MakeFfiStatus(ciphertext_vec.status());
   }
-  out->len = ciphertext_vec.value().size();
   out->ptr = std::make_unique<std::vector<secure_aggregation::RnsPolynomial>>(
       std::move(ciphertext_vec.value()));
   return MakeFfiStatus();

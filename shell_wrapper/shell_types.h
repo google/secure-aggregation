@@ -65,6 +65,9 @@ RnsPolynomialWrapper CloneRnsPolynomialWrapper(const RnsPolynomialWrapper* in);
 RnsPolynomialVecWrapper CloneRnsPolynomialVecWrapper(
     const RnsPolynomialVecWrapper* in);
 
+RnsPolynomialVecWrapper RustVecToRnsPolynomialVecWrapper(
+    rust::Vec<RnsPolynomialWrapper> v);
+
 // Takes prime moduli {q_i}, and the RNS representation `poly` of a "small"
 // polynomial in Z[X] where each coefficient c \in Z verifies |c| < q_i/2 for
 // all q_i. Fills in the buffer with the signed integer

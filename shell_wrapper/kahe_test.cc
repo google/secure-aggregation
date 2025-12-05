@@ -590,7 +590,7 @@ TEST(KaheTest, Failures) {
                                       &prng, &ciphertexts)),
               StatusIs(absl::StatusCode::kInvalidArgument));
 
-  RnsPolynomialVecWrapper bad_ciphertexts{.len = 1, .ptr = nullptr};
+  RnsPolynomialVecWrapper bad_ciphertexts{.ptr = nullptr};
   BigIntVectorWrapper decrypted_wrapper;
   EXPECT_THAT(UnwrapFfiStatus(
                   Decrypt(bad_ciphertexts, key, params, &decrypted_wrapper)),

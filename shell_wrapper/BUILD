@@ -79,6 +79,7 @@ cc_library(
         "shell_types.h",
     ],
     deps = [
+        ":shell_types",
         ":shell_types_cxx/include",
         ":status_cc",
         ":status_cxx",
@@ -133,7 +134,6 @@ rust_library(
     name = "shell_types",
     srcs = ["shell_types.rs"],
     deps = [
-        ":shell_types_cc",
         ":status",
         "@cxx.rs//:cxx",
     ],
@@ -381,7 +381,6 @@ rust_library(
         ":single_thread_hkdf",
         ":status",
         "@cxx.rs//:cxx",
-        "@cxx.rs//:core",
     ],
 )
 

@@ -15,6 +15,7 @@
 use status::Status;
 use std::marker::PhantomData;
 use std::mem::MaybeUninit;
+use std::ops::Deref;
 
 #[cxx::bridge]
 pub mod ffi {
@@ -24,8 +25,6 @@ pub mod ffi {
     }
 
     pub struct RnsPolynomialVecWrapper {
-        /// Number of polynomials in the vector, for easy access from Rust.
-        len: i32,
         ptr: UniquePtr<CxxVector<RnsPolynomial>>,
     }
 
@@ -94,6 +93,10 @@ pub mod ffi {
             poly: *const RnsPolynomialVecWrapper,
         ) -> RnsPolynomialVecWrapper;
 
+        pub fn RustVecToRnsPolynomialVecWrapper(
+            v: Vec<RnsPolynomialWrapper>,
+        ) -> RnsPolynomialVecWrapper;
+
         pub fn CloneString(x: &CxxString) -> UniquePtr<CxxString>;
         pub fn EmptyString() -> &'static CxxString;
 
@@ -105,6 +108,15 @@ use status::rust_status_from_cpp;
 
 /// Re-export CXX bindings, and implement Clone for them.
 pub use ffi::RnsPolynomialVecWrapper as RnsPolynomialVec;
+
+impl Deref for RnsPolynomialVec {
+    type Target = cxx::Vector<ffi::RnsPolynomial>;
+
+    fn deref(&self) -> &Self::Target {
+        // SAFETY: No lifetime constraints. self->ptr is guaranteed to be non-null.
+        &self.ptr.deref()
+    }
+}
 
 impl Clone for RnsPolynomialVec {
     fn clone(&self) -> Self {

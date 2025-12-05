@@ -27,6 +27,7 @@
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
 #include "absl/types/span.h"
+#include "include/cxx.h"
 #include "shell_encryption/int256.h"
 #include "shell_encryption/rns/crt_interpolation.h"
 #include "shell_wrapper/shell_aliases.h"
@@ -280,7 +281,6 @@ RnsPolynomialWrapper CloneRnsPolynomialWrapper(const RnsPolynomialWrapper* in) {
 RnsPolynomialVecWrapper CloneRnsPolynomialVecWrapper(
     const RnsPolynomialVecWrapper* in) {
   RnsPolynomialVecWrapper result{
-      .len = in->len,
       .ptr = std::make_unique<std::vector<secure_aggregation::RnsPolynomial>>(),
   };
   result.ptr->reserve(in->ptr->size());
@@ -288,4 +288,19 @@ RnsPolynomialVecWrapper CloneRnsPolynomialVecWrapper(
     result.ptr->push_back(poly.Clone());
   }
   return result;
+}
+
+RnsPolynomialVecWrapper RustVecToRnsPolynomialVecWrapper(
+    rust::Vec<RnsPolynomialWrapper> v) {
+  auto result_vec =
+      std::make_unique<std::vector<secure_aggregation::RnsPolynomial>>();
+  result_vec->reserve(v.size());
+  for (auto& wrapper : v) {
+    if (wrapper.ptr) {
+      result_vec->push_back(std::move(*wrapper.ptr));
+    }
+  }
+  return RnsPolynomialVecWrapper{
+      .ptr = std::move(result_vec),
+  };
 }
