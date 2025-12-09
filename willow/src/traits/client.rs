@@ -21,11 +21,12 @@ use vahe_traits::VaheBase;
 pub trait SecureAggregationClient<Kahe: KaheBase, Vahe: VaheBase> {
     /// The plaintext to be aggregated.
     type Plaintext;
+    type PlaintextSlice<'a>;
 
     /// Creates a client message to be sent to the Server.
     fn create_client_message(
         &mut self,
-        plaintext: &Self::Plaintext,
+        plaintext: &Self::PlaintextSlice<'_>,
         signed_public_key: &DecryptorPublicKey<Vahe>,
     ) -> Result<ClientMessage<Kahe, Vahe>, StatusError>;
 }

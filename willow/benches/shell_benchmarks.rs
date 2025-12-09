@@ -114,10 +114,10 @@ struct BaseInputs {
 fn setup_base(args: &Args) -> BaseInputs {
     // Create common configs and seeds. Prepare enough public polynomials to
     // accomodate the input length.
-    let default_id = String::from(DEFAULT_ID);
+    let default_id = DEFAULT_ID.to_string();
     let aggregation_config = AggregationConfig {
         vector_lengths_and_bounds: HashMap::from([(
-            default_id.clone(),
+            default_id,
             (args.input_length as isize, args.input_domain as i64),
         )]),
         max_number_of_decryptors: 1,
@@ -187,14 +187,14 @@ struct ClientInputs {
 fn setup_client(args: &Args) -> ClientInputs {
     let inputs = setup_base(args);
     let input_values = generate_random_unsigned_vector(args.input_length, args.input_domain);
-    let plaintext = HashMap::from([(String::from(DEFAULT_ID), input_values)]);
+    let plaintext = HashMap::from([(DEFAULT_ID.to_string(), input_values)]);
     ClientInputs { client: inputs.client, public_key: inputs.public_key, plaintext: plaintext }
 }
 
 fn run_client(inputs: &mut ClientInputs) {
-    let res = inputs
-        .client
-        .create_client_message(black_box(&inputs.plaintext), black_box(&inputs.public_key));
+    let plaintext = ShellKahe::plaintext_as_slice(&inputs.plaintext);
+    let res =
+        inputs.client.create_client_message(black_box(&plaintext), black_box(&inputs.public_key));
     let _ = black_box(res); // Prevent optimization.
 }
 
@@ -219,7 +219,8 @@ fn setup_verifier_verify_client_message(args: &Args) -> VerifierInputs {
         // Generates a plaintext and encrypts.
         let client_input_values =
             generate_random_unsigned_vector(args.input_length, args.input_domain);
-        let client_plaintext = HashMap::from([(String::from(DEFAULT_ID), client_input_values)]);
+        let client_plaintext_owned = HashMap::from([(DEFAULT_ID.to_string(), client_input_values)]);
+        let client_plaintext = ShellKahe::plaintext_as_slice(&client_plaintext_owned);
         let client_message =
             inputs.client.create_client_message(&client_plaintext, &inputs.public_key).unwrap();
         let (_, decryption_request_contribution) =
@@ -254,7 +255,8 @@ fn setup_server_handle_client_message(args: &Args) -> ServerInputs {
         // Generates a plaintext and encrypts.
         let client_input_values =
             generate_random_unsigned_vector(args.input_length, args.input_domain);
-        let client_plaintext = HashMap::from([(String::from(DEFAULT_ID), client_input_values)]);
+        let client_plaintext_owned = HashMap::from([(DEFAULT_ID.to_string(), client_input_values)]);
+        let client_plaintext = ShellKahe::plaintext_as_slice(&client_plaintext_owned);
         let client_message =
             inputs.client.create_client_message(&client_plaintext, &inputs.public_key).unwrap();
         let (ciphertext_contribution, _) =
@@ -291,7 +293,8 @@ fn setup_server_recover_aggregation_result(args: &Args) -> ServerRecoverInputs {
 
     // Client generates a plaintext and encrypts.
     let client_input_values = generate_random_unsigned_vector(args.input_length, args.input_domain);
-    let client_plaintext = HashMap::from([(String::from(DEFAULT_ID), client_input_values)]);
+    let client_plaintext_owned = HashMap::from([(DEFAULT_ID.to_string(), client_input_values)]);
+    let client_plaintext = ShellKahe::plaintext_as_slice(&client_plaintext_owned);
     let client_message =
         inputs.client.create_client_message(&client_plaintext, &inputs.public_key).unwrap();
 
@@ -341,7 +344,8 @@ fn setup_decryptor_partial_decryption(args: &Args) -> DecryptorInputs {
     let mut inputs = setup_base(args);
     // Generates a plaintext and encrypts.
     let client_input_values = generate_random_unsigned_vector(args.input_length, args.input_domain);
-    let client_plaintext = HashMap::from([(String::from(DEFAULT_ID), client_input_values)]);
+    let client_plaintext_owned = HashMap::from([(DEFAULT_ID.to_string(), client_input_values)]);
+    let client_plaintext = ShellKahe::plaintext_as_slice(&client_plaintext_owned);
     let client_message =
         inputs.client.create_client_message(&client_plaintext, &inputs.public_key).unwrap();
 

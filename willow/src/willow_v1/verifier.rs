@@ -267,8 +267,8 @@ mod tests {
 
         // Client encrypts.
         let client_plaintext = HashMap::from([(
-            DEFAULT_VECTOR_ID.to_string(),
-            vec![1, 2, 3, 4, 5, 6, 7, 8, 7, 6, 5, 4, 3, 2, 1],
+            DEFAULT_VECTOR_ID,
+            [1, 2, 3, 4, 5, 6, 7, 8, 7, 6, 5, 4, 3, 2, 1].as_slice(),
         )]);
         let client_message = client.create_client_message(&client_plaintext, &public_key)?;
 

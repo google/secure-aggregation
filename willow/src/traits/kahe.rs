@@ -46,6 +46,8 @@ pub trait KaheBase: Sized {
         right: &mut Self::Plaintext,
     ) -> Result<(), StatusError>;
 
+    /// Plaintext slice, when underlying data (e.g. different fields of the plaintext) is itself owned by the caller.
+    type PlaintextSlice<'a>;
     /// Ciphertext. Supports addition.
     type Ciphertext: Clone;
     fn add_ciphertexts_in_place(
@@ -67,9 +69,9 @@ pub trait KaheKeygen: KaheBase {
 /// Encryption
 pub trait KaheEncrypt: KaheBase {
     /// Encrypt a plaintext `pt` with the secret key `sk`.
-    fn encrypt(
+    fn encrypt<'a>(
         &self,
-        pt: &Self::Plaintext,
+        pt: &Self::PlaintextSlice<'a>,
         sk: &Self::SecretKey,
         r: &mut Self::Rng,
     ) -> Result<Self::Ciphertext, StatusError>;

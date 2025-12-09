@@ -44,7 +44,9 @@ fn encrypt_decrypt_one() -> googletest::Result<()> {
     let max_number_of_decryptors = aggregation_config.max_number_of_decryptors;
 
     // Create client.
-    let vahe = ShellVahe::new(create_shell_ahe_config(max_number_of_decryptors).unwrap(), CONTEXT_STRING).unwrap();
+    let vahe =
+        ShellVahe::new(create_shell_ahe_config(max_number_of_decryptors).unwrap(), CONTEXT_STRING)
+            .unwrap();
     let kahe =
         ShellKahe::new(create_shell_kahe_config(&aggregation_config).unwrap(), CONTEXT_STRING)
             .unwrap();
@@ -54,14 +56,18 @@ fn encrypt_decrypt_one() -> googletest::Result<()> {
 
     // Create decryptor, which needs its own `vahe` (with same public polynomials
     // generated from the seeds) and `prng`.
-    let vahe = ShellVahe::new(create_shell_ahe_config(max_number_of_decryptors).unwrap(), CONTEXT_STRING).unwrap();
+    let vahe =
+        ShellVahe::new(create_shell_ahe_config(max_number_of_decryptors).unwrap(), CONTEXT_STRING)
+            .unwrap();
     let seed = SingleThreadHkdfPrng::generate_seed().unwrap();
     let prng = SingleThreadHkdfPrng::create(&seed).unwrap();
     let mut decryptor_state = DecryptorState::default();
     let mut decryptor = WillowV1Decryptor { vahe, prng };
 
     // Create server.
-    let vahe = ShellVahe::new(create_shell_ahe_config(max_number_of_decryptors).unwrap(), CONTEXT_STRING).unwrap();
+    let vahe =
+        ShellVahe::new(create_shell_ahe_config(max_number_of_decryptors).unwrap(), CONTEXT_STRING)
+            .unwrap();
     let kahe =
         ShellKahe::new(create_shell_kahe_config(&aggregation_config).unwrap(), CONTEXT_STRING)
             .unwrap();
@@ -69,7 +75,9 @@ fn encrypt_decrypt_one() -> googletest::Result<()> {
     let mut server_state = ServerState::default();
 
     // Create verifier.
-    let vahe = ShellVahe::new(create_shell_ahe_config(max_number_of_decryptors).unwrap(), CONTEXT_STRING).unwrap();
+    let vahe =
+        ShellVahe::new(create_shell_ahe_config(max_number_of_decryptors).unwrap(), CONTEXT_STRING)
+            .unwrap();
     let verifier = WillowV1Verifier { vahe };
     let mut verifier_state = VerifierState::default();
 
@@ -85,8 +93,8 @@ fn encrypt_decrypt_one() -> googletest::Result<()> {
     let public_key = server.create_decryptor_public_key(&server_state).unwrap();
 
     // Client encrypts.
-    let client_plaintext =
-        HashMap::from([(default_id.clone(), vec![1, 2, 3, 4, 5, 6, 7, 8, 7, 6, 5, 4, 3, 2, 1])]);
+    let input_values = vec![1, 2, 3, 4, 5, 6, 7, 8, 7, 6, 5, 4, 3, 2, 1];
+    let client_plaintext = HashMap::from([(default_id.as_str(), input_values.as_slice())]);
     let client_message = client.create_client_message(&client_plaintext, &public_key).unwrap();
 
     // The client message is split and handled by the server and verifier.
@@ -109,10 +117,10 @@ fn encrypt_decrypt_one() -> googletest::Result<()> {
 
     // Check that the (padded) result matches the client plaintext.
     verify_that!(aggregation_result.keys().collect::<Vec<_>>(), container_eq([&default_id]))?;
-    let client_plaintext_length = client_plaintext.get(&default_id).unwrap().len();
+    let client_plaintext_length = client_plaintext.get(default_id.as_str()).unwrap().len();
     verify_eq!(
-        aggregation_result.get(&default_id).unwrap()[..client_plaintext_length],
-        client_plaintext.get(&default_id).unwrap()[..]
+        aggregation_result.get(default_id.as_str()).unwrap()[..client_plaintext_length],
+        client_plaintext.get(default_id.as_str()).unwrap()[..]
     )
 }
 
@@ -128,7 +136,11 @@ fn encrypt_decrypt_multiple_clients() -> googletest::Result<()> {
     // Create clients.
     let mut clients = vec![];
     for _ in 0..NUM_CLIENTS {
-        let vahe = ShellVahe::new(create_shell_ahe_config(max_number_of_decryptors).unwrap(), CONTEXT_STRING).unwrap();
+        let vahe = ShellVahe::new(
+            create_shell_ahe_config(max_number_of_decryptors).unwrap(),
+            CONTEXT_STRING,
+        )
+        .unwrap();
         let kahe =
             ShellKahe::new(create_shell_kahe_config(&aggregation_config).unwrap(), CONTEXT_STRING)
                 .unwrap();
@@ -140,14 +152,18 @@ fn encrypt_decrypt_multiple_clients() -> googletest::Result<()> {
 
     // Create decryptor, which needs its own `vahe` (with same public polynomials
     // generated from the seeds) and `prng`.
-    let vahe = ShellVahe::new(create_shell_ahe_config(max_number_of_decryptors).unwrap(), CONTEXT_STRING).unwrap();
+    let vahe =
+        ShellVahe::new(create_shell_ahe_config(max_number_of_decryptors).unwrap(), CONTEXT_STRING)
+            .unwrap();
     let seed = SingleThreadHkdfPrng::generate_seed().unwrap();
     let prng = SingleThreadHkdfPrng::create(&seed).unwrap();
     let mut decryptor_state = DecryptorState::default();
     let mut decryptor = WillowV1Decryptor { vahe, prng };
 
     // Create server.
-    let vahe = ShellVahe::new(create_shell_ahe_config(max_number_of_decryptors).unwrap(), CONTEXT_STRING).unwrap();
+    let vahe =
+        ShellVahe::new(create_shell_ahe_config(max_number_of_decryptors).unwrap(), CONTEXT_STRING)
+            .unwrap();
     let kahe =
         ShellKahe::new(create_shell_kahe_config(&aggregation_config).unwrap(), CONTEXT_STRING)
             .unwrap();
@@ -155,7 +171,9 @@ fn encrypt_decrypt_multiple_clients() -> googletest::Result<()> {
     let mut server_state = ServerState::default();
 
     // Create verifier.
-    let vahe = ShellVahe::new(create_shell_ahe_config(max_number_of_decryptors).unwrap(), CONTEXT_STRING).unwrap();
+    let vahe =
+        ShellVahe::new(create_shell_ahe_config(max_number_of_decryptors).unwrap(), CONTEXT_STRING)
+            .unwrap();
     let verifier = WillowV1Verifier { vahe };
     let mut verifier_state = VerifierState::default();
 
@@ -178,7 +196,8 @@ fn encrypt_decrypt_multiple_clients() -> googletest::Result<()> {
         for i in 0..expected_output.len() {
             expected_output[i] += client_input_values[i];
         }
-        let client_plaintext = HashMap::from([(default_id.clone(), client_input_values)]);
+        let client_plaintext =
+            HashMap::from([(default_id.as_str(), client_input_values.as_slice())]);
         let client_message = client.create_client_message(&client_plaintext, &public_key).unwrap();
         client_messages.push(client_message);
     }
@@ -228,7 +247,7 @@ fn encrypt_decrypt_multiple_clients() -> googletest::Result<()> {
         // Check that the (padded) result matches the client plaintext.
         verify_that!(aggregation_result.keys().collect::<Vec<_>>(), container_eq([&default_id]))?;
         verify_eq!(
-            aggregation_result.get(&default_id).unwrap()[..expected_output.len()],
+            aggregation_result.get(default_id.as_str()).unwrap()[..expected_output.len()],
             expected_output
         )?;
     }
@@ -249,7 +268,11 @@ fn encrypt_decrypt_multiple_clients_including_invalid_proofs() -> googletest::Re
     // Create clients.
     let mut good_clients = vec![];
     for _ in 0..NUM_GOOD_CLIENTS {
-        let vahe = ShellVahe::new(create_shell_ahe_config(max_number_of_decryptors).unwrap(), CONTEXT_STRING).unwrap();
+        let vahe = ShellVahe::new(
+            create_shell_ahe_config(max_number_of_decryptors).unwrap(),
+            CONTEXT_STRING,
+        )
+        .unwrap();
         let kahe =
             ShellKahe::new(create_shell_kahe_config(&aggregation_config).unwrap(), CONTEXT_STRING)
                 .unwrap();
@@ -262,7 +285,11 @@ fn encrypt_decrypt_multiple_clients_including_invalid_proofs() -> googletest::Re
     // Create bad clients.
     let mut bad_clients = vec![];
     for _ in 0..NUM_BAD_CLIENTS {
-        let vahe = ShellVahe::new(create_shell_ahe_config(max_number_of_decryptors).unwrap(), CONTEXT_STRING).unwrap();
+        let vahe = ShellVahe::new(
+            create_shell_ahe_config(max_number_of_decryptors).unwrap(),
+            CONTEXT_STRING,
+        )
+        .unwrap();
         let kahe =
             ShellKahe::new(create_shell_kahe_config(&aggregation_config).unwrap(), CONTEXT_STRING)
                 .unwrap();
@@ -274,14 +301,18 @@ fn encrypt_decrypt_multiple_clients_including_invalid_proofs() -> googletest::Re
 
     // Create decryptor, which needs its own `vahe` (with same public polynomials
     // generated from the seeds) and `prng`.
-    let vahe = ShellVahe::new(create_shell_ahe_config(max_number_of_decryptors).unwrap(), CONTEXT_STRING).unwrap();
+    let vahe =
+        ShellVahe::new(create_shell_ahe_config(max_number_of_decryptors).unwrap(), CONTEXT_STRING)
+            .unwrap();
     let seed = SingleThreadHkdfPrng::generate_seed().unwrap();
     let prng = SingleThreadHkdfPrng::create(&seed).unwrap();
     let mut decryptor_state = DecryptorState::default();
     let mut decryptor = WillowV1Decryptor { vahe, prng };
 
     // Create server.
-    let vahe = ShellVahe::new(create_shell_ahe_config(max_number_of_decryptors).unwrap(), CONTEXT_STRING).unwrap();
+    let vahe =
+        ShellVahe::new(create_shell_ahe_config(max_number_of_decryptors).unwrap(), CONTEXT_STRING)
+            .unwrap();
     let kahe =
         ShellKahe::new(create_shell_kahe_config(&aggregation_config).unwrap(), CONTEXT_STRING)
             .unwrap();
@@ -289,7 +320,9 @@ fn encrypt_decrypt_multiple_clients_including_invalid_proofs() -> googletest::Re
     let mut server_state = ServerState::default();
 
     // Create verifier.
-    let vahe = ShellVahe::new(create_shell_ahe_config(max_number_of_decryptors).unwrap(), CONTEXT_STRING).unwrap();
+    let vahe =
+        ShellVahe::new(create_shell_ahe_config(max_number_of_decryptors).unwrap(), CONTEXT_STRING)
+            .unwrap();
     let verifier = WillowV1Verifier { vahe };
     let mut verifier_state = VerifierState::default();
 
@@ -312,7 +345,8 @@ fn encrypt_decrypt_multiple_clients_including_invalid_proofs() -> googletest::Re
         for i in 0..expected_output.len() {
             expected_output[i] += client_input_values[i];
         }
-        let client_plaintext = HashMap::from([(default_id.clone(), client_input_values)]);
+        let client_plaintext =
+            HashMap::from([(default_id.as_str(), client_input_values.as_slice())]);
         let client_message = client.create_client_message(&client_plaintext, &public_key).unwrap();
         client_messages.push(client_message);
     }
@@ -334,7 +368,8 @@ fn encrypt_decrypt_multiple_clients_including_invalid_proofs() -> googletest::Re
     {
         let client = &mut bad_clients[0];
         let client_input_values = vec![1, 2, 3, 4, 5, 6, 7, 8, 7, 6, 5, 4, 3, 2, 1];
-        let client_plaintext = HashMap::from([(default_id.clone(), client_input_values)]);
+        let client_plaintext =
+            HashMap::from([(default_id.as_str(), client_input_values.as_slice())]);
         let client_message = client.create_client_message(&client_plaintext, &public_key).unwrap();
         bad_proof = client_message.proof;
     }
@@ -343,7 +378,8 @@ fn encrypt_decrypt_multiple_clients_including_invalid_proofs() -> googletest::Re
     for i in 1..bad_clients.len() {
         let client = &mut bad_clients[i];
         let client_input_values = vec![8, 7, 6, 5, 4, 3, 2, 1, 2, 3, 4, 5, 6, 7, 8];
-        let client_plaintext = HashMap::from([(default_id.clone(), client_input_values)]);
+        let client_plaintext =
+            HashMap::from([(default_id.as_str(), client_input_values.as_slice())]);
         let mut client_message =
             client.create_client_message(&client_plaintext, &public_key).unwrap();
         client_message.proof = bad_proof.clone();
@@ -375,7 +411,7 @@ fn encrypt_decrypt_multiple_clients_including_invalid_proofs() -> googletest::Re
     // Check that the (padded) result matches the client plaintext.
     verify_that!(aggregation_result.keys().collect::<Vec<_>>(), container_eq([&default_id]))?;
     verify_eq!(
-        aggregation_result.get(&default_id).unwrap()[..expected_output.len()],
+        aggregation_result.get(default_id.as_str()).unwrap()[..expected_output.len()],
         expected_output
     )
 }
@@ -405,7 +441,9 @@ fn encrypt_decrypt_many_clients_decryptors() -> googletest::Result<()> {
     let max_number_of_decryptors = 1;
 
     // Create server.
-    let vahe = ShellVahe::new(create_shell_ahe_config(max_number_of_decryptors).unwrap(), CONTEXT_STRING).unwrap();
+    let vahe =
+        ShellVahe::new(create_shell_ahe_config(max_number_of_decryptors).unwrap(), CONTEXT_STRING)
+            .unwrap();
     let kahe =
         ShellKahe::new(create_shell_kahe_config(&aggregation_config).unwrap(), CONTEXT_STRING)
             .unwrap();
@@ -413,7 +451,9 @@ fn encrypt_decrypt_many_clients_decryptors() -> googletest::Result<()> {
     let mut server_state = ServerState::default();
 
     // Create verifier.
-    let vahe = ShellVahe::new(create_shell_ahe_config(max_number_of_decryptors).unwrap(), CONTEXT_STRING).unwrap();
+    let vahe =
+        ShellVahe::new(create_shell_ahe_config(max_number_of_decryptors).unwrap(), CONTEXT_STRING)
+            .unwrap();
     let verifier = WillowV1Verifier { vahe };
     let mut verifier_state = VerifierState::default();
 
@@ -422,7 +462,11 @@ fn encrypt_decrypt_many_clients_decryptors() -> googletest::Result<()> {
     let mut decryptors = vec![];
     let mut decryptor_states = vec![];
     for i in 0..NUM_DECRYPTORS {
-        let vahe = ShellVahe::new(create_shell_ahe_config(max_number_of_decryptors).unwrap(), CONTEXT_STRING).unwrap();
+        let vahe = ShellVahe::new(
+            create_shell_ahe_config(max_number_of_decryptors).unwrap(),
+            CONTEXT_STRING,
+        )
+        .unwrap();
         let seed = SingleThreadHkdfPrng::generate_seed().unwrap();
         let prng = SingleThreadHkdfPrng::create(&seed).unwrap();
         let mut decryptor_state = DecryptorState::default();
@@ -451,7 +495,11 @@ fn encrypt_decrypt_many_clients_decryptors() -> googletest::Result<()> {
     let mut expected_output = vec![0; INPUT_LENGTH as usize];
     let mut client_messages = vec![];
     for _ in 0..NUM_CLIENTS {
-        let vahe = ShellVahe::new(create_shell_ahe_config(max_number_of_decryptors).unwrap(), CONTEXT_STRING).unwrap();
+        let vahe = ShellVahe::new(
+            create_shell_ahe_config(max_number_of_decryptors).unwrap(),
+            CONTEXT_STRING,
+        )
+        .unwrap();
         let kahe =
             ShellKahe::new(create_shell_kahe_config(&aggregation_config).unwrap(), CONTEXT_STRING)
                 .unwrap();
@@ -464,7 +512,8 @@ fn encrypt_decrypt_many_clients_decryptors() -> googletest::Result<()> {
         for i in 0..expected_output.len() {
             expected_output[i] += client_input_values[i];
         }
-        let client_plaintext = HashMap::from([(default_id.clone(), client_input_values)]);
+        let client_plaintext =
+            HashMap::from([(default_id.as_str(), client_input_values.as_slice())]);
         let client_message = client.create_client_message(&client_plaintext, &public_key).unwrap();
         client_messages.push(client_message);
     }
@@ -501,7 +550,7 @@ fn encrypt_decrypt_many_clients_decryptors() -> googletest::Result<()> {
     // Check that the (padded) result matches the client plaintext.
     verify_that!(aggregation_result.keys().collect::<Vec<_>>(), container_eq([&default_id]))?;
     verify_eq!(
-        aggregation_result.get(&default_id).unwrap()[..expected_output.len()],
+        aggregation_result.get(default_id.as_str()).unwrap()[..expected_output.len()],
         expected_output
     )
 }
@@ -522,7 +571,11 @@ fn encrypt_decrypt_no_dropout() -> googletest::Result<()> {
     // Create clients.
     let mut clients = vec![];
     for _ in 0..NUM_CLIENTS {
-        let vahe = ShellVahe::new(create_shell_ahe_config(max_number_of_decryptors).unwrap(), CONTEXT_STRING).unwrap();
+        let vahe = ShellVahe::new(
+            create_shell_ahe_config(max_number_of_decryptors).unwrap(),
+            CONTEXT_STRING,
+        )
+        .unwrap();
         let kahe =
             ShellKahe::new(create_shell_kahe_config(&aggregation_config).unwrap(), CONTEXT_STRING)
                 .unwrap();
@@ -537,7 +590,11 @@ fn encrypt_decrypt_no_dropout() -> googletest::Result<()> {
     let mut decryptor_states = vec![];
     let mut decryptors = vec![];
     for _ in 0..NUM_DECRYPTORS {
-        let vahe = ShellVahe::new(create_shell_ahe_config(max_number_of_decryptors).unwrap(), CONTEXT_STRING).unwrap();
+        let vahe = ShellVahe::new(
+            create_shell_ahe_config(max_number_of_decryptors).unwrap(),
+            CONTEXT_STRING,
+        )
+        .unwrap();
         let seed = SingleThreadHkdfPrng::generate_seed().unwrap();
         let prng = SingleThreadHkdfPrng::create(&seed).unwrap();
         let decryptor_state = DecryptorState::default();
@@ -547,7 +604,9 @@ fn encrypt_decrypt_no_dropout() -> googletest::Result<()> {
     }
 
     // Create server.
-    let vahe = ShellVahe::new(create_shell_ahe_config(max_number_of_decryptors).unwrap(), CONTEXT_STRING).unwrap();
+    let vahe =
+        ShellVahe::new(create_shell_ahe_config(max_number_of_decryptors).unwrap(), CONTEXT_STRING)
+            .unwrap();
     let kahe =
         ShellKahe::new(create_shell_kahe_config(&aggregation_config).unwrap(), CONTEXT_STRING)
             .unwrap();
@@ -555,7 +614,9 @@ fn encrypt_decrypt_no_dropout() -> googletest::Result<()> {
     let mut server_state = ServerState::default();
 
     // Create verifier.
-    let vahe = ShellVahe::new(create_shell_ahe_config(max_number_of_decryptors).unwrap(), CONTEXT_STRING).unwrap();
+    let vahe =
+        ShellVahe::new(create_shell_ahe_config(max_number_of_decryptors).unwrap(), CONTEXT_STRING)
+            .unwrap();
     let verifier = WillowV1Verifier { vahe };
     let mut verifier_state = VerifierState::default();
 
@@ -584,7 +645,8 @@ fn encrypt_decrypt_no_dropout() -> googletest::Result<()> {
         for i in 0..expected_output.len() {
             expected_output[i] += client_input_values[i];
         }
-        let client_plaintext = HashMap::from([(default_id.clone(), client_input_values)]);
+        let client_plaintext =
+            HashMap::from([(default_id.as_str(), client_input_values.as_slice())]);
         let client_message = client.create_client_message(&client_plaintext, &public_key).unwrap();
         client_messages.push(client_message);
     }
@@ -619,7 +681,7 @@ fn encrypt_decrypt_no_dropout() -> googletest::Result<()> {
     // Check that the (padded) result matches the client plaintext.
     verify_that!(aggregation_result.keys().collect::<Vec<_>>(), container_eq([&default_id]))?;
     verify_eq!(
-        aggregation_result.get(&default_id).unwrap()[..expected_output.len()],
+        aggregation_result.get(default_id.as_str()).unwrap()[..expected_output.len()],
         expected_output
     )
 }

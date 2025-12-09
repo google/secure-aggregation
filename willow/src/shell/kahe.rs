@@ -80,11 +80,22 @@ impl ShellKahe {
             let log_base = (base as f64).log2().ceil() as u64;
             if log_base * dimension > config.log_t as u64 {
                 return Err(status::invalid_argument(format!(
-                    "For packing id {}, base^dimension must not be larger than the KAHE plaintext modulus 2^log_t+1: base = {}, dimension = {}, log_t = {}", id, base, dimension, config.log_t
+                    "For packing id {}, base^dimension must not be larger than the KAHE plaintext modulus 2^log_t+1: base = {}, dimension = {}, log_t = {}",
+                    id,
+                    base,
+                    dimension,
+                    config.log_t
                 )));
             }
         }
         Ok(())
+    }
+
+    /// Utility function to convert an owned map to a map of slices.
+    pub fn plaintext_as_slice<'a>(
+        pt: &'a HashMap<String, Vec<u64>>,
+    ) -> HashMap<&'a str, &'a [u64]> {
+        pt.iter().map(|(k, v)| (k.as_str(), v.as_slice())).collect()
     }
 }
 
@@ -98,6 +109,7 @@ impl KaheBase for ShellKahe {
     type SecretKey = SecretKey;
 
     type Plaintext = HashMap<String, Vec<u64>>;
+    type PlaintextSlice<'a> = HashMap<&'a str, &'a [u64]>;
 
     type Ciphertext = Ciphertext;
 
@@ -190,15 +202,15 @@ impl KaheKeygen for ShellKahe {
 }
 
 impl KaheEncrypt for ShellKahe {
-    fn encrypt(
+    fn encrypt<'a>(
         &self,
-        pt: &Self::Plaintext,
+        pt: &Self::PlaintextSlice<'a>,
         sk: &Self::SecretKey,
         r: &mut Self::Rng,
     ) -> Result<Self::Ciphertext, status::StatusError> {
         // Check that inputs are valid to avoid packing and plaintext overflow errors.
         for (id, values) in pt.iter() {
-            if let Some(packed_vector_config) = self.config.packed_vector_configs.get(id) {
+            if let Some(packed_vector_config) = self.config.packed_vector_configs.get(*id) {
                 let max_length =
                     packed_vector_config.dimension * packed_vector_config.num_packed_coeffs;
                 if values.len() > max_length as usize {
@@ -327,17 +339,18 @@ mod test {
     fn test_encrypt_decrypt_short() -> googletest::Result<()> {
         let plaintext_modulus_bits = 39;
         let packed_vector_configs = HashMap::from([(
-            String::from(DEFAULT_ID),
+            DEFAULT_ID.to_string(),
             PackedVectorConfig { base: 10, dimension: 2, num_packed_coeffs: 5 },
         )]);
         let kahe_config = make_kahe_config_for(plaintext_modulus_bits, packed_vector_configs)?;
         let kahe = ShellKahe::new(kahe_config, CONTEXT_STRING)?;
 
-        let pt = HashMap::from([(String::from(DEFAULT_ID), vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9])]);
+        let pt = HashMap::from([(DEFAULT_ID.to_string(), vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9])]);
         let seed = SingleThreadHkdfPrng::generate_seed()?;
         let mut prng = SingleThreadHkdfPrng::create(&seed)?;
         let sk = kahe.key_gen(&mut prng)?;
-        let ct = kahe.encrypt(&pt, &sk, &mut prng)?;
+        let pt_slice = ShellKahe::plaintext_as_slice(&pt);
+        let ct = kahe.encrypt(&pt_slice, &sk, &mut prng)?;
         let decrypted = kahe.decrypt(&ct, &sk)?;
         verify_eq!(&pt, &decrypted)
     }
@@ -346,17 +359,18 @@ mod test {
     fn test_encrypt_decrypt_with_serialized_key() -> googletest::Result<()> {
         let plaintext_modulus_bits = 39;
         let packed_vector_configs = HashMap::from([(
-            String::from(DEFAULT_ID),
+            DEFAULT_ID.to_string(),
             PackedVectorConfig { base: 10, dimension: 2, num_packed_coeffs: 5 },
         )]);
         let kahe_config = make_kahe_config_for(plaintext_modulus_bits, packed_vector_configs)?;
         let kahe = ShellKahe::new(kahe_config, CONTEXT_STRING)?;
 
-        let pt = HashMap::from([(String::from(DEFAULT_ID), vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9])]);
+        let pt = HashMap::from([(DEFAULT_ID.to_string(), vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9])]);
         let seed = SingleThreadHkdfPrng::generate_seed()?;
         let mut prng = SingleThreadHkdfPrng::create(&seed)?;
         let sk = kahe.key_gen(&mut prng)?;
-        let ct = kahe.encrypt(&pt, &sk, &mut prng)?;
+        let pt_slice = ShellKahe::plaintext_as_slice(&pt);
+        let ct = kahe.encrypt(&pt_slice, &sk, &mut prng)?;
 
         // Serialize the key and deserialize it.
         let sk_buffer = kahe.try_secret_key_into(sk)?;
@@ -372,7 +386,7 @@ mod test {
         let plaintext_modulus_bits = 17;
         let input_domain = 5;
         let packed_vector_configs = HashMap::from([(
-            String::from(DEFAULT_ID),
+            DEFAULT_ID.to_string(),
             PackedVectorConfig {
                 base: input_domain,
                 dimension: 1,
@@ -394,10 +408,11 @@ mod test {
 
         // Generate a random vector, encrypt and decrypt it.
         let pt = HashMap::from([(
-            String::from(DEFAULT_ID),
+            DEFAULT_ID.to_string(),
             generate_random_unsigned_vector(num_messages as usize, input_domain as u64),
         )]);
-        let ct = kahe.encrypt(&pt, &sk, &mut prng)?;
+        let pt_slice = ShellKahe::plaintext_as_slice(&pt);
+        let ct = kahe.encrypt(&pt_slice, &sk, &mut prng)?;
         let decrypted = kahe.decrypt(&ct, &sk)?;
         verify_eq!(pt, decrypted) // Both vectors are padded to the same length.
     }
@@ -409,7 +424,7 @@ mod test {
         let input_domain = 10;
         let num_messages = 50;
         let packed_vector_configs = HashMap::from([(
-            String::from(DEFAULT_ID),
+            DEFAULT_ID.to_string(),
             PackedVectorConfig {
                 base: input_domain * 2,
                 dimension: 1,
@@ -425,18 +440,20 @@ mod test {
         // Client 1
         let sk1 = kahe.key_gen(&mut prng)?;
         let pt1 = HashMap::from([(
-            String::from(DEFAULT_ID),
+            DEFAULT_ID.to_string(),
             generate_random_unsigned_vector(num_messages as usize, input_domain as u64),
         )]);
-        let ct1 = kahe.encrypt(&pt1, &sk1, &mut prng)?;
+        let pt1_slice = ShellKahe::plaintext_as_slice(&pt1);
+        let ct1 = kahe.encrypt(&pt1_slice, &sk1, &mut prng)?;
 
         // Client 2
         let mut sk2 = kahe.key_gen(&mut prng)?;
         let mut pt2 = HashMap::from([(
-            String::from(DEFAULT_ID),
+            DEFAULT_ID.to_string(),
             generate_random_unsigned_vector(num_messages as usize, input_domain as u64),
         )]);
-        let mut ct2 = kahe.encrypt(&pt2, &sk2, &mut prng)?;
+        let pt2_slice = ShellKahe::plaintext_as_slice(&pt2);
+        let mut ct2 = kahe.encrypt(&pt2_slice, &sk2, &mut prng)?;
 
         // Decryptor adds up keys
         kahe.add_keys_in_place(&sk1, &mut sk2)?;

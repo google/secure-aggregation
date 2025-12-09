@@ -44,9 +44,9 @@ fn encrypt_decrypt() -> Result<()> {
 
     // Encrypt small vector. `ciphertext` is a wrapper around a C++ pointer.
     let input_values = vec![1, 2, 3];
-    let plaintext = HashMap::from([(String::from(DEFAULT_ID), input_values.clone())]);
+    let plaintext = HashMap::from([(DEFAULT_ID, input_values.as_slice())]);
     let packed_vector_configs = HashMap::from([(
-        String::from(DEFAULT_ID),
+        DEFAULT_ID.to_string(),
         PackedVectorConfig { base: 10, dimension: 2, num_packed_coeffs: 2 },
     )]);
     let ciphertext = encrypt(&plaintext, &packed_vector_configs, &secret_key, &params, &mut prng)?;
@@ -81,9 +81,9 @@ fn encrypt_decrypt_padding() -> Result<()> {
         (0..num_input_values).map(|_| rand::thread_rng().gen_range(0..input_domain)).collect();
 
     // Encrypt the vector.
-    let plaintext = HashMap::from([(String::from(DEFAULT_ID), input_values.clone())]);
+    let plaintext = HashMap::from([(DEFAULT_ID, input_values.as_slice())]);
     let packed_vector_configs = HashMap::from([(
-        String::from(DEFAULT_ID),
+        DEFAULT_ID.to_string(),
         PackedVectorConfig {
             base: input_domain as u64,
             dimension: packing_dimension as u64,
@@ -131,9 +131,9 @@ fn encrypt_decrypt_long() -> Result<()> {
     let num_packed_coeffs = (num_input_values + packing_dimension - 1) / packing_dimension as usize;
     let input_values: Vec<u64> =
         (0..num_input_values).map(|_| rand::thread_rng().gen_range(0..input_domain)).collect();
-    let plaintext = HashMap::from([(String::from(DEFAULT_ID), input_values.clone())]);
+    let plaintext = HashMap::from([(DEFAULT_ID, input_values.as_slice())]);
     let packed_vector_configs = HashMap::from([(
-        String::from(DEFAULT_ID),
+        DEFAULT_ID.to_string(),
         PackedVectorConfig {
             base: input_domain as u64,
             dimension: packing_dimension as u64,
@@ -159,7 +159,7 @@ fn encrypt_decrypt_long() -> Result<()> {
     let num_values_too_long = num_public_polynomials * poly_capacity + 1;
     let input_values_too_long: Vec<u64> =
         (0..num_values_too_long).map(|_| rand::thread_rng().gen_range(0..input_domain)).collect();
-    let plaintext_too_long = HashMap::from([(String::from(DEFAULT_ID), input_values_too_long)]);
+    let plaintext_too_long = HashMap::from([(DEFAULT_ID, input_values_too_long.as_slice())]);
     match encrypt(&plaintext_too_long, &packed_vector_configs, &secret_key, &params, &mut prng) {
         Err(e) => expect_that!(e, status_is(StatusErrorCode::InvalidArgument)),
         Ok(_) => fail!("Expected call to fail")?,
@@ -190,7 +190,7 @@ fn encrypt_decrypt_two_vectors() -> Result<()> {
 
     let packed_vector_configs = HashMap::from([
         (
-            String::from(ID0),
+            ID0.to_string(),
             PackedVectorConfig {
                 base: input_domains[0] as u64,
                 dimension: packing_dimensions[0] as u64,
@@ -198,7 +198,7 @@ fn encrypt_decrypt_two_vectors() -> Result<()> {
             },
         ),
         (
-            String::from(ID1),
+            ID1.to_string(),
             PackedVectorConfig {
                 base: input_domains[1] as u64,
                 dimension: packing_dimensions[1] as u64,
@@ -214,10 +214,8 @@ fn encrypt_decrypt_two_vectors() -> Result<()> {
     let input_values1: Vec<u64> = (0..num_input_values[1])
         .map(|_| rand::thread_rng().gen_range(0..input_domains[1]))
         .collect();
-    let plaintext = HashMap::from([
-        (String::from(ID0), input_values0.clone()),
-        (String::from(ID1), input_values1.clone()),
-    ]);
+    let plaintext =
+        HashMap::from([(ID0, input_values0.as_slice()), (ID1, input_values1.as_slice())]);
     let ciphertext = encrypt(&plaintext, &packed_vector_configs, &secret_key, &params, &mut prng)?;
 
     // Decrypt and check the output contains the two vectors that are padded correctly.

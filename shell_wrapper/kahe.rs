@@ -184,7 +184,7 @@ pub use ffi::BigIntVectorWrapper;
 /// stored in `params`. The input vectors are packed according to the given `packed_vector_configs`.
 /// Returns the resulting ciphertexts.
 pub fn encrypt(
-    input_vectors: &HashMap<String, Vec<u64>>,
+    input_vectors: &HashMap<&str, &[u64]>,
     packed_vector_configs: &HashMap<String, PackedVectorConfig>,
     secret_key: &RnsPolynomial,
     params: &KahePublicParametersWrapper,
@@ -196,6 +196,7 @@ pub fn encrypt(
     // `PackMessagesRaw` only appends to the C++ vector wrapped by `packed_values`,
     // allocating it in case it is NULL (in the first iteration).
     for (id, packed_vector_config) in packed_vector_configs.iter() {
+        let id: &str = id;
         if !input_vectors.contains_key(id) {
             return Err(status::invalid_argument(format!("Input vector with id {} not found", id)));
         }
@@ -244,9 +245,9 @@ pub fn decrypt(
         let unpacked_size =
             (packed_vector_config.num_packed_coeffs * packed_vector_config.dimension) as usize;
         let mut unpacked_values = Vec::with_capacity(unpacked_size);
-        /// SAFETY: No lifetime constraints (output values of `UnpackMessagesRaw` do not keep any
-        /// reference to its inputs). `UnpackMessagesRaw` reads and removes a prefix of the C++
-        /// vector wrapped by `packed_values`, and writes into the buffer `out`.
+        // SAFETY: No lifetime constraints (output values of `UnpackMessagesRaw` do not keep any
+        // reference to its inputs). `UnpackMessagesRaw` reads and removes a prefix of the C++
+        // vector wrapped by `packed_values`, and writes into the buffer `out`.
         rust_status_from_cpp(unsafe {
             ffi::UnpackMessagesRaw(
                 packed_vector_config.base,

@@ -35,10 +35,11 @@ where
     Kahe: KaheBase<Rng = Vahe::Rng> + KaheEncrypt + KaheKeygen + TrySecretKeyInto<Vahe::Plaintext>,
 {
     type Plaintext = Kahe::Plaintext;
+    type PlaintextSlice<'a> = <Kahe as KaheBase>::PlaintextSlice<'a>;
 
     fn create_client_message(
         &mut self,
-        plaintext: &Self::Plaintext,
+        plaintext: &Self::PlaintextSlice<'_>,
         signed_public_key: &DecryptorPublicKey<Vahe>,
     ) -> Result<ClientMessage<Kahe, Vahe>, status::StatusError> {
         // Generate a new KAHE key.
@@ -111,11 +112,9 @@ mod test {
         let public_key = vahe.aggregate_public_key_shares(&[pk_share])?;
 
         // Create client message.
-        let client_plaintext = HashMap::from([(
-            default_id.clone(),
-            vec![1, 2, 3, 4, 5, 6, 7, 8, 7, 6, 5, 4, 3, 2, 1],
-        )]);
-        let client_message = client.create_client_message(&client_plaintext, &public_key)?;
+        let input_values = vec![1, 2, 3, 4, 5, 6, 7, 8, 7, 6, 5, 4, 3, 2, 1];
+        let client_plaintext = HashMap::from([(default_id.as_str(), input_values.as_slice())]);
+        let client_message = client.create_client_message(&client_plaintext, &public_key).unwrap();
 
         // Decrypt client message.
         let decryption_request = vahe.get_partial_dec_ciphertext(&client_message.ahe_ciphertext)?;
@@ -127,10 +126,10 @@ mod test {
             kahe.decrypt(&client_message.kahe_ciphertext, &decrypted_kahe_key)?;
 
         verify_that!(decrypted_plaintext.keys().collect::<Vec<_>>(), container_eq([&default_id]))?;
-        let client_plaintext_length = client_plaintext.get(&default_id).unwrap().len();
+        let client_plaintext_length = client_plaintext.get(default_id.as_str()).unwrap().len();
         verify_eq!(
-            decrypted_plaintext.get(&default_id).unwrap()[..client_plaintext_length],
-            client_plaintext.get(&default_id).unwrap()[..]
+            decrypted_plaintext.get(default_id.as_str()).unwrap()[..client_plaintext_length],
+            client_plaintext.get(default_id.as_str()).unwrap()[..]
         )
     }
 
@@ -168,17 +167,14 @@ mod test {
         let public_key = vahe.aggregate_public_key_shares(&[pk_share])?;
 
         // Create client messages.
-        let client1_plaintext = HashMap::from([(
-            default_id.clone(),
-            vec![1, 2, 3, 4, 5, 6, 7, 8, 7, 6, 5, 4, 3, 2, 1],
-        )]);
-        let client2_plaintext = HashMap::from([(
-            default_id.clone(),
-            vec![1, 1, 2, 3, 5, 8, 3, 1, 4, 5, 9, 4, 3, 7, 0],
-        )]);
+        let input_values1 = vec![1, 2, 3, 4, 5, 6, 7, 8, 7, 6, 5, 4, 3, 2, 1];
+        let client1_plaintext = HashMap::from([(default_id.as_str(), input_values1.as_slice())]);
+        let input_values2 = vec![1, 1, 2, 3, 5, 8, 3, 1, 4, 5, 9, 4, 3, 7, 0];
+        let client2_plaintext = HashMap::from([(default_id.as_str(), input_values2.as_slice())]);
         let expected_output = vec![2, 3, 5, 7, 10, 14, 10, 9, 11, 11, 14, 8, 6, 9, 1];
-        let mut client_message = client1.create_client_message(&client1_plaintext, &public_key)?;
-        let extra_message = client2.create_client_message(&client2_plaintext, &public_key)?;
+        let mut client_message =
+            client1.create_client_message(&client1_plaintext, &public_key).unwrap();
+        let extra_message = client2.create_client_message(&client2_plaintext, &public_key).unwrap();
 
         // Add extra message to the first client message.
         kahe.add_ciphertexts_in_place(
@@ -200,9 +196,9 @@ mod test {
             kahe.decrypt(&client_message.kahe_ciphertext, &decrypted_kahe_key)?;
 
         verify_that!(decrypted_plaintext.keys().collect::<Vec<_>>(), container_eq([&default_id]))?;
-        let client_plaintext_length = client1_plaintext.get(&default_id).unwrap().len();
+        let client_plaintext_length = client1_plaintext.get(default_id.as_str()).unwrap().len();
         verify_eq!(
-            decrypted_plaintext.get(&default_id).unwrap()[..client_plaintext_length],
+            decrypted_plaintext.get(default_id.as_str()).unwrap()[..client_plaintext_length],
             expected_output
         )
     }
