@@ -31,59 +31,7 @@ use willow_api_common::AggregationConfig;
 ///
 
 /// ----------------------------------------------------------------------------
-/// Section A) Both KAHE and AHE parameters are free to choose.
-/// ----------------------------------------------------------------------------
-/// KAHE & AHE Parameter constants for:
-/// - input of length 1K with 32-bit domain
-/// - max number of clients 10M
-/// - max number of decryptors 100
-const KAHE_LOG_N_1K_10M: usize = 12;
-const KAHE_LOG_T_1K_10M: usize = 56;
-const KAHE_QS_1K_10M: [u64; 2] = [
-    274877816833, // 38 bits
-    274877718529, // 38 bits
-];
-const AHE_LOG_N_1K_10M: u64 = 12;
-const AHE_T_1K_10M: u64 = 109965;
-const AHE_QS_1K_10M: [u64; 2] = [1099510824961, 1099508760577]; // 80 bits total
-const AHE_S_FLOOD_1K_10M: f64 = 3.0834e+16;
-
-/// Parameter constants for:
-/// - input of length 100K with 32-bit domain
-/// - max number of clients 10M
-/// - max number of decryptors 100
-const KAHE_LOG_N_100K_10M: usize = 13;
-const KAHE_LOG_T_100K_10M: usize = 168;
-const KAHE_QS_100K_10M: [u64; 4] = [
-    1125899906629633, // 50 bits
-    1125899905744897, // 50 bits
-    1125899905351681, // 50 bits
-    1125899903827969, // 50 bits
-];
-const AHE_LOG_N_100K_10M: u64 = 12;
-const AHE_T_100K_10M: u64 = 6582404323;
-const AHE_QS_100K_10M: [u64; 2] = [281474976546817, 281474975662081]; // 96 bits total
-const AHE_S_FLOOD_100K_10M: f64 = 3.0834e+16;
-
-/// Parameter constants for:
-/// - input of length 10M with 32-bit domain
-/// - max number of clients 10M
-/// - max number of decryptors 100
-const KAHE_LOG_N_10M_10M: usize = 14;
-const KAHE_LOG_T_10M_10M: usize = 224;
-const KAHE_QS_10M_10M: [u64; 4] = [
-    2305843009211596801, // 61 bits
-    2305843009211400193, // 61 bits
-    2305843009210515457, // 61 bits
-    2305843009210023937, // 61 bits
-];
-const AHE_LOG_N_10M_10M: u64 = 12;
-const AHE_T_10M_10M: u64 = 7121256483;
-const AHE_QS_10M_10M: [u64; 2] = [281474976546817, 281474975662081]; // 96 bits total
-const AHE_S_FLOOD_10M_10M: f64 = 3.0834e+16;
-
-/// ----------------------------------------------------------------------------
-/// Section B) AHE parameters are fixed across all input settings.
+/// AHE parameters are fixed across all input settings.
 /// ----------------------------------------------------------------------------
 /// This set of AHE parameters are good for the following assumption:
 /// - there are at most 10^7 clients, and at least 99.999% of them are honest;
@@ -96,6 +44,9 @@ const AHE_FIXED_QS: [u64; 2] = [281474976546817, 281474975662081]; // 96 bits to
 const AHE_FIXED_S_FLOOD: f64 = 4.81659e+19;
 const AHE_FIXED_MAX_NUM_DECRYPTORS: i64 = 1;
 
+/// ----------------------------------------------------------------------------
+/// KAHE parameters for some typical input settings.
+/// ----------------------------------------------------------------------------
 /// KAHE parameters for:
 /// - input of length 1K with 32-bit domain
 /// - max number of clients 10M
@@ -132,116 +83,6 @@ const KAHE_FOR_FIXED_AHE_QS_10M_10M: [u64; 4] = [
     2305843009210515457, // 61 bits
     2305843009210023937, // 61 bits
 ];
-
-/// Creates a pair (ShellKaheConfig, ShellAheConfig) to be used to instantiate
-/// KAHE and AHE schemes for the given protocol setting.
-pub fn create_shell_configs(
-    aggregation_config: &AggregationConfig,
-) -> Result<(ShellKaheConfig, ShellAheConfig), status::StatusError> {
-    // Use heuristics to select parameters.
-    let total_input_length: i64 = aggregation_config
-        .vector_lengths_and_bounds
-        .values()
-        .map(|(length, _)| *length as i64)
-        .sum();
-    let max_input_bound = aggregation_config
-        .vector_lengths_and_bounds
-        .values()
-        .map(|(_, bound)| bound)
-        .max()
-        .unwrap();
-
-    if total_input_length <= 1000
-        && *max_input_bound <= (1i64 << 32)
-        && aggregation_config.max_number_of_clients <= 10_000_000
-        && aggregation_config.max_number_of_decryptors <= 100
-    {
-        let packed_vector_configs = generate_packing_config(KAHE_LOG_T_1K_10M, aggregation_config)?;
-        let kahe_total_num_coeffs: usize = packed_vector_configs
-            .values()
-            .map(|packed_vector_cfg| packed_vector_cfg.num_packed_coeffs as usize)
-            .sum();
-        let kahe_num_coeffs = 1 << KAHE_LOG_N_1K_10M;
-        return Ok((
-            ShellKaheConfig {
-                log_n: KAHE_LOG_N_1K_10M,
-                moduli: KAHE_QS_1K_10M.to_vec(),
-                log_t: KAHE_LOG_T_1K_10M,
-                num_public_polynomials: divide_and_roundup(kahe_total_num_coeffs, kahe_num_coeffs),
-                packed_vector_configs,
-            },
-            ShellAheConfig {
-                log_n: AHE_LOG_N_1K_10M,
-                t: AHE_T_1K_10M,
-                qs: AHE_QS_1K_10M.to_vec(),
-                s_flood: AHE_S_FLOOD_1K_10M,
-            },
-        ));
-    }
-
-    if total_input_length <= 100_000
-        && *max_input_bound <= (1i64 << 32)
-        && aggregation_config.max_number_of_clients <= 10_000_000
-        && aggregation_config.max_number_of_decryptors <= 100
-    {
-        let packed_vector_configs =
-            generate_packing_config(KAHE_LOG_T_100K_10M, aggregation_config)?;
-        let kahe_total_num_coeffs: usize = packed_vector_configs
-            .values()
-            .map(|packed_vector_cfg| packed_vector_cfg.num_packed_coeffs as usize)
-            .sum();
-        let kahe_num_coeffs = 1 << KAHE_LOG_N_100K_10M;
-        return Ok((
-            ShellKaheConfig {
-                log_n: KAHE_LOG_N_100K_10M,
-                moduli: KAHE_QS_100K_10M.to_vec(),
-                log_t: KAHE_LOG_T_100K_10M,
-                num_public_polynomials: divide_and_roundup(kahe_total_num_coeffs, kahe_num_coeffs),
-                packed_vector_configs,
-            },
-            ShellAheConfig {
-                log_n: AHE_LOG_N_100K_10M,
-                t: AHE_T_100K_10M,
-                qs: AHE_QS_100K_10M.to_vec(),
-                s_flood: AHE_S_FLOOD_100K_10M,
-            },
-        ));
-    }
-
-    if total_input_length <= 10_000_000
-        && *max_input_bound <= (1i64 << 32)
-        && aggregation_config.max_number_of_clients <= 10_000_000
-        && aggregation_config.max_number_of_decryptors <= 100
-    {
-        let packed_vector_configs =
-            generate_packing_config(KAHE_LOG_T_10M_10M, aggregation_config)?;
-        let kahe_total_num_coeffs: usize = packed_vector_configs
-            .values()
-            .map(|packed_vector_cfg| packed_vector_cfg.num_packed_coeffs as usize)
-            .sum();
-        let kahe_num_coeffs = 1 << KAHE_LOG_N_10M_10M;
-        return Ok((
-            ShellKaheConfig {
-                log_n: KAHE_LOG_N_10M_10M,
-                moduli: KAHE_QS_10M_10M.to_vec(),
-                log_t: KAHE_LOG_T_10M_10M,
-                num_public_polynomials: divide_and_roundup(kahe_total_num_coeffs, kahe_num_coeffs),
-                packed_vector_configs,
-            },
-            ShellAheConfig {
-                log_n: AHE_LOG_N_10M_10M,
-                t: AHE_T_10M_10M,
-                qs: AHE_QS_10M_10M.to_vec(),
-                s_flood: AHE_S_FLOOD_10M_10M,
-            },
-        ));
-    }
-
-    Err(status::invalid_argument(format!(
-        "input setting is not supported: aggregation_config = {:?}",
-        aggregation_config
-    )))
-}
 
 pub fn create_shell_ahe_config(
     max_number_of_decryptors: i64,
@@ -344,4 +185,14 @@ pub fn create_shell_kahe_config(
         "input setting is not supported: aggregation_config = {:?}",
         aggregation_config
     )))
+}
+
+/// Creates a pair (ShellKaheConfig, ShellAheConfig) to be used to instantiate
+/// KAHE and AHE schemes for the given protocol setting.
+pub fn create_shell_configs(
+    aggregation_config: &AggregationConfig,
+) -> Result<(ShellKaheConfig, ShellAheConfig), status::StatusError> {
+    let ahe_config = create_shell_ahe_config(aggregation_config.max_number_of_decryptors)?;
+    let kahe_config = create_shell_kahe_config(&aggregation_config)?;
+    Ok((kahe_config, ahe_config))
 }
