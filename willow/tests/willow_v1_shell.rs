@@ -26,7 +26,9 @@ use single_thread_hkdf::SingleThreadHkdfPrng;
 use status::StatusErrorCode;
 use status_matchers_rs::status_is;
 use std::collections::HashMap;
-use testing_utils::{generate_aggregation_config, generate_random_unsigned_vector};
+use testing_utils::{
+    generate_aggregation_config, generate_random_nonce, generate_random_unsigned_vector,
+};
 use vahe_shell::ShellVahe;
 use verifier_traits::SecureAggregationVerifier;
 use willow_v1_client::WillowV1Client;
@@ -95,7 +97,9 @@ fn encrypt_decrypt_one() -> googletest::Result<()> {
     // Client encrypts.
     let input_values = vec![1, 2, 3, 4, 5, 6, 7, 8, 7, 6, 5, 4, 3, 2, 1];
     let client_plaintext = HashMap::from([(default_id.as_str(), input_values.as_slice())]);
-    let client_message = client.create_client_message(&client_plaintext, &public_key).unwrap();
+    let nonce = generate_random_nonce();
+    let client_message =
+        client.create_client_message(&client_plaintext, &public_key, &nonce).unwrap();
 
     // The client message is split and handled by the server and verifier.
     let (ciphertext_contribution, decryption_request_contribution) =
@@ -198,7 +202,9 @@ fn encrypt_decrypt_multiple_clients() -> googletest::Result<()> {
         }
         let client_plaintext =
             HashMap::from([(default_id.as_str(), client_input_values.as_slice())]);
-        let client_message = client.create_client_message(&client_plaintext, &public_key).unwrap();
+        let nonce = generate_random_nonce();
+        let client_message =
+            client.create_client_message(&client_plaintext, &public_key, &nonce).unwrap();
         client_messages.push(client_message);
     }
 
@@ -347,7 +353,9 @@ fn encrypt_decrypt_multiple_clients_including_invalid_proofs() -> googletest::Re
         }
         let client_plaintext =
             HashMap::from([(default_id.as_str(), client_input_values.as_slice())]);
-        let client_message = client.create_client_message(&client_plaintext, &public_key).unwrap();
+        let nonce = generate_random_nonce();
+        let client_message =
+            client.create_client_message(&client_plaintext, &public_key, &nonce).unwrap();
         client_messages.push(client_message);
     }
 
@@ -370,7 +378,9 @@ fn encrypt_decrypt_multiple_clients_including_invalid_proofs() -> googletest::Re
         let client_input_values = vec![1, 2, 3, 4, 5, 6, 7, 8, 7, 6, 5, 4, 3, 2, 1];
         let client_plaintext =
             HashMap::from([(default_id.as_str(), client_input_values.as_slice())]);
-        let client_message = client.create_client_message(&client_plaintext, &public_key).unwrap();
+        let nonce = generate_random_nonce();
+        let client_message =
+            client.create_client_message(&client_plaintext, &public_key, &nonce).unwrap();
         bad_proof = client_message.proof;
     }
     // Bad Clients encrypt and should not be included in the aggregation.
@@ -380,8 +390,9 @@ fn encrypt_decrypt_multiple_clients_including_invalid_proofs() -> googletest::Re
         let client_input_values = vec![8, 7, 6, 5, 4, 3, 2, 1, 2, 3, 4, 5, 6, 7, 8];
         let client_plaintext =
             HashMap::from([(default_id.as_str(), client_input_values.as_slice())]);
+        let nonce = generate_random_nonce();
         let mut client_message =
-            client.create_client_message(&client_plaintext, &public_key).unwrap();
+            client.create_client_message(&client_plaintext, &public_key, &nonce).unwrap();
         client_message.proof = bad_proof.clone();
         client_messages.push(client_message);
     }
@@ -514,7 +525,9 @@ fn encrypt_decrypt_many_clients_decryptors() -> googletest::Result<()> {
         }
         let client_plaintext =
             HashMap::from([(default_id.as_str(), client_input_values.as_slice())]);
-        let client_message = client.create_client_message(&client_plaintext, &public_key).unwrap();
+        let nonce = generate_random_nonce();
+        let client_message =
+            client.create_client_message(&client_plaintext, &public_key, &nonce).unwrap();
         client_messages.push(client_message);
     }
 
@@ -647,7 +660,9 @@ fn encrypt_decrypt_no_dropout() -> googletest::Result<()> {
         }
         let client_plaintext =
             HashMap::from([(default_id.as_str(), client_input_values.as_slice())]);
-        let client_message = client.create_client_message(&client_plaintext, &public_key).unwrap();
+        let nonce = generate_random_nonce();
+        let client_message =
+            client.create_client_message(&client_plaintext, &public_key, &nonce).unwrap();
         client_messages.push(client_message);
     }
 

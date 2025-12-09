@@ -30,7 +30,7 @@ use parameters_shell::{create_shell_ahe_config, create_shell_kahe_config};
 use prng_traits::SecurePrng;
 use server_traits::SecureAggregationServer;
 use single_thread_hkdf::SingleThreadHkdfPrng;
-use testing_utils::generate_random_unsigned_vector;
+use testing_utils::{generate_random_nonce, generate_random_unsigned_vector};
 use vahe_shell::ShellVahe;
 use verifier_traits::SecureAggregationVerifier;
 use willow_api_common::AggregationConfig;
@@ -182,19 +182,24 @@ struct ClientInputs {
     client: WillowV1Client<ShellKahe, ShellVahe>,
     public_key: DecryptorPublicKey<ShellVahe>,
     plaintext: <ShellKahe as KaheBase>::Plaintext,
+    nonce: Vec<u8>,
 }
 
 fn setup_client(args: &Args) -> ClientInputs {
     let inputs = setup_base(args);
     let input_values = generate_random_unsigned_vector(args.input_length, args.input_domain);
     let plaintext = HashMap::from([(DEFAULT_ID.to_string(), input_values)]);
-    ClientInputs { client: inputs.client, public_key: inputs.public_key, plaintext: plaintext }
+    let nonce = generate_random_nonce();
+    ClientInputs { client: inputs.client, public_key: inputs.public_key, plaintext, nonce }
 }
 
 fn run_client(inputs: &mut ClientInputs) {
     let plaintext = ShellKahe::plaintext_as_slice(&inputs.plaintext);
-    let res =
-        inputs.client.create_client_message(black_box(&plaintext), black_box(&inputs.public_key));
+    let res = inputs.client.create_client_message(
+        black_box(&plaintext),
+        black_box(&inputs.public_key),
+        black_box(&inputs.nonce),
+    );
     let _ = black_box(res); // Prevent optimization.
 }
 
@@ -221,8 +226,11 @@ fn setup_verifier_verify_client_message(args: &Args) -> VerifierInputs {
             generate_random_unsigned_vector(args.input_length, args.input_domain);
         let client_plaintext_owned = HashMap::from([(DEFAULT_ID.to_string(), client_input_values)]);
         let client_plaintext = ShellKahe::plaintext_as_slice(&client_plaintext_owned);
-        let client_message =
-            inputs.client.create_client_message(&client_plaintext, &inputs.public_key).unwrap();
+        let nonce = generate_random_nonce();
+        let client_message = inputs
+            .client
+            .create_client_message(&client_plaintext, &inputs.public_key, &nonce)
+            .unwrap();
         let (_, decryption_request_contribution) =
             inputs.server.split_client_message(client_message).unwrap();
         decryption_request_contributions.push(decryption_request_contribution);
@@ -257,8 +265,11 @@ fn setup_server_handle_client_message(args: &Args) -> ServerInputs {
             generate_random_unsigned_vector(args.input_length, args.input_domain);
         let client_plaintext_owned = HashMap::from([(DEFAULT_ID.to_string(), client_input_values)]);
         let client_plaintext = ShellKahe::plaintext_as_slice(&client_plaintext_owned);
-        let client_message =
-            inputs.client.create_client_message(&client_plaintext, &inputs.public_key).unwrap();
+        let nonce = generate_random_nonce();
+        let client_message = inputs
+            .client
+            .create_client_message(&client_plaintext, &inputs.public_key, &nonce)
+            .unwrap();
         let (ciphertext_contribution, _) =
             inputs.server.split_client_message(client_message).unwrap();
         ciphertext_contributions.push(ciphertext_contribution);
@@ -295,8 +306,9 @@ fn setup_server_recover_aggregation_result(args: &Args) -> ServerRecoverInputs {
     let client_input_values = generate_random_unsigned_vector(args.input_length, args.input_domain);
     let client_plaintext_owned = HashMap::from([(DEFAULT_ID.to_string(), client_input_values)]);
     let client_plaintext = ShellKahe::plaintext_as_slice(&client_plaintext_owned);
+    let nonce = generate_random_nonce();
     let client_message =
-        inputs.client.create_client_message(&client_plaintext, &inputs.public_key).unwrap();
+        inputs.client.create_client_message(&client_plaintext, &inputs.public_key, &nonce).unwrap();
 
     // Server splits the client message.
     let (ciphertext_contribution, decryption_request_contribution) =
@@ -346,8 +358,9 @@ fn setup_decryptor_partial_decryption(args: &Args) -> DecryptorInputs {
     let client_input_values = generate_random_unsigned_vector(args.input_length, args.input_domain);
     let client_plaintext_owned = HashMap::from([(DEFAULT_ID.to_string(), client_input_values)]);
     let client_plaintext = ShellKahe::plaintext_as_slice(&client_plaintext_owned);
+    let nonce = generate_random_nonce();
     let client_message =
-        inputs.client.create_client_message(&client_plaintext, &inputs.public_key).unwrap();
+        inputs.client.create_client_message(&client_plaintext, &inputs.public_key, &nonce).unwrap();
 
     // Server splits the client message.
     let (ciphertext_contribution, decryption_request_contribution) =

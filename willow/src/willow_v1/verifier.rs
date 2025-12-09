@@ -209,7 +209,7 @@ mod tests {
     use single_thread_hkdf::SingleThreadHkdfPrng;
     use status_matchers_rs::status_is;
     use std::collections::HashMap;
-    use testing_utils::generate_aggregation_config;
+    use testing_utils::{generate_aggregation_config, generate_random_nonce};
     use vahe_shell::ShellVahe;
     use willow_v1_client::WillowV1Client;
     use willow_v1_decryptor::{DecryptorState, WillowV1Decryptor};
@@ -270,7 +270,9 @@ mod tests {
             DEFAULT_VECTOR_ID,
             [1, 2, 3, 4, 5, 6, 7, 8, 7, 6, 5, 4, 3, 2, 1].as_slice(),
         )]);
-        let client_message = client.create_client_message(&client_plaintext, &public_key)?;
+        let nonce = generate_random_nonce();
+        let client_message =
+            client.create_client_message(&client_plaintext, &public_key, &nonce)?;
 
         // The client message is split and handled by the server and verifier.
         let (_, decryption_request_contribution) = server.split_client_message(client_message)?;

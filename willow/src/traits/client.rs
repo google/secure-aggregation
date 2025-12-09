@@ -24,9 +24,11 @@ pub trait SecureAggregationClient<Kahe: KaheBase, Vahe: VaheBase> {
     type PlaintextSlice<'a>;
 
     /// Creates a client message to be sent to the Server.
+    /// nonce is used for the VAHE encryption, has to be unique.
     fn create_client_message(
         &mut self,
         plaintext: &Self::PlaintextSlice<'_>,
         signed_public_key: &DecryptorPublicKey<Vahe>,
+        nonce: &[u8],
     ) -> Result<ClientMessage<Kahe, Vahe>, StatusError>;
 }

@@ -21,6 +21,12 @@ use vahe_shell::ShellVahe;
 use vahe_traits::Recover;
 use willow_api_common::AggregationConfig;
 
+pub fn generate_random_nonce() -> Vec<u8> {
+    let mut nonce = vec![0u8; 16];
+    rand::thread_rng().fill(&mut nonce[..]);
+    nonce
+}
+
 pub fn generate_random_unsigned_vector(num_values: usize, max_absolute_value: u64) -> Vec<u64> {
     let mut pt: Vec<u64> = Vec::with_capacity(num_values);
     for _ in 0..num_values {

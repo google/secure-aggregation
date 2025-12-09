@@ -41,6 +41,7 @@ where
         &mut self,
         plaintext: &Self::PlaintextSlice<'_>,
         signed_public_key: &DecryptorPublicKey<Vahe>,
+        nonce: &[u8],
     ) -> Result<ClientMessage<Kahe, Vahe>, status::StatusError> {
         // Generate a new KAHE key.
         let kahe_secret_key = self.kahe.key_gen(&mut self.prng)?;
@@ -51,18 +52,16 @@ where
         // Convert KAHE secret key into short AHE plaintext.
         let ahe_plaintext: Vahe::Plaintext = self.kahe.try_secret_key_into(kahe_secret_key)?;
 
-        // Generate a nonce for the VAHE encryption.
-        let nonce =
-            (0..16).map(|_| self.prng.rand8()).collect::<Result<Vec<u8>, status::StatusError>>()?;
-
         // Encrypt AHE plaintext with public key.
         let (ahe_ciphertext, proof) = self.vahe.verifiable_encrypt(
             &ahe_plaintext,
             signed_public_key,
-            &nonce,
+            nonce,
             &mut self.prng,
         )?;
-        Ok(ClientMessage { kahe_ciphertext, ahe_ciphertext, proof, nonce })
+
+        // Keep a copy of the nonce so the message can be forwarded as-is.
+        Ok(ClientMessage { kahe_ciphertext, ahe_ciphertext, proof, nonce: nonce.to_vec() })
     }
 }
 
@@ -79,6 +78,7 @@ mod test {
     use shell_testing_parameters::{make_ahe_config, make_kahe_config};
     use single_thread_hkdf::SingleThreadHkdfPrng;
     use std::collections::HashMap;
+    use testing_utils::generate_random_nonce;
     use vahe_shell::ShellVahe;
     use vahe_traits::Recover;
     use willow_api_common::AggregationConfig;
@@ -114,7 +114,9 @@ mod test {
         // Create client message.
         let input_values = vec![1, 2, 3, 4, 5, 6, 7, 8, 7, 6, 5, 4, 3, 2, 1];
         let client_plaintext = HashMap::from([(default_id.as_str(), input_values.as_slice())]);
-        let client_message = client.create_client_message(&client_plaintext, &public_key).unwrap();
+        let nonce = generate_random_nonce();
+        let client_message =
+            client.create_client_message(&client_plaintext, &public_key, &nonce).unwrap();
 
         // Decrypt client message.
         let decryption_request = vahe.get_partial_dec_ciphertext(&client_message.ahe_ciphertext)?;
@@ -172,9 +174,12 @@ mod test {
         let input_values2 = vec![1, 1, 2, 3, 5, 8, 3, 1, 4, 5, 9, 4, 3, 7, 0];
         let client2_plaintext = HashMap::from([(default_id.as_str(), input_values2.as_slice())]);
         let expected_output = vec![2, 3, 5, 7, 10, 14, 10, 9, 11, 11, 14, 8, 6, 9, 1];
+        let nonce1 = generate_random_nonce();
         let mut client_message =
-            client1.create_client_message(&client1_plaintext, &public_key).unwrap();
-        let extra_message = client2.create_client_message(&client2_plaintext, &public_key).unwrap();
+            client1.create_client_message(&client1_plaintext, &public_key, &nonce1).unwrap();
+        let nonce2 = generate_random_nonce();
+        let extra_message =
+            client2.create_client_message(&client2_plaintext, &public_key, &nonce2).unwrap();
 
         // Add extra message to the first client message.
         kahe.add_ciphertexts_in_place(
