@@ -28,9 +28,11 @@ mod ffi {
         type FfiStatus = shell_types::ffi::FfiStatus;
         type ModuliWrapper = shell_types::ffi::ModuliWrapper;
         type RnsPolynomialWrapper = shell_types::ffi::RnsPolynomialWrapper;
+        #[namespace = "secure_aggregation"]
+        type RnsPolynomial = shell_types::ffi::RnsPolynomial;
 
         pub unsafe fn SerializeRnsPolynomialToBytes(
-            poly: *const RnsPolynomialWrapper,
+            poly: *const RnsPolynomial,
             moduli: ModuliWrapper,
             out: &mut UniquePtr<CxxString>,
         ) -> FfiStatus;
@@ -48,7 +50,7 @@ use status::rust_status_from_cpp;
 
 // Serialize a RnsPolynomial to a SerializedRnsPolynomial proto.
 pub fn rns_polynomial_to_proto(
-    poly: &RnsPolynomial,
+    poly: &ffi::RnsPolynomial,
     moduli: &Moduli,
 ) -> Result<SerializedRnsPolynomial, status::StatusError> {
     let mut out = cxx::UniquePtr::null();

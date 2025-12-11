@@ -56,19 +56,13 @@ TEST(ShellSerializationTest, SerializeRnsPolynomialToBytesFailsOnNullptr) {
           /*poly=*/nullptr, moduli_wrapper, serialized_bytes)),
       StatusIs(absl::StatusCode::kInvalidArgument, HasSubstr("non-null")));
 
-  RnsPolynomialWrapper null_poly_wrapper = {.ptr = nullptr};
-  EXPECT_THAT(
-      UnwrapFfiStatus(SerializeRnsPolynomialToBytes(
-          &null_poly_wrapper, moduli_wrapper, serialized_bytes)),
-      StatusIs(absl::StatusCode::kInvalidArgument, HasSubstr("non-null")));
-
   SECAGG_ASSERT_OK_AND_ASSIGN(auto poly,
                               RnsPolynomial::CreateZero(kLogN, moduli));
   RnsPolynomialWrapper poly_wrapper = {
       .ptr = std::make_unique<RnsPolynomial>(std::move(poly))};
   EXPECT_THAT(
       UnwrapFfiStatus(SerializeRnsPolynomialToBytes(
-          &poly_wrapper, ModuliWrapper{.moduli = nullptr, .len = 0},
+          poly_wrapper.ptr.get(), ModuliWrapper{.moduli = nullptr, .len = 0},
           serialized_bytes)),
       StatusIs(absl::StatusCode::kInvalidArgument, HasSubstr("non-null")));
 }
@@ -123,7 +117,7 @@ TEST(ShellSerializationTest, SerializeRnsPolynomialToBytes) {
       .ptr = std::make_unique<RnsPolynomial>(std::move(poly))};
   auto serialized_bytes = std::make_unique<std::string>();
   SECAGG_EXPECT_OK(UnwrapFfiStatus(SerializeRnsPolynomialToBytes(
-      &poly_wrapper, moduli_wrapper, serialized_bytes)));
+      poly_wrapper.ptr.get(), moduli_wrapper, serialized_bytes)));
 
   // Create a proto from the serialized bytes and then deserialize it.
   rlwe::SerializedRnsPolynomial serialized_poly_proto;

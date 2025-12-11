@@ -21,7 +21,7 @@ use std::ops::Deref;
 pub mod ffi {
     /// Owned RnsPolynomial behind a unique_ptr.
     pub struct RnsPolynomialWrapper {
-        pub ptr: UniquePtr<RnsPolynomial>,
+        ptr: UniquePtr<RnsPolynomial>,
     }
 
     pub struct RnsPolynomialVecWrapper {
@@ -126,6 +126,15 @@ impl Clone for RnsPolynomialVec {
 }
 
 pub use ffi::RnsPolynomialWrapper as RnsPolynomial;
+
+impl Deref for RnsPolynomial {
+    type Target = ffi::RnsPolynomial;
+
+    fn deref(&self) -> &Self::Target {
+        // SAFETY: self.ptr is guaranteed to be non-null in all safe Rust code.
+        self.ptr.deref()
+    }
+}
 
 impl Clone for RnsPolynomial {
     fn clone(&self) -> Self {

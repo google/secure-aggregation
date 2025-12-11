@@ -28,9 +28,9 @@
 
 extern "C" {
 
-FfiStatus SerializeRnsPolynomialToBytes(const RnsPolynomialWrapper* poly,
-                                        ModuliWrapper moduli,
-                                        std::unique_ptr<std::string>& out);
+FfiStatus SerializeRnsPolynomialToBytes(
+    const secure_aggregation::RnsPolynomial* poly, ModuliWrapper moduli,
+    std::unique_ptr<std::string>& out);
 
 FfiStatus DeserializeRnsPolynomialFromBytes(
     rust::Slice<const uint8_t> serialized_poly, ModuliWrapper moduli,

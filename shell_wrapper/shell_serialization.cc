@@ -32,19 +32,21 @@
 
 using secure_aggregation::MakeFfiStatus;
 
-FfiStatus SerializeRnsPolynomialToBytes(const RnsPolynomialWrapper* poly,
-                                        ModuliWrapper moduli,
-                                        std::unique_ptr<std::string>& out) {
-  if (poly == nullptr || poly->ptr == nullptr || moduli.moduli == nullptr) {
+FfiStatus SerializeRnsPolynomialToBytes(
+    const secure_aggregation::RnsPolynomial* poly, ModuliWrapper moduli,
+    std::unique_ptr<std::string>& out) {
+  if (poly == nullptr || moduli.moduli == nullptr) {
     return MakeFfiStatus(absl::InvalidArgumentError(
         "All pointer arguments and their wrapped pointers must be non-null."));
   }
-  auto serialized = poly->ptr->Serialize({moduli.moduli, moduli.len});
-  if (!serialized.ok()) {
-    return MakeFfiStatus(serialized.status());
+
+  absl::StatusOr<rlwe::SerializedRnsPolynomial> serialized_poly =
+      poly->Serialize({moduli.moduli, moduli.len});
+  if (!serialized_poly.ok()) {
+    return MakeFfiStatus(serialized_poly.status());
   }
   std::string buffer;
-  if (!serialized->SerializeToString(&buffer)) {
+  if (!serialized_poly->SerializeToString(&buffer)) {
     return MakeFfiStatus(
         absl::InternalError("Failed to serialize RNS polynomial to string."));
   }
