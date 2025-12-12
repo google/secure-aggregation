@@ -53,3 +53,7 @@ message ShellAheCiphertext {
 message ShellKaheCiphertext {
   repeated rlwe.SerializedRnsPolynomial poly = 1;
 }
+
+message ShellKaheSecretKey {
+  rlwe.SerializedRnsPolynomial poly = 1;
+}

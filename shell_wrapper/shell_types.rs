@@ -125,6 +125,8 @@ impl Clone for RnsPolynomialVec {
     }
 }
 
+pub use ffi::RustVecToRnsPolynomialVecWrapper as rust_vec_to_rns_polynomial_vec;
+
 pub use ffi::RnsPolynomialWrapper as RnsPolynomial;
 
 impl Deref for RnsPolynomial {

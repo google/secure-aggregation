@@ -65,11 +65,16 @@ rust_library(
     srcs = ["kahe.rs"],
     deps = [
         ":single_thread_hkdf",
+        "@protobuf//rust:protobuf",
         "//shell_wrapper:kahe",
+        "//shell_wrapper:shell_serialization",
+        "//shell_wrapper:shell_serialization_cxx",  # fixdeps: keep
         "//shell_wrapper:shell_types",
         "//shell_wrapper:status",
+        "//willow/proto/shell:shell_ciphertexts_rust_proto",
         "//willow/src/traits:kahe_traits",
         "//willow/src/traits:prng_traits",
+        "//willow/src/traits:proto_serialization_traits",
     ],
 )
 
