@@ -391,26 +391,24 @@ pub struct PartialDecryptionMetadata {
 
 macro_rules! impl_proto_traits_single_poly {
     ($type:ty, $proto:ty) => {
-        impl ToProto for $type {
+        impl<Context: AsRef<ShellAhe>> ToProto<Context> for $type {
             type Proto = $proto;
-            type Context = ShellAhe;
 
-            fn to_proto(&self, ctx: &Self::Context) -> Result<Self::Proto, status::StatusError> {
-                let moduli = ahe::get_moduli(&ctx.public_ahe_parameters);
+            fn to_proto(&self, ctx: Context) -> Result<Self::Proto, status::StatusError> {
+                let moduli = ahe::get_moduli(&ctx.as_ref().public_ahe_parameters);
                 let poly_proto = rns_polynomial_to_proto(&self.0, &moduli)?;
                 Ok(proto!($proto { poly: poly_proto }))
             }
         }
 
-        impl FromProto for $type {
+        impl<Context: AsRef<ShellAhe>> FromProto<Context> for $type {
             type Proto = $proto;
-            type Context = ShellAhe;
 
             fn from_proto(
                 proto: impl protobuf::AsView<Proxied = Self::Proto>,
-                ctx: &Self::Context,
+                ctx: Context,
             ) -> Result<Self, status::StatusError> {
-                let moduli = ahe::get_moduli(&ctx.public_ahe_parameters);
+                let moduli = ahe::get_moduli(&ctx.as_ref().public_ahe_parameters);
                 let poly = rns_polynomial_from_proto(proto.as_view().poly(), &moduli)?;
                 Ok(Self(poly))
             }
@@ -424,12 +422,11 @@ impl_proto_traits_single_poly!(PublicKey, ShellAhePublicKey);
 
 macro_rules! impl_proto_traits_vec_poly {
     ($type:ty, $proto:ty) => {
-        impl ToProto for $type {
+        impl<Context: AsRef<ShellAhe>> ToProto<Context> for $type {
             type Proto = $proto;
-            type Context = ShellAhe;
 
-            fn to_proto(&self, ctx: &Self::Context) -> Result<Self::Proto, status::StatusError> {
-                let moduli = ahe::get_moduli(&ctx.public_ahe_parameters);
+            fn to_proto(&self, ctx: Context) -> Result<Self::Proto, status::StatusError> {
+                let moduli = ahe::get_moduli(&ctx.as_ref().public_ahe_parameters);
                 let mut result = proto!($proto {});
                 for poly in &self.0 {
                     result.poly_mut().push(rns_polynomial_to_proto(&poly, &moduli)?);
@@ -438,15 +435,14 @@ macro_rules! impl_proto_traits_vec_poly {
             }
         }
 
-        impl FromProto for $type {
+        impl<Context: AsRef<ShellAhe>> FromProto<Context> for $type {
             type Proto = $proto;
-            type Context = ShellAhe;
 
             fn from_proto(
                 proto: impl protobuf::AsView<Proxied = Self::Proto>,
-                ctx: &Self::Context,
+                ctx: Context,
             ) -> Result<Self, status::StatusError> {
-                let moduli = ahe::get_moduli(&ctx.public_ahe_parameters);
+                let moduli = ahe::get_moduli(&ctx.as_ref().public_ahe_parameters);
                 let polys: Result<Vec<_>, _> = proto
                     .as_view()
                     .poly()
@@ -463,31 +459,35 @@ impl_proto_traits_vec_poly!(PartialDecryption, ShellAhePartialDecryption);
 impl_proto_traits_vec_poly!(PartialDecCiphertext, ShellAhePartialDecCiphertext);
 impl_proto_traits_vec_poly!(RecoverCiphertext, ShellAheRecoverCiphertext);
 
-impl ToProto for Ciphertext {
+impl<Context: AsRef<ShellAhe>> ToProto<Context> for Ciphertext {
     type Proto = ShellAheCiphertext;
-    type Context = ShellAhe;
 
-    fn to_proto(&self, ctx: &Self::Context) -> Result<Self::Proto, status::StatusError> {
+    fn to_proto(&self, ctx: Context) -> Result<Self::Proto, status::StatusError> {
         Ok(proto!(ShellAheCiphertext {
-            component_b: self.component_b.to_proto(ctx)?,
-            component_a: self.component_a.to_proto(ctx)?,
+            component_b: self.component_b.to_proto(&ctx)?,
+            component_a: self.component_a.to_proto(&ctx)?,
         }))
     }
 }
 
-impl FromProto for Ciphertext {
+impl<Context: AsRef<ShellAhe>> FromProto<Context> for Ciphertext {
     type Proto = ShellAheCiphertext;
-    type Context = ShellAhe;
 
     fn from_proto(
         proto: impl protobuf::AsView<Proxied = Self::Proto>,
-        ctx: &Self::Context,
+        ctx: Context,
     ) -> Result<Self, status::StatusError> {
         let proto_view = proto.as_view();
         Ok(Ciphertext {
-            component_b: RecoverCiphertext::from_proto(proto_view.component_b(), ctx)?,
-            component_a: PartialDecCiphertext::from_proto(proto_view.component_a(), ctx)?,
+            component_b: RecoverCiphertext::from_proto(proto_view.component_b(), &ctx)?,
+            component_a: PartialDecCiphertext::from_proto(proto_view.component_a(), &ctx)?,
         })
+    }
+}
+
+impl AsRef<ShellAhe> for ShellAhe {
+    fn as_ref(&self) -> &ShellAhe {
+        self
     }
 }
 

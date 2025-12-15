@@ -15,20 +15,18 @@
 use status::StatusError;
 
 /// Trait for converting a struct to a Protobuf message.
-pub trait ToProto {
+pub trait ToProto<Context = ()> {
     type Proto;
-    type Context;
 
-    fn to_proto(&self, ctx: &Self::Context) -> Result<Self::Proto, StatusError>;
+    fn to_proto(&self, ctx: Context) -> Result<Self::Proto, StatusError>;
 }
 
 /// Trait for converting a Protobuf message view to a struct.
-pub trait FromProto: Sized {
-    type Proto: protobuf::AsView;
-    type Context;
+pub trait FromProto<Context = ()>: Sized {
+    type Proto;
 
     fn from_proto(
         proto: impl protobuf::AsView<Proxied = Self::Proto>,
-        ctx: &Self::Context,
+        ctx: Context,
     ) -> Result<Self, StatusError>;
 }
