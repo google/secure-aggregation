@@ -37,3 +37,7 @@ message RlweRelationProofProto {
   repeated bytes z_vw = 8;
   LinearInnerProductProofProto lip_proof = 9;
 }
+
+message RlweRelationProofListProto {
+  repeated RlweRelationProofProto proofs = 1;
+}
