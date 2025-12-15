@@ -15,6 +15,11 @@
 use ahe_traits::{AheKeygen, PartialDec};
 use decryptor_traits::SecureAggregationDecryptor;
 use messages::{DecryptorPublicKeyShare, PartialDecryptionRequest, PartialDecryptionResponse};
+use messages_rust_proto::DecryptorStateProto;
+use proto_serialization_traits::{FromProto, ToProto};
+use protobuf::{proto, AsView};
+use shell_ciphertexts_rust_proto::ShellAheSecretKeyShare;
+use status::StatusError;
 use vahe_traits::{EncryptVerify, HasVahe, VaheBase};
 
 /// Lightweight decryptor directly exposing KAHE/VAHE types. It verifies only the client proofs,
@@ -38,6 +43,45 @@ pub struct DecryptorState<Vahe: VaheBase> {
 impl<Vahe: VaheBase> Default for DecryptorState<Vahe> {
     fn default() -> Self {
         Self { sk_share: None }
+    }
+}
+
+impl<'a, C, Vahe> ToProto<&'a C> for DecryptorState<Vahe>
+where
+    C: HasVahe<Vahe = Vahe>,
+    Vahe: VaheBase + 'a,
+    Vahe::SecretKeyShare: ToProto<&'a Vahe, Proto = ShellAheSecretKeyShare>,
+{
+    type Proto = DecryptorStateProto;
+
+    fn to_proto(&self, context: &'a C) -> Result<Self::Proto, StatusError> {
+        let mut proto = DecryptorStateProto::new();
+        if let Some(sk) = &self.sk_share {
+            proto.set_sk_share(sk.to_proto(context.vahe())?);
+        }
+        Ok(proto)
+    }
+}
+
+impl<'a, C, Vahe> FromProto<&'a C> for DecryptorState<Vahe>
+where
+    C: HasVahe<Vahe = Vahe>,
+    Vahe: VaheBase + 'a,
+    Vahe::SecretKeyShare: FromProto<&'a Vahe, Proto = ShellAheSecretKeyShare>,
+{
+    type Proto = DecryptorStateProto;
+
+    fn from_proto(
+        proto: impl AsView<Proxied = Self::Proto>,
+        context: &'a C,
+    ) -> Result<Self, StatusError> {
+        let proto = proto.as_view();
+        let sk_share = if proto.has_sk_share() {
+            Some(Vahe::SecretKeyShare::from_proto(proto.sk_share(), context.vahe())?)
+        } else {
+            None
+        };
+        Ok(DecryptorState { sk_share })
     }
 }
 
@@ -80,5 +124,46 @@ where
             &mut self.prng,
         )?;
         Ok(PartialDecryptionResponse { partial_decryption: pd })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{DecryptorState, WillowV1Decryptor};
+    use ahe_traits::AheBase;
+    use decryptor_traits::SecureAggregationDecryptor;
+    use googletest::{gtest, verify_true};
+    use parameters_shell::create_shell_ahe_config;
+    use prng_traits::SecurePrng;
+    use proto_serialization_traits::{FromProto, ToProto};
+    use single_thread_hkdf::SingleThreadHkdfPrng;
+    use vahe_shell::ShellVahe;
+
+    const CONTEXT_STRING: &[u8] = b"testing_context_string";
+
+    #[gtest]
+    fn decryptor_state_serialization_roundtrip() -> googletest::Result<()> {
+        let vahe = ShellVahe::new(create_shell_ahe_config(1).unwrap(), CONTEXT_STRING).unwrap();
+        let seed = SingleThreadHkdfPrng::generate_seed()?;
+        let prng = SingleThreadHkdfPrng::create(&seed)?;
+        let mut decryptor = WillowV1Decryptor { vahe, prng };
+        let mut decryptor_state = DecryptorState::default();
+
+        // Check empty state serialization.
+        let decryptor_state_proto = decryptor_state.to_proto(&decryptor)?;
+        let decryptor_state_roundtrip =
+            DecryptorState::from_proto(decryptor_state_proto, &decryptor)?;
+        verify_true!(decryptor_state_roundtrip.sk_share.is_none())?;
+
+        // Check populated state serialization.
+        decryptor.create_public_key_share(&mut decryptor_state)?;
+        verify_true!(decryptor_state.sk_share.is_some())?;
+        let decryptor_state_proto = decryptor_state.to_proto(&decryptor)?;
+        let decryptor_state_roundtrip =
+            DecryptorState::from_proto(decryptor_state_proto, &decryptor)?;
+        verify_true!(decryptor_state_roundtrip.sk_share.is_some())?;
+
+        Ok(())
     }
 }

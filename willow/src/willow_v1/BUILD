@@ -51,17 +51,59 @@ rust_test(
     ],
 )
 
+rust_test(
+    name = "willow_v1_decryptor_test",
+    crate = ":willow_v1_decryptor",
+    deps = [
+        "@crate_index//:googletest",
+        "//willow/src/shell:parameters_shell",
+        "//willow/src/shell:single_thread_hkdf",
+        "//willow/src/shell:vahe_shell",
+        "//willow/src/traits:ahe_traits",
+        "//willow/src/traits:decryptor_traits",
+        "//willow/src/traits:prng_traits",
+        "//willow/src/traits:proto_serialization_traits",
+    ],
+)
+
 rust_library(
     name = "willow_v1_decryptor",
     srcs = [
         "decryptor.rs",
     ],
     deps = [
+        "@protobuf//rust:protobuf",
         "//shell_wrapper:status",
+        "//willow/proto/shell:shell_ciphertexts_rust_proto",
+        "//willow/proto/willow:messages_rust_proto",
         "//willow/src/traits:ahe_traits",
         "//willow/src/traits:decryptor_traits",
         "//willow/src/traits:messages",
+        "//willow/src/traits:proto_serialization_traits",
         "//willow/src/traits:vahe_traits",
+    ],
+)
+
+rust_test(
+    name = "willow_v1_server_test",
+    crate = ":willow_v1_server",
+    deps = [
+        ":willow_v1_client",
+        ":willow_v1_decryptor",
+        ":willow_v1_verifier",
+        "@crate_index//:googletest",
+        "//willow/src/shell:kahe_shell",
+        "//willow/src/shell:parameters_shell",
+        "//willow/src/shell:single_thread_hkdf",
+        "//willow/src/shell:vahe_shell",
+        "//willow/src/testing_utils",
+        "//willow/src/traits:ahe_traits",
+        "//willow/src/traits:client_traits",
+        "//willow/src/traits:decryptor_traits",
+        "//willow/src/traits:prng_traits",
+        "//willow/src/traits:proto_serialization_traits",
+        "//willow/src/traits:server_traits",
+        "//willow/src/traits:verifier_traits",
     ],
 )
 
@@ -71,10 +113,14 @@ rust_library(
         "server.rs",
     ],
     deps = [
+        "@protobuf//rust:protobuf",
         "//shell_wrapper:status",
+        "//willow/proto/shell:shell_ciphertexts_rust_proto",
+        "//willow/proto/willow:messages_rust_proto",
         "//willow/src/traits:ahe_traits",
         "//willow/src/traits:kahe_traits",
         "//willow/src/traits:messages",
+        "//willow/src/traits:proto_serialization_traits",
         "//willow/src/traits:server_traits",
         "//willow/src/traits:vahe_traits",
     ],
@@ -86,10 +132,14 @@ rust_library(
         "verifier.rs",
     ],
     deps = [
+        "@protobuf//rust:protobuf",
         "//shell_wrapper:status",
+        "//willow/proto/shell:shell_ciphertexts_rust_proto",
+        "//willow/proto/willow:messages_rust_proto",
         "//willow/src/traits:ahe_traits",
         "//willow/src/traits:kahe_traits",
         "//willow/src/traits:messages",
+        "//willow/src/traits:proto_serialization_traits",
         "//willow/src/traits:vahe_traits",
         "//willow/src/traits:verifier_traits",
     ],
@@ -105,6 +155,7 @@ rust_test(
         "@crate_index//:googletest",
         "//shell_wrapper:status_matchers_rs",
         "//willow/src/shell:kahe_shell",
+        "//willow/src/shell:parameters_shell",
         "//willow/src/shell:single_thread_hkdf",
         "//willow/src/shell:vahe_shell",
         "//willow/src/testing_utils",
@@ -114,6 +165,7 @@ rust_test(
         "//willow/src/traits:decryptor_traits",
         "//willow/src/traits:kahe_traits",
         "//willow/src/traits:prng_traits",
+        "//willow/src/traits:proto_serialization_traits",
         "//willow/src/traits:server_traits",
         "//willow/src/traits:vahe_traits",
     ],

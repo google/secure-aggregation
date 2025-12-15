@@ -13,6 +13,11 @@
 // limitations under the License.
 
 use messages::{DecryptionRequestContribution, PartialDecryptionRequest};
+use messages_rust_proto::VerifierStateProto;
+use proto_serialization_traits::{FromProto, ToProto};
+use protobuf::{proto, AsView};
+use shell_ciphertexts_rust_proto::ShellAhePartialDecCiphertext;
+use status::StatusError;
 use std::fmt::Debug;
 use vahe_traits::{EncryptVerify, HasVahe, VaheBase};
 use verifier_traits::SecureAggregationVerifier;
@@ -94,6 +99,61 @@ impl<Vahe: VaheBase> Default for VerifierState<Vahe> {
 impl<Vahe: VaheBase> Clone for VerifierState<Vahe> {
     fn clone(&self) -> Self {
         Self(self.0.clone())
+    }
+}
+
+impl<'a, C, Vahe> ToProto<&'a C> for VerifierState<Vahe>
+where
+    C: HasVahe<Vahe = Vahe>,
+    Vahe: VaheBase + 'a,
+    Vahe::PartialDecCiphertext: ToProto<&'a Vahe, Proto = ShellAhePartialDecCiphertext>,
+{
+    type Proto = VerifierStateProto;
+
+    fn to_proto(&self, context: &'a C) -> Result<Self::Proto, StatusError> {
+        if let Some(state) = &self.0 {
+            Ok(proto!(VerifierStateProto {
+                partial_dec_ciphertext_sum: state
+                    .partial_dec_ciphertext_sum
+                    .to_proto(context.vahe())?,
+                nonce_lower_bound: state.nonce_bounds.0.clone(),
+                nonce_upper_bound: state.nonce_bounds.1.clone(),
+            }))
+        } else {
+            Ok(proto!(VerifierStateProto {}))
+        }
+    }
+}
+
+impl<'a, C, Vahe> FromProto<&'a C> for VerifierState<Vahe>
+where
+    C: HasVahe<Vahe = Vahe>,
+    Vahe: VaheBase + 'a,
+    Vahe::PartialDecCiphertext: FromProto<&'a Vahe, Proto = ShellAhePartialDecCiphertext>,
+{
+    type Proto = VerifierStateProto;
+
+    fn from_proto(
+        proto: impl AsView<Proxied = Self::Proto>,
+        context: &'a C,
+    ) -> Result<Self, StatusError> {
+        let proto = proto.as_view();
+        if proto.has_partial_dec_ciphertext_sum() {
+            let state = VerifierState(Some(NonemptyVerifierState {
+                partial_dec_ciphertext_sum: Vahe::PartialDecCiphertext::from_proto(
+                    proto.partial_dec_ciphertext_sum(),
+                    context.vahe(),
+                )?,
+                nonce_bounds: (
+                    proto.nonce_lower_bound().to_vec(),
+                    proto.nonce_upper_bound().to_vec(),
+                ),
+            }));
+            state.validate()?;
+            Ok(state)
+        } else {
+            Ok(VerifierState(None))
+        }
     }
 }
 
@@ -210,9 +270,10 @@ mod tests {
     };
     use kahe_shell::ShellKahe;
     use kahe_traits::KaheBase;
+    use parameters_shell::{create_shell_ahe_config, create_shell_kahe_config};
     use prng_traits::SecurePrng;
+    use proto_serialization_traits::{FromProto, ToProto};
     use server_traits::SecureAggregationServer;
-    use shell_testing_parameters::{make_ahe_config, make_kahe_config};
     use single_thread_hkdf::SingleThreadHkdfPrng;
     use status_matchers_rs::status_is;
     use std::collections::HashMap;
@@ -233,30 +294,51 @@ mod tests {
     fn setup() -> Result<VerifierTestSetup, status::StatusError> {
         let aggregation_config =
             generate_aggregation_config(DEFAULT_VECTOR_ID.to_string(), 16, 10, 1, 1);
+        let max_number_of_decryptors = aggregation_config.max_number_of_decryptors;
 
         // Create client.
-        let kahe = ShellKahe::new(make_kahe_config(&aggregation_config), CONTEXT_STRING).unwrap();
-        let vahe = ShellVahe::new(make_ahe_config(), CONTEXT_STRING).unwrap();
+        let kahe =
+            ShellKahe::new(create_shell_kahe_config(&aggregation_config).unwrap(), CONTEXT_STRING)
+                .unwrap();
+        let vahe = ShellVahe::new(
+            create_shell_ahe_config(max_number_of_decryptors).unwrap(),
+            CONTEXT_STRING,
+        )
+        .unwrap();
         let seed = SingleThreadHkdfPrng::generate_seed()?;
         let prng = SingleThreadHkdfPrng::create(&seed)?;
         let mut client = WillowV1Client { kahe, vahe, prng };
 
         // Create decryptor, which needs its own `vahe` (with same public polynomials
         // generated from the seeds) and `prng`.
-        let vahe = ShellVahe::new(make_ahe_config(), CONTEXT_STRING).unwrap();
+        let vahe = ShellVahe::new(
+            create_shell_ahe_config(max_number_of_decryptors).unwrap(),
+            CONTEXT_STRING,
+        )
+        .unwrap();
         let seed = SingleThreadHkdfPrng::generate_seed()?;
         let prng = SingleThreadHkdfPrng::create(&seed)?;
         let mut decryptor_state = DecryptorState::default();
         let mut decryptor = WillowV1Decryptor { vahe, prng };
 
         // Create server.
-        let kahe = ShellKahe::new(make_kahe_config(&aggregation_config), CONTEXT_STRING).unwrap();
-        let vahe = ShellVahe::new(make_ahe_config(), CONTEXT_STRING).unwrap();
+        let kahe =
+            ShellKahe::new(create_shell_kahe_config(&aggregation_config).unwrap(), CONTEXT_STRING)
+                .unwrap();
+        let vahe = ShellVahe::new(
+            create_shell_ahe_config(max_number_of_decryptors).unwrap(),
+            CONTEXT_STRING,
+        )
+        .unwrap();
         let server = WillowV1Server { kahe, vahe };
         let mut server_state = ServerState::default();
 
         // Create verifier.
-        let vahe = ShellVahe::new(make_ahe_config(), CONTEXT_STRING).unwrap();
+        let vahe = ShellVahe::new(
+            create_shell_ahe_config(max_number_of_decryptors).unwrap(),
+            CONTEXT_STRING,
+        )
+        .unwrap();
         let verifier = WillowV1Verifier { vahe };
 
         // Decryptor generates public key share.
@@ -398,5 +480,31 @@ mod tests {
             err(status_is(status::StatusErrorCode::FailedPrecondition)
                 .with_message(contains_substring("at least one client message ")))
         )
+    }
+
+    #[gtest]
+    fn verifier_state_serialization_roundtrip() -> googletest::Result<()> {
+        let setup = setup()?;
+        let mut verifier_state = VerifierState::default();
+
+        // Check empty state serialization
+        let verifier_state_proto = verifier_state.to_proto(&setup.verifier)?;
+        let verifier_state_roundtrip =
+            VerifierState::from_proto(verifier_state_proto, &setup.verifier)?;
+        verify_true!(verifier_state_roundtrip.0.is_none())?;
+
+        // Check populated state serialization
+        setup.verifier.verify_and_include(
+            setup.decryption_request_contribution.clone(),
+            &mut verifier_state,
+        )?;
+        let nonce_bounds_before = verifier_state.0.as_ref().unwrap().nonce_bounds.clone();
+        let verifier_state_proto = verifier_state.to_proto(&setup.verifier)?;
+        let verifier_state_roundtrip =
+            VerifierState::from_proto(verifier_state_proto, &setup.verifier)?;
+        verify_true!(verifier_state_roundtrip.0.is_some())?;
+        verify_eq!(verifier_state_roundtrip.0.as_ref().unwrap().nonce_bounds, nonce_bounds_before)?;
+
+        Ok(())
     }
 }
