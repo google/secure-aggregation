@@ -14,6 +14,7 @@
 
 load("@protobuf//bazel:cc_proto_library.bzl", "cc_proto_library")
 load("@protobuf//bazel:proto_library.bzl", "proto_library")
+load("@protobuf//rust:defs.bzl", "rust_proto_library")
 
 package(
     default_visibility = ["//visibility:public"],
@@ -47,4 +48,23 @@ proto_library(
 cc_proto_library(
     name = "input_spec_cc_proto",
     deps = [":input_spec_proto"],
+)
+
+proto_library(
+    name = "messages_proto",
+    srcs = ["messages.proto"],
+    deps = [
+        "//willow/proto/shell:shell_ciphertexts_proto",
+        "//willow/proto/zk:proofs_proto",
+    ],
+)
+
+cc_proto_library(
+    name = "messages_cc_proto",
+    deps = [":messages_proto"],
+)
+
+rust_proto_library(
+    name = "messages_rust_proto",
+    deps = [":messages_proto"],
 )

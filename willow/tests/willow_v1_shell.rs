@@ -19,8 +19,13 @@ use googletest::prelude::container_eq;
 use googletest::{gtest, verify_eq, verify_that};
 use kahe_shell::ShellKahe;
 use kahe_traits::KaheBase;
+use messages::{
+    CiphertextContribution, ClientMessage, DecryptionRequestContribution, DecryptorPublicKeyShare,
+    PartialDecryptionRequest, PartialDecryptionResponse,
+};
 use parameters_shell::{create_shell_ahe_config, create_shell_kahe_config};
 use prng_traits::SecurePrng;
+use proto_serialization_traits::{FromProto, ToProto};
 use server_traits::SecureAggregationServer;
 use single_thread_hkdf::SingleThreadHkdfPrng;
 use status::StatusErrorCode;
@@ -125,6 +130,140 @@ fn encrypt_decrypt_one() -> googletest::Result<()> {
     verify_eq!(
         aggregation_result.get(default_id.as_str()).unwrap()[..client_plaintext_length],
         client_plaintext.get(default_id.as_str()).unwrap()[..]
+    )
+}
+
+/// Encrypt and decrypt with a single decryptor and single client, using serialization.
+#[gtest]
+fn encrypt_decrypt_one_serialized() -> googletest::Result<()> {
+    let default_id = String::from("default");
+    let aggregation_config = generate_aggregation_config(default_id.clone(), 16, 10, 1, 1);
+    let max_number_of_decryptors = aggregation_config.max_number_of_decryptors;
+
+    // Create client.
+    let kahe =
+        ShellKahe::new(create_shell_kahe_config(&aggregation_config).unwrap(), CONTEXT_STRING)
+            .unwrap();
+    let vahe =
+        ShellVahe::new(create_shell_ahe_config(max_number_of_decryptors).unwrap(), CONTEXT_STRING)
+            .unwrap();
+    let seed = SingleThreadHkdfPrng::generate_seed().unwrap();
+    let prng = SingleThreadHkdfPrng::create(&seed).unwrap();
+    let mut client = WillowV1Client { kahe, vahe, prng };
+
+    // Create decryptor, which needs its own `vahe` (with same public polynomials
+    // generated from the seeds) and `prng`.
+    let vahe =
+        ShellVahe::new(create_shell_ahe_config(max_number_of_decryptors).unwrap(), CONTEXT_STRING)
+            .unwrap();
+    let seed = SingleThreadHkdfPrng::generate_seed().unwrap();
+    let prng = SingleThreadHkdfPrng::create(&seed).unwrap();
+    let mut decryptor_state = DecryptorState::default();
+    let mut decryptor = WillowV1Decryptor { vahe, prng };
+
+    // Create server.
+    let kahe =
+        ShellKahe::new(create_shell_kahe_config(&aggregation_config).unwrap(), CONTEXT_STRING)
+            .unwrap();
+    let vahe =
+        ShellVahe::new(create_shell_ahe_config(max_number_of_decryptors).unwrap(), CONTEXT_STRING)
+            .unwrap();
+    let server = WillowV1Server { kahe, vahe };
+    let mut server_state = ServerState::default();
+
+    // Create verifier.
+    let vahe =
+        ShellVahe::new(create_shell_ahe_config(max_number_of_decryptors).unwrap(), CONTEXT_STRING)
+            .unwrap();
+    let verifier = WillowV1Verifier { vahe };
+    let mut verifier_state = VerifierState::default();
+
+    // Decryptor generates public key share.
+    let public_key_share = decryptor.create_public_key_share(&mut decryptor_state).unwrap();
+
+    // Serialize and deserialize the public key share.
+    let public_key_share_proto = public_key_share.to_proto(&decryptor.vahe)?;
+    let public_key_share: DecryptorPublicKeyShare<ShellVahe> =
+        DecryptorPublicKeyShare::<ShellVahe>::from_proto(public_key_share_proto, &server.vahe)?;
+
+    // Server handles the public key share.
+    server
+        .handle_decryptor_public_key_share(public_key_share, "Decryptor 0", &mut server_state)
+        .unwrap();
+
+    // Server creates the public key.
+    let public_key = server.create_decryptor_public_key(&server_state).unwrap();
+
+    // Serialize and deserialize the public key.
+    let public_key_proto = public_key.to_proto(&server.vahe)?;
+    let public_key =
+        messages::DecryptorPublicKey::<ShellVahe>::from_proto(public_key_proto, &client.vahe)?;
+
+    // Client encrypts.
+    let client_plaintext =
+        HashMap::from([(default_id.clone(), vec![1, 2, 3, 4, 5, 6, 7, 8, 7, 6, 5, 4, 3, 2, 1])]);
+    let nonce = generate_random_nonce();
+    let client_message = client
+        .create_client_message(
+            &ShellKahe::plaintext_as_slice(&client_plaintext),
+            &public_key,
+            &nonce,
+        )
+        .unwrap();
+
+    // Serialize and deserialize the client message.
+    let client_message_proto = client_message.to_proto(&client)?;
+    let client_message: ClientMessage<ShellKahe, ShellVahe> =
+        ClientMessage::from_proto(client_message_proto, &server)?;
+
+    // The client message is split and handled by the server and verifier.
+    let (ciphertext_contribution, decryption_request_contribution) =
+        server.split_client_message(client_message).unwrap();
+
+    // Serialize and deserialize the contributions.
+    let ciphertext_contribution_proto = ciphertext_contribution.to_proto(&server)?;
+    let ciphertext_contribution: CiphertextContribution<ShellKahe, ShellVahe> =
+        CiphertextContribution::from_proto(ciphertext_contribution_proto, &server)?;
+
+    let decryption_request_contribution_proto =
+        decryption_request_contribution.to_proto(&server)?;
+    let decryption_request_contribution: DecryptionRequestContribution<ShellVahe> =
+        DecryptionRequestContribution::from_proto(
+            decryption_request_contribution_proto,
+            &verifier,
+        )?;
+
+    verifier.verify_and_include(decryption_request_contribution, &mut verifier_state).unwrap();
+    server.handle_ciphertext_contribution(ciphertext_contribution, &mut server_state).unwrap();
+
+    // Verifier creates the partial decryption request.
+    let pd_ct = verifier.create_partial_decryption_request(verifier_state).unwrap();
+
+    // Serialize and deserialize the partial decryption request.
+    let pd_ct_proto = pd_ct.to_proto(&verifier)?;
+    let pd_ct: PartialDecryptionRequest<ShellVahe> =
+        PartialDecryptionRequest::from_proto(pd_ct_proto, &decryptor)?;
+
+    // Decryptor creates partial decryption.
+    let pd = decryptor.handle_partial_decryption_request(pd_ct, &decryptor_state).unwrap();
+
+    // Serialize and deserialize the partial decryption.
+    let pd_proto = pd.to_proto(&decryptor)?;
+    let pd: PartialDecryptionResponse<ShellVahe> =
+        PartialDecryptionResponse::from_proto(pd_proto, &server)?;
+
+    // Server handles the partial decryption.
+    server.handle_partial_decryption(pd, &mut server_state).unwrap();
+
+    // Server recovers the aggregation result.
+    let aggregation_result = server.recover_aggregation_result(&server_state).unwrap();
+
+    // Check that the (padded) result matches the client plaintext.
+    verify_that!(aggregation_result.keys().collect::<Vec<_>>(), container_eq([&default_id]))?;
+    let client_plaintext_length = client_plaintext.get(&default_id).unwrap().len();
+    verify_eq!(
+        aggregation_result.get(&default_id).unwrap()[..client_plaintext_length],
+        client_plaintext.get(&default_id).unwrap()[..]
     )
 }
 
