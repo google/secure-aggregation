@@ -27,7 +27,7 @@ concurrency:
 jobs:
   build:
     runs-on:
-      labels: ubuntu-24.04
+      labels: ubuntu-24.04-64core
     steps:
       - name: Check out repository code
         uses: actions/checkout@8e5e7e5ab8b370d6c329ec480221332ada57f0ab # pin@v3
@@ -37,11 +37,9 @@ jobs:
         with:
           path: |
             ~/.cache/bazel
-          key: ${{ runner.os }}-${{ hashFiles('.bazelrc') }}-${{ hashFiles('MODULE.bazel.lock') }}-${{ github.sha }}
+          key: ${{ runner.os }}-${{ hashFiles('.bazelrc', 'MODULE.bazel.lock') }}-${{ github.sha }}
           restore-keys: |
-            ${{ runner.os }}-${{ hashFiles('.bazelrc') }}-${{ hashFiles('MODULE.bazel.lock') }}-
-            ${{ runner.os }}-${{ hashFiles('.bazelrc') }}-
-            ${{ runner.os }}-
+            ${{ runner.os }}-${{ hashFiles('.bazelrc', 'MODULE.bazel.lock') }}-
 
       - name: "Run `bazel build`"
         run: |
