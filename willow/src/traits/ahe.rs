@@ -100,6 +100,12 @@ pub trait AheBase: Sized {
     type Rng: SecurePrng;
 }
 
+/// Accessor trait for composition.
+pub trait HasAhe {
+    type Ahe: AheBase;
+    fn ahe(&self) -> &Self::Ahe;
+}
+
 pub trait AheKeygen: AheBase {
     /// Sample a new secret key and public key share.
     fn key_gen(

@@ -14,18 +14,18 @@
 
 use messages::{DecryptionRequestContribution, PartialDecryptionRequest};
 use status::StatusError;
-use vahe_traits::VaheBase;
+use vahe_traits::HasVahe;
 
 /// Base trait for the secure aggregation verifier.
 ///
-pub trait SecureAggregationVerifier<Vahe: VaheBase> {
+pub trait SecureAggregationVerifier: HasVahe {
     /// The state held by the verifier between messages.
     type VerifierState: Default;
 
     /// Verifies a clients decryption request contribution.
     fn verify_and_include(
         &self,
-        contribution: DecryptionRequestContribution<Vahe>,
+        contribution: DecryptionRequestContribution<<Self as HasVahe>::Vahe>,
         state: &mut Self::VerifierState,
     ) -> Result<(), StatusError>;
 
@@ -41,5 +41,5 @@ pub trait SecureAggregationVerifier<Vahe: VaheBase> {
     fn create_partial_decryption_request(
         &self,
         state: Self::VerifierState,
-    ) -> Result<PartialDecryptionRequest<Vahe>, StatusError>;
+    ) -> Result<PartialDecryptionRequest<<Self as HasVahe>::Vahe>, StatusError>;
 }

@@ -60,6 +60,12 @@ pub trait KaheBase: Sized {
     type Rng: SecurePrng;
 }
 
+/// Accessor trait for composition.
+pub trait HasKahe {
+    type Kahe: KaheBase;
+    fn kahe(&self) -> &Self::Kahe;
+}
+
 /// Key generation
 pub trait KaheKeygen: KaheBase {
     /// Sample a new secret key.

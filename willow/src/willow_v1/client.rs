@@ -13,10 +13,10 @@
 // limitations under the License.
 
 use client_traits::SecureAggregationClient;
-use kahe_traits::{KaheBase, KaheEncrypt, KaheKeygen, TrySecretKeyInto};
+use kahe_traits::{HasKahe, KaheBase, KaheEncrypt, KaheKeygen, TrySecretKeyInto};
 use messages::{ClientMessage, DecryptorPublicKey};
 use prng_traits::SecurePrng;
-use vahe_traits::{VaheBase, VerifiableEncrypt};
+use vahe_traits::{HasVahe, VaheBase, VerifiableEncrypt};
 
 /// Lightweight client directly exposing KAHE/VAHE types.
 pub struct WillowV1Client<Kahe: KaheBase, Vahe: VaheBase> {
@@ -25,10 +25,24 @@ pub struct WillowV1Client<Kahe: KaheBase, Vahe: VaheBase> {
     pub prng: Kahe::Rng, // Using a single PRNG for both VAHE and KAHE.
 }
 
+impl<Kahe: KaheBase, Vahe: VaheBase> HasKahe for WillowV1Client<Kahe, Vahe> {
+    type Kahe = Kahe;
+    fn kahe(&self) -> &Self::Kahe {
+        &self.kahe
+    }
+}
+
+impl<Kahe: KaheBase, Vahe: VaheBase> HasVahe for WillowV1Client<Kahe, Vahe> {
+    type Vahe = Vahe;
+    fn vahe(&self) -> &Self::Vahe {
+        &self.vahe
+    }
+}
+
 /// Implementation of the `SecureAggregationClient` trait for the generic
 /// KAHE/VAHE client, using WillowCommon as the common types (e.g. protocol
 /// messages are directly the AHE public key and ciphertexts).
-impl<Kahe, Vahe> SecureAggregationClient<Kahe, Vahe> for WillowV1Client<Kahe, Vahe>
+impl<Kahe, Vahe> SecureAggregationClient for WillowV1Client<Kahe, Vahe>
 where
     Vahe: VaheBase + VerifiableEncrypt,
     // Reusing the same PRNG for both AHE and KAHE.

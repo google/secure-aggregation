@@ -15,13 +15,20 @@
 use ahe_traits::{AheKeygen, PartialDec};
 use decryptor_traits::SecureAggregationDecryptor;
 use messages::{DecryptorPublicKeyShare, PartialDecryptionRequest, PartialDecryptionResponse};
-use vahe_traits::{EncryptVerify, VaheBase};
+use vahe_traits::{EncryptVerify, HasVahe, VaheBase};
 
 /// Lightweight decryptor directly exposing KAHE/VAHE types. It verifies only the client proofs,
 /// does not provide verifiable partial decryptions.
 pub struct WillowV1Decryptor<Vahe: VaheBase> {
     pub vahe: Vahe,
     pub prng: Vahe::Rng,
+}
+
+impl<Vahe: VaheBase> HasVahe for WillowV1Decryptor<Vahe> {
+    type Vahe = Vahe;
+    fn vahe(&self) -> &Self::Vahe {
+        &self.vahe
+    }
 }
 
 pub struct DecryptorState<Vahe: VaheBase> {
@@ -37,7 +44,7 @@ impl<Vahe: VaheBase> Default for DecryptorState<Vahe> {
 /// Implementation of the `SecureAggregationDecryptor` trait for the generic
 /// KAHE/AHE decryptor, using WillowCommon as the common types (e.g. protocol
 /// messages are directly the AHE public key and ciphertexts).
-impl<Vahe> SecureAggregationDecryptor<Vahe> for WillowV1Decryptor<Vahe>
+impl<Vahe> SecureAggregationDecryptor for WillowV1Decryptor<Vahe>
 where
     Vahe: VaheBase + EncryptVerify + PartialDec + AheKeygen,
 {
