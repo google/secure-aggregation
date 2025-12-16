@@ -244,6 +244,15 @@ impl From<StatusError> for ffi::FfiStatus {
     }
 }
 
+impl From<Status> for ffi::FfiStatus {
+    fn from(status: Status) -> Self {
+        match status {
+            Ok(()) => ffi::FfiStatus { code: 0, message: cxx::UniquePtr::null() },
+            Err(error) => error.into(),
+        }
+    }
+}
+
 pub fn rust_status_from_cpp(status: ffi::FfiStatus) -> Status {
     if status.code == 0 {
         Ok(())
@@ -417,5 +426,21 @@ mod tests {
         assert!(rust_status.is_err());
         expect_eq!(&rust_status.as_ref().err().unwrap().code(), &StatusErrorCode::Cancelled);
         expect_eq!(&rust_status.as_ref().err().unwrap().message_bytes(), &b"test");
+    }
+
+    #[gtest]
+    fn test_ffi_status_from_ok_status() {
+        let rust_status = Ok(());
+        let ffi_status: ffi::FfiStatus = rust_status.into();
+        expect_eq!(ffi_status.code, 0);
+        expect_eq!(ffi_status.message.is_null(), true);
+    }
+
+    #[gtest]
+    fn test_ffi_status_from_non_ok_status() {
+        let rust_status = Err(StatusError::new_untracked(StatusErrorCode::Cancelled, "test"));
+        let ffi_status: ffi::FfiStatus = rust_status.into();
+        expect_eq!(ffi_status.code, StatusErrorCode::Cancelled as i32);
+        expect_eq!(ffi_status.message.as_bytes(), b"test");
     }
 }
