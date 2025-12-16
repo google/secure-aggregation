@@ -13,9 +13,6 @@
 # limitations under the License.
 
 load("@rules_rust//rust:defs.bzl", "rust_library", "rust_test")
-load("@protobuf//bazel:cc_proto_library.bzl", "cc_proto_library")
-load("@protobuf//bazel:proto_library.bzl", "proto_library")
-load("@protobuf//rust:defs.bzl", "rust_proto_library")
 
 package(
     default_applicable_licenses = [
@@ -24,12 +21,25 @@ package(
 )
 
 rust_library(
-    name = "willow_api_common",
+    name = "aggregation_config",
     srcs = [
-        "common.rs",
+        "aggregation_config.rs",
     ],
     deps = [
+        "@protobuf//rust:protobuf",
         "//shell_wrapper:status",
+        "//willow/proto/willow:aggregation_config_rust_proto",
+        "//willow/src/traits:proto_serialization_traits",
+    ],
+)
+
+rust_test(
+    name = "aggregation_config_test",
+    crate = ":aggregation_config",
+    deps = [
+        ":aggregation_config",
+        "@crate_index//:googletest",
+        "//willow/src/testing_utils",
     ],
 )
 
@@ -39,9 +49,9 @@ rust_library(
         "client.rs",
     ],
     deps = [
-        ":willow_api_common",
-        ":willow_api_common_rust_proto",
+        ":aggregation_config",
         "//shell_wrapper:status",
+        "//willow/proto/willow:aggregation_config_rust_proto",
     ],
 )
 
@@ -51,9 +61,9 @@ rust_library(
         "decryptor.rs",
     ],
     deps = [
-        ":willow_api_common",
-        ":willow_api_common_rust_proto",
+        ":aggregation_config",
         "//shell_wrapper:status",
+        "//willow/proto/willow:aggregation_config_rust_proto",
     ],
 )
 
@@ -63,9 +73,9 @@ rust_library(
         "server.rs",
     ],
     deps = [
-        ":willow_api_common",
-        ":willow_api_common_rust_proto",
+        ":aggregation_config",
         "//shell_wrapper:status",
+        "//willow/proto/willow:aggregation_config_rust_proto",
     ],
 )
 
@@ -75,50 +85,8 @@ rust_library(
         "verifier.rs",
     ],
     deps = [
-        ":willow_api_common",
-        ":willow_api_common_rust_proto",
+        ":aggregation_config",
         "//shell_wrapper:status",
-    ],
-)
-
-# Common proto
-proto_library(
-    name = "willow_api_common_proto",
-    srcs = ["common.proto"],
-    deps = [
-        "//willow/proto/shell:shell_ciphertexts_proto",
-        "//willow/proto/zk:proofs_proto",
-    ],
-)
-
-cc_proto_library(
-    name = "willow_api_common_cc_proto",
-    deps = [":willow_api_common_proto"],
-)
-
-rust_proto_library(
-    name = "willow_api_common_rust_proto",
-    deps = [":willow_api_common_proto"],
-)
-
-rust_library(
-    name = "willow_api_common_serialization",
-    srcs = [
-        "common_serialization.rs",
-    ],
-    deps = [
-        ":willow_api_common",
-        ":willow_api_common_rust_proto",
-        "@protobuf//rust:protobuf",
-    ],
-)
-
-rust_test(
-    name = "willow_api_common_serialization_test",
-    crate = ":willow_api_common_serialization",
-    deps = [
-        ":willow_api_common_serialization",
-        "@crate_index//:googletest",
-        "//willow/src/testing_utils",
+        "//willow/proto/willow:aggregation_config_rust_proto",
     ],
 )

@@ -12,12 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use aggregation_config::AggregationConfig;
 use ahe_shell::ShellAheConfig;
 use kahe::PackedVectorConfig;
 use kahe_shell::ShellKaheConfig;
 use shell_parameters_generation::{divide_and_roundup, generate_packing_config};
 use std::collections::HashMap;
-use willow_api_common::AggregationConfig;
 
 /// Creates an KAHE configuration with the given plaintext modulus bits, by
 /// looking up some pre-generated configurations.

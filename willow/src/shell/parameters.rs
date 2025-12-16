@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use aggregation_config::AggregationConfig;
 use ahe_shell::ShellAheConfig;
 use kahe_shell::ShellKaheConfig;
 use shell_parameters_generation::{divide_and_roundup, generate_packing_config};
-use willow_api_common::AggregationConfig;
 
 /// This file contains parameters for the KAHE and AHE schemes in Willow, which
 /// are selected to have at least 128 bits of computational security and 40 bits

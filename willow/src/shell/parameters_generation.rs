@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use aggregation_config::AggregationConfig;
 use kahe::PackedVectorConfig;
 use std::collections::HashMap;
-use willow_api_common::AggregationConfig;
 
 /// Generating KAHE and AHE parameters given the Willow protocol configuration.
 

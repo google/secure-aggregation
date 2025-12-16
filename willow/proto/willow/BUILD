@@ -21,6 +21,25 @@ package(
 )
 
 proto_library(
+    name = "aggregation_config_proto",
+    srcs = ["aggregation_config.proto"],
+    deps = [
+        "//willow/proto/shell:shell_ciphertexts_proto",
+        "//willow/proto/zk:proofs_proto",
+    ],
+)
+
+cc_proto_library(
+    name = "aggregation_config_cc_proto",
+    deps = [":aggregation_config_proto"],
+)
+
+rust_proto_library(
+    name = "aggregation_config_rust_proto",
+    deps = [":aggregation_config_proto"],
+)
+
+proto_library(
     name = "decryptor_proto",
     srcs = ["decryptor.proto"],
 )

@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use aggregation_config::AggregationConfig;
 use ahe_traits::{AheBase, PartialDec};
 use kahe_shell::ShellKahe;
 use kahe_traits::KaheBase;
@@ -19,7 +20,6 @@ use rand::Rng;
 use std::collections::HashMap;
 use vahe_shell::ShellVahe;
 use vahe_traits::Recover;
-use willow_api_common::AggregationConfig;
 
 pub fn generate_random_nonce() -> Vec<u8> {
     let mut nonce = vec![0u8; 16];

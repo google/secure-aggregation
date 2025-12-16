@@ -20,9 +20,8 @@
 // If a server function returns an error, that error can be logged and the aggregation should be
 // considered to have failed.
 
-use status;
-use willow_api_common::AggregationConfig;
-use willow_api_common_rust_proto::{
+use aggregation_config::AggregationConfig;
+use aggregation_config_rust_proto::{
     Contribution, ContributionToServer, ContributionToVerifier, DecryptionRequest,
     DecryptionResponse, DropoutRecoveryRequest, KeyGenRequest,
 };

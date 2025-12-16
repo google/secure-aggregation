@@ -49,7 +49,7 @@ rust_library(
     deps = [
         "//shell_wrapper:kahe",
         "//shell_wrapper:status",
-        "//willow/src/api:willow_api_common",
+        "//willow/src/api:aggregation_config",
         "//willow/src/shell:ahe_shell",
         "//willow/src/shell:kahe_shell",
         "//willow/src/shell:shell_parameters_generation",
@@ -69,7 +69,7 @@ rust_library(
         ":shell_testing_parameters",
         "@crate_index//:rand",
         "//shell_wrapper:status",
-        "//willow/src/api:willow_api_common",
+        "//willow/src/api:aggregation_config",
         "//willow/src/shell:kahe_shell",
         "//willow/src/shell:single_thread_hkdf",
         "//willow/src/shell:vahe_shell",

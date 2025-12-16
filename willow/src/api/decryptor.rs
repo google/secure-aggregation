@@ -19,10 +19,9 @@
 // If a function returns an error, that error can be logged and the decryptor
 // should be considered to have dropped out.
 
-use status;
-use willow_api_common::AggregationConfig;
-use willow_api_common_rust_proto::{
-    DecryptionRequest, KeyGenRequest, KeyGenResponse, DecryptionResponse,
+use aggregation_config::AggregationConfig;
+use aggregation_config_rust_proto::{
+    DecryptionRequest, DecryptionResponse, KeyGenRequest, KeyGenResponse,
 };
 
 pub struct Decryptor {}

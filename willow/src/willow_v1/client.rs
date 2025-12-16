@@ -83,6 +83,7 @@ where
 mod test {
     use super::*;
 
+    use aggregation_config::AggregationConfig;
     use ahe_traits::{AheBase, AheKeygen, PartialDec};
     use googletest::prelude::container_eq;
     use googletest::{gtest, verify_eq, verify_that};
@@ -95,7 +96,6 @@ mod test {
     use testing_utils::generate_random_nonce;
     use vahe_shell::ShellVahe;
     use vahe_traits::Recover;
-    use willow_api_common::AggregationConfig;
 
     const CONTEXT_STRING: &[u8] = b"test_context_string";
 

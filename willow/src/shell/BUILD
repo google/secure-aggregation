@@ -102,7 +102,7 @@ rust_library(
         ":shell_parameters_generation",
         "//shell_wrapper:kahe",
         "//shell_wrapper:status",
-        "//willow/src/api:willow_api_common",
+        "//willow/src/api:aggregation_config",
     ],
 )
 
@@ -140,7 +140,7 @@ rust_library(
         ":kahe_shell",
         "//shell_wrapper:kahe",
         "//shell_wrapper:status",
-        "//willow/src/api:willow_api_common",
+        "//willow/src/api:aggregation_config",
     ],
 )
 

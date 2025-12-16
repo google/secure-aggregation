@@ -17,6 +17,7 @@ use std::collections::HashMap;
 use std::hint::black_box;
 use std::time::Duration;
 
+use aggregation_config::AggregationConfig;
 use ahe_traits::AheBase;
 use client_traits::SecureAggregationClient;
 use decryptor_traits::SecureAggregationDecryptor;
@@ -33,7 +34,6 @@ use single_thread_hkdf::SingleThreadHkdfPrng;
 use testing_utils::{generate_random_nonce, generate_random_unsigned_vector};
 use vahe_shell::ShellVahe;
 use verifier_traits::SecureAggregationVerifier;
-use willow_api_common::AggregationConfig;
 use willow_v1_client::WillowV1Client;
 use willow_v1_decryptor::{DecryptorState, WillowV1Decryptor};
 use willow_v1_server::{ServerState, WillowV1Server};

@@ -15,9 +15,9 @@
 // This is the API for Willow clients.
 //
 // Each function should be called once (by each client) in the order they appear in the trait.
+use aggregation_config::AggregationConfig;
+use aggregation_config_rust_proto::{AggregationKey, Contribution};
 use std::collections::HashMap;
-use willow_api_common::AggregationConfig;
-use willow_api_common_rust_proto::{Contribution, AggregationKey};
 
 pub struct Client {}
 
