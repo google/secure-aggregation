@@ -1,3 +1,5 @@
+load("@cxx.rs//tools/bazel:rust_cxx_bridge.bzl", "rust_cxx_bridge")
+
 # Copyright 2025 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -12,6 +14,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
+load("@rules_cc//cc:cc_test.bzl", "cc_test")
 load("@rules_rust//rust:defs.bzl", "rust_library", "rust_test")
 
 package(
@@ -40,5 +44,70 @@ rust_test(
         ":aggregation_config",
         "@crate_index//:googletest",
         "//willow/src/testing_utils",
+    ],
+)
+
+cc_library(
+    name = "server_accumulator",
+    srcs = ["server_accumulator.cc"],
+    hdrs = ["server_accumulator.h"],
+    deps = [
+        ":server_accumulator_cxx/include",  # fixdeps: keep
+        ":server_accumulator_rust",  # fixdeps: keep
+        "@abseil-cpp//absl/memory",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:statusor",
+        "@abseil-cpp//absl/strings",
+        "@cxx.rs//:cxx",
+        "@cxx.rs//:core",
+        "//willow/proto/willow:aggregation_config_cc_proto",
+        "//willow/proto/willow:server_accumulator_cc_proto",
+    ],
+)
+
+cc_test(
+    name = "server_accumulator_test",
+    srcs = ["server_accumulator_test.cc"],
+    deps = [
+        ":server_accumulator",
+        ":server_accumulator_cxx",  # fixdeps: keep
+        "@googletest//:gtest_main",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:statusor",
+        "//willow/proto/willow:aggregation_config_cc_proto",
+        "//willow/proto/willow:server_accumulator_cc_proto",
+    ],
+)
+
+rust_cxx_bridge(
+    name = "server_accumulator_cxx",
+    src = "server_accumulator.rs",
+    deps = [
+        ":server_accumulator",
+    ],
+)
+
+rust_library(
+    name = "server_accumulator_rust",
+    srcs = ["server_accumulator.rs"],
+    deps = [
+        ":aggregation_config",
+        "@protobuf//rust:protobuf",
+        "@cxx.rs//:cxx",
+        "//shell_wrapper:status",
+        "//willow/proto/willow:aggregation_config_rust_proto",
+        "//willow/proto/willow:server_accumulator_rust_proto",
+        "//willow/src/shell:kahe_shell",
+        "//willow/src/shell:parameters_shell",
+        "//willow/src/shell:vahe_shell",
+        "//willow/src/traits:ahe_traits",
+        "//willow/src/traits:kahe_traits",
+        "//willow/src/traits:messages",
+        "//willow/src/traits:proto_serialization_traits",
+        "//willow/src/traits:server_traits",
+        "//willow/src/traits:vahe_traits",
+        "//willow/src/traits:verifier_traits",
+        "//willow/src/willow_v1:willow_v1_server",
+        "//willow/src/willow_v1:willow_v1_verifier",
     ],
 )

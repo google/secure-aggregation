@@ -203,8 +203,8 @@ where
     /// Merges two states into one. Fails if the intervals in the two states overlap.
     fn merge_states(
         &self,
-        state1: &Self::VerifierState,
-        state2: &Self::VerifierState,
+        state1: Self::VerifierState,
+        state2: Self::VerifierState,
     ) -> Result<Self::VerifierState, status::StatusError> {
         match (&state1.0, &state2.0) {
             (Some(state1), Some(state2)) => {
@@ -426,7 +426,7 @@ mod tests {
 
         // Try to merge the states, should fail.
         verify_that!(
-            setup.verifier.merge_states(&verifier_state_1, &verifier_state_2),
+            setup.verifier.merge_states(verifier_state_1, verifier_state_2),
             err(status_is(status::StatusErrorCode::InvalidArgument).with_message(eq(
                 "`nonce_bounds.0` must be less than or equal to `nonce_bounds.1`"
             )))
@@ -444,8 +444,10 @@ mod tests {
         )?;
 
         // Merge with empty state, should preserve nonce bounds.
-        let verifier_state_3 = setup.verifier.merge_states(&verifier_state_1, &verifier_state_2)?;
-        let verifier_state_4 = setup.verifier.merge_states(&verifier_state_2, &verifier_state_1)?;
+        let verifier_state_3 =
+            setup.verifier.merge_states(verifier_state_1.clone(), verifier_state_2.clone())?;
+        let verifier_state_4 =
+            setup.verifier.merge_states(verifier_state_2.clone(), verifier_state_1.clone())?;
 
         // Nonce bounds should be the same as in verifier_state_1.
         verify_true!(verifier_state_3.0.is_some())?;
@@ -466,7 +468,7 @@ mod tests {
         let verifier_state_1 = VerifierState::default();
         let verifier_state_2 = VerifierState::default();
 
-        let verifier_state_3 = setup.verifier.merge_states(&verifier_state_1, &verifier_state_2)?;
+        let verifier_state_3 = setup.verifier.merge_states(verifier_state_1, verifier_state_2)?;
         verify_true!(verifier_state_3.0.is_none())
     }
 

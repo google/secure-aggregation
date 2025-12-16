@@ -300,55 +300,53 @@ where
     /// client sums and partial decryption sums. The public key shares will be merged by joining all
     /// public key shares with unique IDs. In case IDs are present in both server states, the public
     /// key share from `server_state_1` will be used.
-    fn merge_server_states(
+    fn merge_states(
         &self,
-        server_state_1: &Self::ServerState,
-        server_state_2: &Self::ServerState,
+        server_state_1: Self::ServerState,
+        server_state_2: Self::ServerState,
     ) -> Result<Self::ServerState, status::StatusError> {
         let mut merged_server_state = ServerState::default();
         // Merge public key shares.
         merged_server_state.decryptor_public_key_shares =
-            server_state_1.decryptor_public_key_shares.clone();
-        for (id, key_share) in server_state_2.decryptor_public_key_shares.iter() {
-            if !merged_server_state.decryptor_public_key_shares.contains_key(id) {
-                merged_server_state
-                    .decryptor_public_key_shares
-                    .insert(id.to_string(), key_share.clone());
+            server_state_1.decryptor_public_key_shares;
+        for (id, key_share) in server_state_2.decryptor_public_key_shares.into_iter() {
+            if !merged_server_state.decryptor_public_key_shares.contains_key(&id) {
+                merged_server_state.decryptor_public_key_shares.insert(id, key_share);
             }
         }
 
         merged_server_state.client_sum =
-            match (&server_state_1.client_sum, &server_state_2.client_sum) {
+            match (server_state_1.client_sum, server_state_2.client_sum) {
                 (
                     Some((kahe_ciphertext_1, ahe_recover_ciphertext_1)),
                     Some((kahe_ciphertext_2, ahe_recover_ciphertext_2)),
                 ) => {
-                    let mut merged_kahe_ciphertext = kahe_ciphertext_1.clone();
-                    let mut merged_ahe_recover_ciphertext = ahe_recover_ciphertext_1.clone();
-                    self.kahe
-                        .add_ciphertexts_in_place(kahe_ciphertext_2, &mut merged_kahe_ciphertext)?;
+                    let mut merged_kahe_ciphertext = kahe_ciphertext_1;
+                    let mut merged_ahe_recover_ciphertext = ahe_recover_ciphertext_1;
+                    self.kahe.add_ciphertexts_in_place(
+                        &kahe_ciphertext_2,
+                        &mut merged_kahe_ciphertext,
+                    )?;
                     self.vahe.add_recover_ciphertexts_in_place(
-                        ahe_recover_ciphertext_2,
+                        &ahe_recover_ciphertext_2,
                         &mut merged_ahe_recover_ciphertext,
                     )?;
                     Some((merged_kahe_ciphertext, merged_ahe_recover_ciphertext))
                 }
-                (Some(s), None) | (None, Some(s)) => Some(s.clone()),
+                (Some(s), None) | (None, Some(s)) => Some(s),
                 (None, None) => None,
             };
 
-        merged_server_state.partial_decryption_sum = match (
-            &server_state_1.partial_decryption_sum,
-            &server_state_2.partial_decryption_sum,
-        ) {
-            (Some(sum1), Some(sum2)) => {
-                let mut merged_sum = sum1.clone();
-                self.vahe.add_partial_decryptions_in_place(sum2, &mut merged_sum)?;
-                Some(merged_sum)
-            }
-            (Some(s), None) | (None, Some(s)) => Some(s.clone()),
-            (None, None) => None,
-        };
+        merged_server_state.partial_decryption_sum =
+            match (server_state_1.partial_decryption_sum, server_state_2.partial_decryption_sum) {
+                (Some(sum1), Some(sum2)) => {
+                    let mut merged_sum = sum1;
+                    self.vahe.add_partial_decryptions_in_place(&sum2, &mut merged_sum)?;
+                    Some(merged_sum)
+                }
+                (Some(s), None) | (None, Some(s)) => Some(s),
+                (None, None) => None,
+            };
 
         Ok(merged_server_state)
     }

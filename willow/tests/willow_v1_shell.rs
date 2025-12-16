@@ -370,8 +370,7 @@ fn encrypt_decrypt_multiple_clients() -> googletest::Result<()> {
             if i < half { &mut verifier_state_1 } else { &mut verifier_state_2 };
         verifier.verify_and_include(decryption_request_contribution, &mut verifier_state).unwrap();
     }
-    let verifier_state_merged =
-        verifier.merge_states(&verifier_state_1, &verifier_state_2).unwrap();
+    let verifier_state_merged = verifier.merge_states(verifier_state_1, verifier_state_2).unwrap();
 
     // Run the rest of the protocol twice, once with each of the the two copies of the verifier state.
     for (mut server_state, verifier_state) in

@@ -82,9 +82,9 @@ pub trait SecureAggregationServer: HasKahe + HasVahe {
     ) -> Result<Self::AggregationResult, StatusError>;
 
     /// Merges two server states into one.
-    fn merge_server_states(
+    fn merge_states(
         &self,
-        server_state_1: &Self::ServerState,
-        server_state_2: &Self::ServerState,
+        server_state_1: Self::ServerState,
+        server_state_2: Self::ServerState,
     ) -> Result<Self::ServerState, StatusError>;
 }

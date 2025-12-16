@@ -87,3 +87,22 @@ rust_proto_library(
     name = "messages_rust_proto",
     deps = [":messages_proto"],
 )
+
+proto_library(
+    name = "server_accumulator_proto",
+    srcs = ["server_accumulator.proto"],
+    deps = [
+        ":aggregation_config_proto",
+        ":messages_proto",
+    ],
+)
+
+cc_proto_library(
+    name = "server_accumulator_cc_proto",
+    deps = [":server_accumulator_proto"],
+)
+
+rust_proto_library(
+    name = "server_accumulator_rust_proto",
+    deps = [":server_accumulator_proto"],
+)
