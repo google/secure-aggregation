@@ -22,6 +22,7 @@ import "willow/proto/zk/proofs.proto";
 option java_multiple_files = true;
 option java_outer_classname = "MessagesProto";
 
+
 message ClientMessage {
   ShellKaheCiphertext kahe_ciphertext = 1;
   ShellAheCiphertext ahe_ciphertext = 2;
@@ -46,4 +47,21 @@ message DecryptionRequestContribution {
   ShellAhePartialDecCiphertext partial_dec_ciphertext = 1;
   RlweRelationProofListProto proof = 2;
   bytes nonce = 3;
+}
+
+message DecryptorStateProto {
+  ShellAheSecretKeyShare sk_share = 1;
+}
+
+message ServerStateProto {
+  map<string, ShellAhePublicKeyShare> decryptor_public_key_shares = 1;
+  ShellKaheCiphertext client_sum_kahe = 2;
+  ShellAheRecoverCiphertext client_sum_ahe_recover = 3;
+  ShellAhePartialDecryption partial_decryption_sum = 4;
+}
+
+message VerifierStateProto {
+  ShellAhePartialDecCiphertext partial_dec_ciphertext_sum = 1;
+  bytes nonce_lower_bound = 2;
+  bytes nonce_upper_bound = 3;
 }
