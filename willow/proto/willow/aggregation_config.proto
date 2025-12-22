@@ -12,15 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-edition = "2023";
+syntax = "proto3";
 
 package secure_aggregation.willow;
 
-import "willow/proto/shell/ciphertexts.proto";
-import "willow/proto/zk/proofs.proto";
-
 option java_multiple_files = true;
-option java_outer_classname = "CommonProto";
+option java_outer_classname = "AggregationConfigProto";
 
 // The configuration of the aggregation as a proto.
 message AggregationConfigProto {

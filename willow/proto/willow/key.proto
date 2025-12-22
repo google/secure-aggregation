@@ -17,6 +17,7 @@ syntax = "proto3";
 package secure_aggregation.willow;
 
 option java_multiple_files = true;
+option java_outer_classname = "KeyProto";
 
 // A simple container for a Willow public cryptographic key that embeds the key
 // ID and the "raw" key material.

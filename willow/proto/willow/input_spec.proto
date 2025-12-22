@@ -16,6 +16,9 @@ syntax = "proto3";
 
 package secure_aggregation.willow;
 
+option java_multiple_files = true;
+option java_outer_classname = "InputSpecProto";
+
 // This message describes the specification of the input data for the secure
 // aggregation protocol. It contains two lists of `InputVectorSpec` messages:
 // `metric_vector_specs` for metrics to be aggregated and
