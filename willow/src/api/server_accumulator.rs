@@ -118,26 +118,24 @@ impl ServerAccumulator {
     }
 
     fn new_from_serialized_config(
-        mut serialized_aggregation_config: cxx::UniquePtr<cxx::CxxString>,
+        serialized_aggregation_config: cxx::UniquePtr<cxx::CxxString>,
     ) -> Result<Self, StatusError> {
         let serialized_aggregation_config_proto = AggregationConfigProto::parse(
             serialized_aggregation_config.as_bytes(),
         )
         .map_err(|e| status::internal(format!("Failed to parse AggregationConfigProto: {}", e)))?;
-        serialized_aggregation_config = cxx::UniquePtr::null(); // Release memory.
         let aggregation_config =
             AggregationConfig::from_proto(serialized_aggregation_config_proto, ())?;
         Self::new(aggregation_config)
     }
 
     fn new_from_serialized_state(
-        mut serialized_server_accumulator: cxx::UniquePtr<cxx::CxxString>,
+        serialized_server_accumulator: cxx::UniquePtr<cxx::CxxString>,
     ) -> Result<Self, StatusError> {
         let serialized_server_accumulator_proto = ServerAccumulatorState::parse(
             serialized_server_accumulator.as_bytes(),
         )
         .map_err(|e| status::internal(format!("Failed to parse ServerAccumulatorState: {}", e)))?;
-        serialized_server_accumulator = cxx::UniquePtr::null(); // Release memory.
         Self::from_proto(serialized_server_accumulator_proto, ())
     }
 
@@ -174,16 +172,17 @@ impl ServerAccumulator {
 
     fn process_client_messages_serialized(
         &mut self,
-        mut client_messages: cxx::UniquePtr<cxx::CxxString>,
+        client_messages: cxx::UniquePtr<cxx::CxxString>,
     ) -> Result<(), StatusError> {
         let client_messages_proto = ClientMessageList::parse(client_messages.as_bytes())
             .map_err(|e| status::internal(format!("Failed to parse ClientMessageList: {}", e)))?;
-        client_messages = cxx::UniquePtr::null(); // Release memory.
+        std::mem::drop(client_messages); // Release memory early. `client_messages` can be huge.
         let client_messages: Result<Vec<_>, _> = client_messages_proto
             .client_messages()
             .iter()
             .map(|m| ClientMessage::from_proto(m, &self.server))
             .collect();
+        std::mem::drop(client_messages_proto);
         self.process_client_messages(client_messages?);
         Ok(())
     }
