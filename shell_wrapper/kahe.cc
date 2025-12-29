@@ -322,12 +322,6 @@ FfiStatus PackMessagesRaw(rust::Slice<const uint64_t> messages,
     return MakeFfiStatus(absl::InvalidArgumentError(
         secure_aggregation::kNullPointerErrorMessage));
   }
-
-  // Allocate the vector for output packed values if needed.
-  if (packed_values->ptr == nullptr) {
-    packed_values->ptr =
-        std::make_unique<std::vector<secure_aggregation::BigInteger>>();
-  }
   auto curr_packed_values =
       rlwe::PackMessagesFlat<secure_aggregation::Integer,
                              secure_aggregation::BigInteger>(
@@ -339,6 +333,11 @@ FfiStatus PackMessagesRaw(rust::Slice<const uint64_t> messages,
   }
   // Pad with zeros if needed.
   curr_packed_values.resize(num_packed_values, 0);
+  // Allocate the vector for output packed values if needed.
+  if (packed_values->ptr == nullptr) {
+    packed_values->ptr =
+        std::make_unique<std::vector<secure_aggregation::BigInteger>>();
+  }
   // Append the packed values to the end of the output vector.
   packed_values->ptr->insert(packed_values->ptr->end(),
                              curr_packed_values.begin(),
