@@ -33,6 +33,7 @@ rust_library(
         "@protobuf//rust:protobuf",
         "//shell_wrapper:status",
         "//willow/proto/willow:aggregation_config_rust_proto",
+        "//willow/src/shell:single_thread_hkdf",
         "//willow/src/traits:proto_serialization_traits",
     ],
 )

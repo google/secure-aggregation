@@ -12,12 +12,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+load("@cxx.rs//tools/bazel:rust_cxx_bridge.bzl", "rust_cxx_bridge")
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
+load("@rules_cc//cc:cc_test.bzl", "cc_test")
 load("@rules_rust//rust:defs.bzl", "rust_library", "rust_test")
 
 package(
     default_applicable_licenses = [
     ],
-    default_visibility = ["//visibility:public"],
+    default_visibility = ["//:internal"],
 )
 
 # PRNG
@@ -71,7 +74,6 @@ rust_library(
         "//shell_wrapper:status",
         "//willow/src/api:aggregation_config",
         "//willow/src/shell:kahe_shell",
-        "//willow/src/shell:single_thread_hkdf",
         "//willow/src/shell:vahe_shell",
         "//willow/src/traits:ahe_traits",
         "//willow/src/traits:kahe_traits",
@@ -90,16 +92,28 @@ rust_test(
     ],
 )
 
+rust_cxx_bridge(
+    name = "shell_testing_decryptor_cxx",
+    src = "shell_testing_decryptor.rs",
+    deps = [
+        ":shell_testing_decryptor",
+    ],
+)
+
 rust_library(
     name = "shell_testing_decryptor",
-    testonly = 1,
     srcs = [
         "shell_testing_decryptor.rs",
     ],
     deps = [
-        ":shell_testing_parameters",
+        "@protobuf//rust:protobuf",
+        "@cxx.rs//:cxx",
+        "//shell_wrapper:shell_types_cc",
         "//shell_wrapper:status",
+        "//willow/proto/willow:aggregation_config_rust_proto",
+        "//willow/proto/willow:messages_rust_proto",
         "//willow/src/api:aggregation_config",
+        "//willow/src/shell:ahe_shell",
         "//willow/src/shell:kahe_shell",
         "//willow/src/shell:parameters_shell",
         "//willow/src/shell:single_thread_hkdf",
@@ -108,6 +122,35 @@ rust_library(
         "//willow/src/traits:kahe_traits",
         "//willow/src/traits:messages",
         "//willow/src/traits:prng_traits",
+        "//willow/src/traits:proto_serialization_traits",
         "//willow/src/traits:vahe_traits",
+    ],
+)
+
+cc_library(
+    name = "shell_testing_decryptor_cc",
+    srcs = ["shell_testing_decryptor.cc"],
+    hdrs = ["shell_testing_decryptor.h"],
+    deps = [
+        ":shell_testing_decryptor_cxx",
+        "@abseil-cpp//absl/memory",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:statusor",
+        "//shell_wrapper:shell_types_cc",
+        "//willow/proto/shell:shell_ciphertexts_cc_proto",
+        "//willow/proto/willow:aggregation_config_cc_proto",
+        "//willow/proto/willow:messages_cc_proto",
+        "//willow/src/input_encoding:codec",
+    ],
+)
+
+cc_test(
+    name = "shell_testing_decryptor_test",
+    srcs = ["shell_testing_decryptor_test.cc"],
+    deps = [
+        ":shell_testing_decryptor_cc",
+        "@googletest//:gtest_main",
+        "//shell_wrapper:status_matchers",
+        "//willow/proto/willow:aggregation_config_cc_proto",
     ],
 )

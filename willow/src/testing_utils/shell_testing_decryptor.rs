@@ -15,19 +15,28 @@
  */
 
 use aggregation_config::AggregationConfig;
+use aggregation_config_rust_proto::AggregationConfigProto;
+use ahe_shell::Ciphertext as VaheCiphertext;
 use ahe_traits::{AheBase, AheKeygen, PartialDec};
+use kahe_shell::Ciphertext as KaheCiphertext;
 use kahe_shell::ShellKahe;
 use kahe_traits::{KaheBase, KaheDecrypt, TrySecretKeyFrom};
 use messages::ClientMessage;
+use messages_rust_proto::ClientMessage as ClientMessageProto;
 use parameters_shell::create_shell_configs;
 use prng_traits::SecurePrng;
+use proto_serialization_traits::{FromProto, ToProto};
+use protobuf::prelude::*;
 use single_thread_hkdf::SingleThreadHkdfPrng;
+use status::ffi::FfiStatus;
 use status::{StatusError, StatusErrorCode};
 use vahe_shell::ShellVahe;
 use vahe_traits::Recover;
+use vahe_traits::VaheBase;
 
 /// Basic implementation of a single decryptor that uses Shell operations directly. Useful for
-/// testing Shell clients, by checking that encrypted messages can be decrypted properly.
+/// testing Shell clients, by checking that encrypted messages can be decrypted properly. Comes with
+/// a C++ interface.
 pub struct ShellTestingDecryptor {
     kahe: ShellKahe,
     vahe: ShellVahe,
@@ -88,4 +97,157 @@ impl ShellTestingDecryptor {
             }
         }
     }
+
+    fn generate_public_key_serialized(&mut self) -> Result<Vec<u8>, StatusError> {
+        let pk = self.generate_public_key()?;
+        pk.to_proto(&self.vahe)
+            .map_err(|e| status::internal(format!("ToProto error: {}", e)))?
+            .serialize()
+            .map_err(|e| status::internal(format!("Serialize error: {}", e)))
+    }
+
+    /// SAFETY: `out` and `out_status_message` must not be null.
+    unsafe fn generate_public_key_ffi(
+        &mut self,
+        out: *mut Vec<u8>,
+        out_status_message: *mut cxx::UniquePtr<cxx::CxxString>,
+    ) -> i32 {
+        match self.generate_public_key_serialized() {
+            Ok(pk) => {
+                *out = pk;
+                0
+            }
+            Err(status_error) => {
+                let ffi_status: FfiStatus = status_error.into();
+                *out_status_message = ffi_status.message;
+                ffi_status.code
+            }
+        }
+    }
+
+    fn decrypt_serialized(
+        &mut self,
+        contribution: &[u8],
+    ) -> Result<Vec<ffi::EncodedDataEntry>, StatusError> {
+        let client_message_proto = ClientMessageProto::parse(contribution)
+            .map_err(|e| status::internal(format!("Failed to parse ClientMessageProto: {}", e)))?;
+
+        let kahe_ciphertext =
+            KaheCiphertext::from_proto(client_message_proto.kahe_ciphertext(), &self.kahe)?;
+        let ahe_ciphertext =
+            VaheCiphertext::from_proto(client_message_proto.ahe_ciphertext(), &self.vahe)?;
+
+        let proof =
+            <ShellVahe as VaheBase>::EncryptionProof::from_proto(client_message_proto.proof(), ())?;
+        let nonce = client_message_proto.nonce().to_vec();
+
+        let client_message = ClientMessage { kahe_ciphertext, ahe_ciphertext, proof, nonce };
+
+        let plaintext = self.decrypt(&client_message)?;
+        let entries = plaintext
+            .into_iter()
+            .map(|(key, values)| ffi::EncodedDataEntry { key, values })
+            .collect();
+        Ok(entries)
+    }
+
+    /// SAFETY: `out` and `out_status_message` must not be null.
+    unsafe fn decrypt_ffi(
+        &mut self,
+        contribution: &[u8],
+        out: *mut Vec<ffi::EncodedDataEntry>,
+        out_status_message: *mut cxx::UniquePtr<cxx::CxxString>,
+    ) -> i32 {
+        match self.decrypt_serialized(contribution) {
+            Ok(result) => {
+                *out = result;
+                0
+            }
+            Err(status_error) => {
+                let ffi_status: FfiStatus = status_error.into();
+                *out_status_message = ffi_status.message;
+                ffi_status.code
+            }
+        }
+    }
+}
+
+/// CXX bridge to call ShellTestingDecryptor from C++, using serialized protos as input and output.
+///
+/// SAFETY: all functions in this module are only called from the wrapping C++ library,
+///   ensuring that output pointers are correctly wrapped by a rust::Box, and that pointer
+///   arguments are not null.
+#[cxx::bridge(namespace = "secure_aggregation")]
+pub mod ffi {
+    struct EncodedDataEntry {
+        key: String,
+        values: Vec<u64>,
+    }
+
+    extern "Rust" {
+        #[cxx_name = "ShellTestingDecryptorRust"]
+        type ShellTestingDecryptor;
+
+        unsafe fn create_shell_testing_decryptor(
+            config: &[u8],
+            out: *mut *mut ShellTestingDecryptor,
+            out_status_message: *mut UniquePtr<CxxString>,
+        ) -> i32;
+
+        #[rust_name = "generate_public_key_ffi"]
+        unsafe fn generate_public_key(
+            self: &mut ShellTestingDecryptor,
+            out: *mut Vec<u8>,
+            out_status_message: *mut UniquePtr<CxxString>,
+        ) -> i32;
+
+        #[rust_name = "decrypt_ffi"]
+        unsafe fn decrypt(
+            self: &mut ShellTestingDecryptor,
+            contribution: &[u8],
+            out: *mut Vec<EncodedDataEntry>,
+            out_status_message: *mut UniquePtr<CxxString>,
+        ) -> i32;
+
+        unsafe fn decryptor_into_box(ptr: *mut ShellTestingDecryptor)
+            -> Box<ShellTestingDecryptor>;
+    }
+}
+
+fn create_shell_testing_decryptor_impl(
+    config: &[u8],
+) -> Result<Box<ShellTestingDecryptor>, StatusError> {
+    let aggregation_config_proto = AggregationConfigProto::parse(config)
+        .map_err(|e| status::internal(format!("Failed to parse AggregationConfigProto: {}", e)))?;
+    let aggregation_config = AggregationConfig::from_proto(aggregation_config_proto, ())?;
+    let context_bytes = aggregation_config.compute_context_bytes()?;
+    let decryptor = ShellTestingDecryptor::new(&aggregation_config, &context_bytes)?;
+    Ok(Box::new(decryptor))
+}
+
+/// SAFETY: `out` and `out_status_message` must not be null.
+unsafe fn create_shell_testing_decryptor(
+    config: &[u8],
+    out: *mut *mut ShellTestingDecryptor,
+    out_status_message: *mut cxx::UniquePtr<cxx::CxxString>,
+) -> i32 {
+    match create_shell_testing_decryptor_impl(config) {
+        Ok(decryptor) => {
+            *out = Box::into_raw(decryptor);
+            0
+        }
+        Err(status_error) => {
+            let ffi_status: FfiStatus = status_error.into();
+            *out_status_message = ffi_status.message;
+            ffi_status.code
+        }
+    }
+}
+
+/// Converts a raw pointer to a Box. Ideally we would use `rust::Box::from_raw`
+/// (https://cxx.rs/binding/box.html) directly from C++, but that causes linker errors.
+///
+/// SAFETY: `ptr` must have been created by `Box::into_raw`, as in `create_shell_testing_decryptor`.
+unsafe fn decryptor_into_box(ptr: *mut ShellTestingDecryptor) -> Box<ShellTestingDecryptor> {
+    Box::from_raw(ptr)
 }

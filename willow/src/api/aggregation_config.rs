@@ -82,6 +82,19 @@ impl ToProto for AggregationConfig {
     }
 }
 
+impl AggregationConfig {
+    /// Computes context bytes by hashing the session ID in the config.
+    pub fn compute_context_bytes(&self) -> Result<Vec<u8>, StatusError> {
+        let context_seed = single_thread_hkdf::compute_hkdf(
+            self.session_id.as_bytes(),
+            b"",
+            b"AggregationConfig.context_string",
+            single_thread_hkdf::seed_length(),
+        )?;
+        Ok(context_seed.as_bytes().to_vec())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::AggregationConfig;
