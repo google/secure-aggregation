@@ -89,3 +89,25 @@ rust_test(
         "@crate_index//:googletest",
     ],
 )
+
+rust_library(
+    name = "shell_testing_decryptor",
+    testonly = 1,
+    srcs = [
+        "shell_testing_decryptor.rs",
+    ],
+    deps = [
+        ":shell_testing_parameters",
+        "//shell_wrapper:status",
+        "//willow/src/api:aggregation_config",
+        "//willow/src/shell:kahe_shell",
+        "//willow/src/shell:parameters_shell",
+        "//willow/src/shell:single_thread_hkdf",
+        "//willow/src/shell:vahe_shell",
+        "//willow/src/traits:ahe_traits",
+        "//willow/src/traits:kahe_traits",
+        "//willow/src/traits:messages",
+        "//willow/src/traits:prng_traits",
+        "//willow/src/traits:vahe_traits",
+    ],
+)

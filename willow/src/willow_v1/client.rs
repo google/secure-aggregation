@@ -15,7 +15,6 @@
 use client_traits::SecureAggregationClient;
 use kahe_traits::{HasKahe, KaheBase, KaheEncrypt, KaheKeygen, TrySecretKeyInto};
 use messages::{ClientMessage, DecryptorPublicKey};
-use prng_traits::SecurePrng;
 use vahe_traits::{HasVahe, VaheBase, VerifiableEncrypt};
 
 /// Lightweight client directly exposing KAHE/VAHE types.
@@ -84,18 +83,17 @@ mod test {
     use super::*;
 
     use aggregation_config::AggregationConfig;
-    use ahe_traits::{AheBase, AheKeygen, PartialDec};
+    use ahe_traits::AheBase;
     use googletest::prelude::container_eq;
     use googletest::{gtest, verify_eq, verify_that};
     use kahe_shell::ShellKahe;
-    use kahe_traits::{KaheDecrypt, TrySecretKeyFrom};
+    use parameters_shell::create_shell_configs;
     use prng_traits::SecurePrng;
-    use shell_testing_parameters::{make_ahe_config, make_kahe_config};
+    use shell_testing_decryptor::ShellTestingDecryptor;
     use single_thread_hkdf::SingleThreadHkdfPrng;
     use std::collections::HashMap;
     use testing_utils::generate_random_nonce;
     use vahe_shell::ShellVahe;
-    use vahe_traits::Recover;
 
     const CONTEXT_STRING: &[u8] = b"test_context_string";
 
@@ -111,36 +109,27 @@ mod test {
         };
 
         // Create a client.
-        let kahe = ShellKahe::new(make_kahe_config(&aggregation_config), CONTEXT_STRING).unwrap();
-        let vahe = ShellVahe::new(make_ahe_config(), CONTEXT_STRING).unwrap();
+        let (kahe_config, ahe_config) = create_shell_configs(&aggregation_config)?;
+        let kahe = ShellKahe::new(kahe_config, CONTEXT_STRING)?;
+        let vahe = ShellVahe::new(ahe_config, CONTEXT_STRING)?;
         let client_seed = SingleThreadHkdfPrng::generate_seed()?;
         let prng = SingleThreadHkdfPrng::create(&client_seed)?;
         let mut client = WillowV1Client { kahe, vahe, prng };
 
         // Generate AHE keys.
-        let kahe = ShellKahe::new(make_kahe_config(&aggregation_config), CONTEXT_STRING).unwrap();
-        let vahe = ShellVahe::new(make_ahe_config(), CONTEXT_STRING).unwrap();
-        let seed = SingleThreadHkdfPrng::generate_seed()?;
-        let mut prng = SingleThreadHkdfPrng::create(&seed)?;
-        let (sk_share, pk_share, _) = vahe.key_gen(&mut prng)?;
-        let public_key = vahe.aggregate_public_key_shares(&[pk_share])?;
+        let mut testing_decryptor =
+            ShellTestingDecryptor::new(&aggregation_config, CONTEXT_STRING)?;
+        let public_key = testing_decryptor.generate_public_key()?;
 
         // Create client message.
         let input_values = vec![1, 2, 3, 4, 5, 6, 7, 8, 7, 6, 5, 4, 3, 2, 1];
         let client_plaintext = HashMap::from([(default_id.as_str(), input_values.as_slice())]);
         let nonce = generate_random_nonce();
         let client_message =
-            client.create_client_message(&client_plaintext, &public_key, &nonce).unwrap();
+            client.create_client_message(&client_plaintext, &public_key, &nonce)?;
 
         // Decrypt client message.
-        let decryption_request = vahe.get_partial_dec_ciphertext(&client_message.ahe_ciphertext)?;
-        let rest_of_ciphertext = vahe.get_recover_ciphertext(&client_message.ahe_ciphertext)?;
-        let partial_decryption = vahe.partial_decrypt(&decryption_request, &sk_share, &mut prng)?;
-        let decrypted_kahe_key = vahe.recover(&partial_decryption, &rest_of_ciphertext, None)?;
-        let decrypted_kahe_key = kahe.try_secret_key_from(decrypted_kahe_key)?;
-        let decrypted_plaintext =
-            kahe.decrypt(&client_message.kahe_ciphertext, &decrypted_kahe_key)?;
-
+        let decrypted_plaintext = testing_decryptor.decrypt(&client_message)?;
         verify_that!(decrypted_plaintext.keys().collect::<Vec<_>>(), container_eq([&default_id]))?;
         let client_plaintext_length = client_plaintext.get(default_id.as_str()).unwrap().len();
         verify_eq!(
@@ -161,26 +150,25 @@ mod test {
         };
 
         // Create a client.
-        let kahe = ShellKahe::new(make_kahe_config(&aggregation_config), CONTEXT_STRING).unwrap();
-        let vahe = ShellVahe::new(make_ahe_config(), CONTEXT_STRING).unwrap();
+        let (kahe_config, ahe_config) = create_shell_configs(&aggregation_config)?;
+        let kahe = ShellKahe::new(kahe_config, CONTEXT_STRING)?;
+        let vahe = ShellVahe::new(ahe_config, CONTEXT_STRING)?;
         let client1_seed = SingleThreadHkdfPrng::generate_seed()?;
         let prng = SingleThreadHkdfPrng::create(&client1_seed)?;
         let mut client1 = WillowV1Client { kahe, vahe, prng };
 
         // Create a second client.
-        let kahe = ShellKahe::new(make_kahe_config(&aggregation_config), CONTEXT_STRING).unwrap();
-        let vahe = ShellVahe::new(make_ahe_config(), CONTEXT_STRING).unwrap();
+        let (kahe_config, ahe_config) = create_shell_configs(&aggregation_config)?;
+        let kahe = ShellKahe::new(kahe_config, CONTEXT_STRING)?;
+        let vahe = ShellVahe::new(ahe_config, CONTEXT_STRING)?;
         let client2_seed = SingleThreadHkdfPrng::generate_seed()?;
         let prng = SingleThreadHkdfPrng::create(&client2_seed)?;
         let mut client2 = WillowV1Client { kahe, vahe, prng };
 
         // Generate AHE keys.
-        let kahe = ShellKahe::new(make_kahe_config(&aggregation_config), CONTEXT_STRING).unwrap();
-        let vahe = ShellVahe::new(make_ahe_config(), CONTEXT_STRING).unwrap();
-        let seed = SingleThreadHkdfPrng::generate_seed()?;
-        let mut prng = SingleThreadHkdfPrng::create(&seed)?;
-        let (sk_share, pk_share, _) = vahe.key_gen(&mut prng)?;
-        let public_key = vahe.aggregate_public_key_shares(&[pk_share])?;
+        let mut testing_decryptor =
+            ShellTestingDecryptor::new(&aggregation_config, CONTEXT_STRING)?;
+        let public_key = testing_decryptor.generate_public_key()?;
 
         // Create client messages.
         let input_values1 = vec![1, 2, 3, 4, 5, 6, 7, 8, 7, 6, 5, 4, 3, 2, 1];
@@ -190,30 +178,23 @@ mod test {
         let expected_output = vec![2, 3, 5, 7, 10, 14, 10, 9, 11, 11, 14, 8, 6, 9, 1];
         let nonce1 = generate_random_nonce();
         let mut client_message =
-            client1.create_client_message(&client1_plaintext, &public_key, &nonce1).unwrap();
+            client1.create_client_message(&client1_plaintext, &public_key, &nonce1)?;
         let nonce2 = generate_random_nonce();
         let extra_message =
-            client2.create_client_message(&client2_plaintext, &public_key, &nonce2).unwrap();
+            client2.create_client_message(&client2_plaintext, &public_key, &nonce2)?;
 
         // Add extra message to the first client message.
-        kahe.add_ciphertexts_in_place(
+        client2.kahe.add_ciphertexts_in_place(
             &extra_message.kahe_ciphertext,
             &mut client_message.kahe_ciphertext,
         )?;
-        vahe.add_ciphertexts_in_place(
+        client2.vahe.add_ciphertexts_in_place(
             &extra_message.ahe_ciphertext,
             &mut client_message.ahe_ciphertext,
         )?;
 
         // Decrypt client message.
-        let decryption_request = vahe.get_partial_dec_ciphertext(&client_message.ahe_ciphertext)?;
-        let rest_of_ciphertext = vahe.get_recover_ciphertext(&client_message.ahe_ciphertext)?;
-        let partial_decryption = vahe.partial_decrypt(&decryption_request, &sk_share, &mut prng)?;
-        let decrypted_kahe_key = vahe.recover(&partial_decryption, &rest_of_ciphertext, None)?;
-        let decrypted_kahe_key = kahe.try_secret_key_from(decrypted_kahe_key)?;
-        let decrypted_plaintext =
-            kahe.decrypt(&client_message.kahe_ciphertext, &decrypted_kahe_key)?;
-
+        let decrypted_plaintext = testing_decryptor.decrypt(&client_message)?;
         verify_that!(decrypted_plaintext.keys().collect::<Vec<_>>(), container_eq([&default_id]))?;
         let client_plaintext_length = client1_plaintext.get(default_id.as_str()).unwrap().len();
         verify_eq!(
