@@ -89,6 +89,7 @@ pub fn generate_packing_config(
                 base: base as u64,
                 dimension: dimension as u64,
                 num_packed_coeffs: num_packed_coeffs as u64,
+                length: *length as u64,
             },
         );
     }
@@ -200,15 +201,30 @@ mod test {
         )?;
         expect_eq!(
             packed_vector_configs.get("small").unwrap(),
-            &PackedVectorConfig { base: 1 << 11, dimension: 2, num_packed_coeffs: 512 }
+            &PackedVectorConfig {
+                base: 1 << 11,
+                dimension: 2,
+                num_packed_coeffs: 512,
+                length: 1024
+            }
         );
         expect_eq!(
             packed_vector_configs.get("large").unwrap(),
-            &PackedVectorConfig { base: 1 << 24, dimension: 1, num_packed_coeffs: 32 }
+            &PackedVectorConfig {
+                base: 1 << 24,
+                dimension: 1,
+                num_packed_coeffs: 32,
+                length: 32
+            }
         );
         expect_eq!(
             packed_vector_configs.get("long").unwrap(),
-            &PackedVectorConfig { base: 1 << 24, dimension: 1, num_packed_coeffs: 65536 }
+            &PackedVectorConfig {
+                base: 1 << 24,
+                dimension: 1,
+                num_packed_coeffs: 65536,
+                length: 65536
+            }
         );
         Ok(())
     }

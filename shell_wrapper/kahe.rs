@@ -22,11 +22,22 @@ use std::collections::HashMap;
 use std::marker::PhantomData;
 use std::mem::MaybeUninit;
 
+/// Configuration for packing and unpacking. Used to convert a long vector of `length` small
+/// integers in [0, `base`) into a short vector of `num_packed_coeffs` large integers in
+/// [0, `base`^`dimension`), and vice versa.
 #[derive(Debug, PartialEq, Clone)]
 pub struct PackedVectorConfig {
+    /// Base for packing.
     pub base: u64,
+
+    /// Number of elements packed into each coefficient.
     pub dimension: u64,
+
+    /// Number of coefficients in the packed vector.
     pub num_packed_coeffs: u64,
+
+    /// Number of elements in the plaintext vector before packing.
+    pub length: u64,
 }
 
 #[cxx::bridge]
@@ -93,6 +104,7 @@ mod ffi {
             packing_base: u64,
             packing_dimension: u64,
             num_packed_values: u64,
+            num_unpacked_values: u64,
             packed_values: &mut BigIntVectorWrapper,
             out: &mut Vec<u64>,
         ) -> FfiStatus;
@@ -260,6 +272,7 @@ pub fn decrypt(
                 packed_vector_config.base,
                 packed_vector_config.dimension,
                 packed_vector_config.num_packed_coeffs,
+                packed_vector_config.length,
                 &mut packed_values,
                 &mut unpacked_values,
             )

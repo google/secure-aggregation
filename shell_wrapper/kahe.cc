@@ -25,6 +25,7 @@
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
 #include "absl/types/span.h"
 #include "include/cxx.h"
@@ -347,6 +348,7 @@ FfiStatus PackMessagesRaw(rust::Slice<const uint64_t> messages,
 
 FfiStatus UnpackMessagesRaw(uint64_t packing_base, uint64_t packing_dimension,
                             uint64_t num_packed_values,
+                            uint64_t num_unpacked_values,
                             BigIntVectorWrapper& packed_values,
                             rust::Vec<uint64_t>& out) {
   // Validate the wrappers.
@@ -358,6 +360,8 @@ FfiStatus UnpackMessagesRaw(uint64_t packing_base, uint64_t packing_dimension,
     return MakeFfiStatus(
         absl::InvalidArgumentError("insufficient number of packed values."));
   }
+
+  // `unpacked_messages` is padded with zeros if needed.
   std::vector<uint64_t> unpacked_messages =
       rlwe::UnpackMessagesFlat<secure_aggregation::Integer,
                                secure_aggregation::BigInteger>(
@@ -365,8 +369,16 @@ FfiStatus UnpackMessagesRaw(uint64_t packing_base, uint64_t packing_dimension,
           packing_base, packing_dimension);
   packed_values.ptr->erase(packed_values.ptr->begin(),
                            packed_values.ptr->begin() + num_packed_values);
-  for (auto& val : unpacked_messages) {
-    out.push_back(val);
+
+  // Remove padding and copy values to Rust output vector.
+  if (unpacked_messages.size() < num_unpacked_values) {
+    return MakeFfiStatus(absl::InvalidArgumentError(
+        absl::StrFormat("unpacked messages is too short (%d) for the requested "
+                        "number of unpacked values (%d)",
+                        unpacked_messages.size(), num_unpacked_values)));
+  }
+  for (size_t i = 0; i < num_unpacked_values; ++i) {
+    out.push_back(unpacked_messages[i]);
   }
   return MakeFfiStatus();
 }

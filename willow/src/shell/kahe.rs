@@ -402,7 +402,7 @@ mod test {
         let plaintext_modulus_bits = 39;
         let packed_vector_configs = HashMap::from([(
             DEFAULT_ID.to_string(),
-            PackedVectorConfig { base: 10, dimension: 2, num_packed_coeffs: 5 },
+            PackedVectorConfig { base: 10, dimension: 2, num_packed_coeffs: 5, length: 10 },
         )]);
         let kahe_config = make_kahe_config_for(plaintext_modulus_bits, packed_vector_configs)?;
         let kahe = ShellKahe::new(kahe_config, CONTEXT_STRING)?;
@@ -418,11 +418,31 @@ mod test {
     }
 
     #[gtest]
+    fn test_encrypt_decrypt_short_padding() -> googletest::Result<()> {
+        let plaintext_modulus_bits = 39;
+        let packed_vector_configs = HashMap::from([(
+            DEFAULT_ID.to_string(),
+            PackedVectorConfig { base: 10, dimension: 2, num_packed_coeffs: 5, length: 8 },
+        )]);
+        let kahe_config = make_kahe_config_for(plaintext_modulus_bits, packed_vector_configs)?;
+        let kahe = ShellKahe::new(kahe_config, CONTEXT_STRING)?;
+
+        let pt = HashMap::from([(DEFAULT_ID.to_string(), vec![0, 1, 2, 3, 4, 5, 6, 7])]);
+        let seed = SingleThreadHkdfPrng::generate_seed()?;
+        let mut prng = SingleThreadHkdfPrng::create(&seed)?;
+        let sk = kahe.key_gen(&mut prng)?;
+        let pt_slice = ShellKahe::plaintext_as_slice(&pt);
+        let ct = kahe.encrypt(&pt_slice, &sk, &mut prng)?;
+        let decrypted = kahe.decrypt(&ct, &sk)?;
+        verify_eq!(&pt, &decrypted)
+    }
+
+    #[gtest]
     fn test_encrypt_decrypt_with_serialized_key() -> googletest::Result<()> {
         let plaintext_modulus_bits = 39;
         let packed_vector_configs = HashMap::from([(
             DEFAULT_ID.to_string(),
-            PackedVectorConfig { base: 10, dimension: 2, num_packed_coeffs: 5 },
+            PackedVectorConfig { base: 10, dimension: 2, num_packed_coeffs: 5, length: 10 },
         )]);
         let kahe_config = make_kahe_config_for(plaintext_modulus_bits, packed_vector_configs)?;
         let kahe = ShellKahe::new(kahe_config, CONTEXT_STRING)?;
@@ -453,6 +473,7 @@ mod test {
                 base: input_domain,
                 dimension: 1,
                 num_packed_coeffs: 0, // Dummy value until we compute it from kahe_config.
+                length: 0,            // Dummy value.
             },
         )]);
         let mut kahe_config = make_kahe_config_for(plaintext_modulus_bits, packed_vector_configs)?;
@@ -460,6 +481,7 @@ mod test {
         let num_messages = (1 << kahe_config.log_n) * 2; // Needs two polynomials.
         let packed_vector_config = kahe_config.packed_vector_configs.get_mut(DEFAULT_ID).unwrap();
         packed_vector_config.num_packed_coeffs = num_messages;
+        packed_vector_config.length = num_messages;
         set_kahe_num_public_polynomials(&mut kahe_config);
 
         let kahe = ShellKahe::new(kahe_config, CONTEXT_STRING)?;
@@ -491,6 +513,7 @@ mod test {
                 base: input_domain * 2,
                 dimension: 1,
                 num_packed_coeffs: num_messages,
+                length: num_messages,
             },
         )]);
         let kahe_config = make_kahe_config_for(plaintext_modulus_bits, packed_vector_configs)?;
@@ -574,7 +597,7 @@ mod test {
         let plaintext_modulus_bits = 39;
         let packed_vector_configs = HashMap::from([(
             String::from(DEFAULT_ID),
-            PackedVectorConfig { base: 10, dimension: 2, num_packed_coeffs: 5 },
+            PackedVectorConfig { base: 10, dimension: 2, num_packed_coeffs: 5, length: 10 },
         )]);
         let kahe_config = make_kahe_config_for(plaintext_modulus_bits, packed_vector_configs)?;
         let kahe = ShellKahe::new(kahe_config, CONTEXT_STRING)?;

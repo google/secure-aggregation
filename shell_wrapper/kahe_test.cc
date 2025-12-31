@@ -337,7 +337,8 @@ TEST(KaheTest, UnpackMessagesRawRemovesConsumedPackedValues) {
   rust::Vec<Integer> unpacked_messages;
   SECAGG_EXPECT_OK(UnwrapFfiStatus(
       UnpackMessagesRaw(packing_base, packing_dimension, num_packed_values,
-                        packed_values, unpacked_messages)));
+                        num_packed_values * packing_dimension, packed_values,
+                        unpacked_messages)));
   EXPECT_EQ(packed_values.ptr->size(), num_packed_values);
   EXPECT_EQ(unpacked_messages.size(), num_packed_values);
   // Unpacked values should match the first half of the original packed values.
@@ -347,6 +348,94 @@ TEST(KaheTest, UnpackMessagesRawRemovesConsumedPackedValues) {
   // Check that the remaining packed values are unchanged.
   EXPECT_EQ(absl::MakeSpan(*packed_values.ptr).first(num_packed_values),
             absl::MakeSpan(packed).subspan(num_packed_values));
+}
+
+TEST(KaheTest, RawEncryptDecryptPadding) {
+  constexpr int num_packing = 2;
+  constexpr int num_public_polynomials = 2;
+  constexpr int num_messages = 9;
+  constexpr Integer packing_base = 10;
+  // 2 messages per coefficient, last coefficient has only 1 message.
+  constexpr int num_packed_messages = 5;
+
+  std::unique_ptr<std::string> public_seed;
+  SECAGG_ASSERT_OK(UnwrapFfiStatus(GenerateSingleThreadHkdfSeed(public_seed)));
+  KahePublicParametersWrapper params;
+  SECAGG_ASSERT_OK(UnwrapFfiStatus(CreateKahePublicParametersWrapper(
+      kLogN, kLogT, ToRustSlice(kQs), num_public_polynomials,
+      ToRustSlice(*public_seed), &params)));
+  std::unique_ptr<std::string> private_seed;
+  SECAGG_ASSERT_OK(UnwrapFfiStatus(GenerateSingleThreadHkdfSeed(private_seed)));
+  SingleThreadHkdfWrapper prng;
+  SECAGG_ASSERT_OK(UnwrapFfiStatus(
+      CreateSingleThreadHkdf(ToRustSlice(*private_seed), prng)));
+  RnsPolynomialWrapper key;
+  SECAGG_ASSERT_OK(
+      UnwrapFfiStatus(GenerateSecretKeyWrapper(params, &prng, &key)));
+
+  // Pack messages that don't fully occupy the packed coefficients.
+  std::vector<Integer> input_messages =
+      rlwe::testing::SampleMessages(num_messages, packing_base);
+  BigIntVectorWrapper packed_messages{
+      .ptr = std::make_unique<std::vector<BigInteger>>()};
+  SECAGG_ASSERT_OK(UnwrapFfiStatus(
+      PackMessagesRaw(ToRustSlice(input_messages), packing_base, num_packing,
+                      num_packed_messages, &packed_messages)));
+
+  // Encrypt the packed messages.
+  RnsPolynomialVecWrapper ciphertexts;
+  SECAGG_ASSERT_OK(UnwrapFfiStatus(
+      Encrypt(packed_messages, key, params, &prng, &ciphertexts)));
+
+  // Decrypt to get a packed plaintext.
+  BigIntVectorWrapper packed_messages_1{
+      .ptr = std::make_unique<std::vector<BigInteger>>()};
+  SECAGG_ASSERT_OK(
+      UnwrapFfiStatus(Decrypt(ciphertexts, key, params, &packed_messages_1)));
+
+  // Unpack and retrieve the original messages plus padding.
+  rust::Vec<Integer> unpacked_messages_1;
+  SECAGG_ASSERT_OK(UnwrapFfiStatus(UnpackMessagesRaw(
+      packing_base, num_packing, packed_messages_1.ptr->size(),
+      num_packed_messages * num_packing, packed_messages_1,
+      unpacked_messages_1)));
+
+  // Decrypted messages are padded to zero up to the end of the polynomial.
+  EXPECT_THAT(
+      absl::MakeSpan(unpacked_messages_1.data(), unpacked_messages_1.size())
+          .subspan(num_messages,
+                   num_packed_messages * num_packing - num_messages),
+      ::testing::Each(::testing::Eq(0)));
+
+  // Decrypt to obtain a fresh packed plaintext.
+  BigIntVectorWrapper packed_messages_2{
+      .ptr = std::make_unique<std::vector<BigInteger>>()};
+  SECAGG_ASSERT_OK(
+      UnwrapFfiStatus(Decrypt(ciphertexts, key, params, &packed_messages_2)));
+
+  // Now unpack and directly pass the right length to remove padding.
+  rust::Vec<Integer> unpacked_messages_2;
+  SECAGG_ASSERT_OK(UnwrapFfiStatus(UnpackMessagesRaw(
+      packing_base, num_packing, packed_messages_2.ptr->size(), num_messages,
+      packed_messages_2, unpacked_messages_2)));
+  EXPECT_EQ(
+      absl::MakeSpan(unpacked_messages_2.data(), unpacked_messages_2.size()),
+      absl::MakeSpan(input_messages));
+
+  // Finally, check that we fail if we request too many unpacked messages
+  BigIntVectorWrapper packed_messages_3{
+      .ptr = std::make_unique<std::vector<BigInteger>>()};
+  SECAGG_ASSERT_OK(
+      UnwrapFfiStatus(Decrypt(ciphertexts, key, params, &packed_messages_2)));
+  SECAGG_ASSERT_OK(UnwrapFfiStatus(
+      Encrypt(packed_messages_3, key, params, &prng, &ciphertexts)));
+  rust::Vec<Integer> unpacked_messages_3;
+  int num_unpacked_messages_3 = packed_messages_3.ptr->size() * num_packing + 1;
+  EXPECT_THAT(
+      UnwrapFfiStatus(UnpackMessagesRaw(
+          packing_base, num_packing, packed_messages_3.ptr->size(),
+          num_unpacked_messages_3, packed_messages_3, unpacked_messages_3)),
+      StatusIs(absl::StatusCode::kInvalidArgument));
 }
 
 TEST(KaheTest, PackAndEncrypt) {
@@ -399,19 +488,14 @@ TEST(KaheTest, PackAndEncrypt) {
       .ptr = std::make_unique<std::vector<BigInteger>>(std::move(decrypted))};
   rust::Vec<Integer> unpacked_messages;
   SECAGG_ASSERT_OK(UnwrapFfiStatus(
-      UnpackMessagesRaw(packing_base, num_packing, packed_messages.size(),
-                        decrypted_wrapper, unpacked_messages)));
+      UnpackMessagesRaw(packing_base, num_packing, num_packed_messages,
+                        num_messages, decrypted_wrapper, unpacked_messages)));
   EXPECT_EQ(absl::MakeSpan(unpacked_messages.data(), num_messages),
             absl::MakeSpan(expected_unpacked_messages.data(), num_messages));
+
   // Check against the original input messages.
   EXPECT_EQ(absl::MakeSpan(unpacked_messages.data(), num_messages),
-            absl::MakeSpan(input_messages).subspan(0, num_messages));
-  // Check unpacked messages are padded with zeros.
-  ASSERT_GE(expected_unpacked_messages.size(), num_messages);
-  EXPECT_THAT(
-      absl::MakeSpan(unpacked_messages.data(), unpacked_messages.size())
-          .subspan(num_messages, unpacked_messages.size() - num_messages),
-      ::testing::Each(::testing::Eq(0)));
+            absl::MakeSpan(input_messages));
 }
 
 TEST(KaheTest, RawVectorEncryptOnePolynomial) {
@@ -461,7 +545,8 @@ TEST(KaheTest, RawVectorEncryptOnePolynomial) {
   rust::Vec<Integer> unpacked_decrypted_messages;
   SECAGG_ASSERT_OK(UnwrapFfiStatus(UnpackMessagesRaw(
       packing_base, num_packing, decrypted_wrapper.ptr->size(),
-      decrypted_wrapper, unpacked_decrypted_messages)));
+      decrypted_wrapper.ptr->size() * num_packing, decrypted_wrapper,
+      unpacked_decrypted_messages)));
 
   // Filled the whole buffer with right messages.
   EXPECT_EQ(absl::MakeSpan(unpacked_decrypted_messages.data(), num_messages),
@@ -481,6 +566,7 @@ TEST(KaheTest, RawVectorEncryptOnePolynomial) {
   unpacked_decrypted_long_messages.reserve(buffer_length);
   SECAGG_ASSERT_OK(UnwrapFfiStatus(UnpackMessagesRaw(
       packing_base, num_packing, decrypted_long_messages_wrapper.ptr->size(),
+      decrypted_long_messages_wrapper.ptr->size() * num_packing,
       decrypted_long_messages_wrapper, unpacked_decrypted_long_messages)));
 
   // The non-zero messages are identical.
@@ -538,10 +624,10 @@ TEST(KaheTest, RawVectorEncryptTwoPolynomials) {
       UnwrapFfiStatus(Decrypt(ciphertexts, key, params, &decrypted_wrapper)));
   rust::Vec<Integer> unpacked_decrypted_messages;
   SECAGG_ASSERT_OK(UnwrapFfiStatus(UnpackMessagesRaw(
-      packing_base, num_packing, decrypted_wrapper.ptr->size(),
+      packing_base, num_packing, decrypted_wrapper.ptr->size(), num_messages,
       decrypted_wrapper, unpacked_decrypted_messages)));
 
-  EXPECT_GE(unpacked_decrypted_messages.size(), num_messages);
+  EXPECT_EQ(unpacked_decrypted_messages.size(), num_messages);
   EXPECT_EQ(absl::MakeSpan(input_messages),
             absl::MakeSpan(unpacked_decrypted_messages.data(), num_messages));
 }
@@ -643,7 +729,8 @@ TEST(KaheTest, UnpackMessagesRawFailsIfUnallocatedPackedValues) {
   rust::Vec<Integer> unpacked_messages;
   EXPECT_THAT(UnwrapFfiStatus(UnpackMessagesRaw(
                   packing_base, packing_dimension, num_packed_messages,
-                  bad_packed_values, unpacked_messages)),
+                  num_packed_messages * packing_dimension, bad_packed_values,
+                  unpacked_messages)),
               StatusIs(absl::StatusCode::kInvalidArgument));
 }
 
@@ -658,7 +745,8 @@ TEST(KaheTest, UnpackMessagesRawFailsIfPackedValuesTooShort) {
   rust::Vec<Integer> unpacked_messages;
   EXPECT_THAT(UnwrapFfiStatus(UnpackMessagesRaw(
                   packing_base, packing_dimension, num_packed_messages,
-                  bad_packed_values, unpacked_messages)),
+                  num_packed_messages * packing_dimension, bad_packed_values,
+                  unpacked_messages)),
               StatusIs(absl::StatusCode::kInvalidArgument));
 }
 
@@ -738,7 +826,7 @@ TEST(KaheTest, AddInPlacePolynomial) {
   rust::Vec<Integer> unpacked_decrypted_messages;
   unpacked_decrypted_messages.reserve(num_messages);
   SECAGG_ASSERT_OK(UnwrapFfiStatus(UnpackMessagesRaw(
-      packing_base, num_packing, decrypted_wrapper.ptr->size(),
+      packing_base, num_packing, decrypted_wrapper.ptr->size(), num_messages,
       decrypted_wrapper, unpacked_decrypted_messages)));
   for (int i = 0; i < num_messages; ++i) {
     EXPECT_EQ(input_values1[i] + input_values2[i],

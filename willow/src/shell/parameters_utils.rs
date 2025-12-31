@@ -30,6 +30,7 @@ pub fn packed_vector_config_to_proto(config: &PackedVectorConfig) -> PackedVecto
         base: config.base as i64,
         dimension: config.dimension as i64,
         num_packed_coeffs: config.num_packed_coeffs as i64,
+        length: config.length as i64,
     })
 }
 
@@ -39,6 +40,7 @@ pub fn packed_vector_config_from_proto(proto: PackedVectorConfigProtoView) -> Pa
         base: proto.base() as u64,
         dimension: proto.dimension() as u64,
         num_packed_coeffs: proto.num_packed_coeffs() as u64,
+        length: proto.length() as u64,
     }
 }
 
@@ -90,7 +92,12 @@ mod test {
 
     #[gtest]
     fn test_packed_vector_config_proto_roundtrip() -> googletest::Result<()> {
-        let config = PackedVectorConfig { base: 8u64, dimension: 2u64, num_packed_coeffs: 1024u64 };
+        let config = PackedVectorConfig {
+            base: 8u64,
+            dimension: 2u64,
+            num_packed_coeffs: 1024u64,
+            length: 2048u64,
+        };
         let proto = packed_vector_config_to_proto(&config);
         let config_from_proto = packed_vector_config_from_proto(proto.as_view());
         verify_eq!(config_from_proto, config)
@@ -106,7 +113,12 @@ mod test {
             packed_vector_configs: HashMap::from([
                 (
                     String::from("vector0"),
-                    PackedVectorConfig { base: 16u64, dimension: 8u64, num_packed_coeffs: 1024u64 },
+                    PackedVectorConfig {
+                        base: 16u64,
+                        dimension: 8u64,
+                        num_packed_coeffs: 1024u64,
+                        length: 8192u64,
+                    },
                 ),
                 (
                     String::from("vector1"),
@@ -114,6 +126,7 @@ mod test {
                         base: 65536u64,
                         dimension: 1u64,
                         num_packed_coeffs: 16u64,
+                        length: 16u64,
                     },
                 ),
             ]),

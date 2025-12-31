@@ -47,13 +47,13 @@ fn encrypt_decrypt() -> Result<()> {
     let plaintext = HashMap::from([(DEFAULT_ID, input_values.as_slice())]);
     let packed_vector_configs = HashMap::from([(
         DEFAULT_ID.to_string(),
-        PackedVectorConfig { base: 10, dimension: 2, num_packed_coeffs: 2 },
+        PackedVectorConfig { base: 10, dimension: 2, num_packed_coeffs: 2, length: 3 },
     )]);
     let ciphertext = encrypt(&plaintext, &packed_vector_configs, &secret_key, &params, &mut prng)?;
 
     let output_values = decrypt(&ciphertext, &secret_key, &params, &packed_vector_configs)?;
     expect_that!(output_values.contains_key(DEFAULT_ID), eq(true));
-    expect_that!(output_values[DEFAULT_ID][..3], container_eq(input_values));
+    expect_that!(output_values[DEFAULT_ID], container_eq(input_values));
     Ok(())
 }
 
@@ -80,7 +80,8 @@ fn encrypt_decrypt_padding() -> Result<()> {
     let input_values: Vec<u64> =
         (0..num_input_values).map(|_| rand::thread_rng().gen_range(0..input_domain)).collect();
 
-    // Encrypt the vector.
+    // Encrypt the vector. Pass a longer length than what we need.
+    let padded_length = (num_packed_coeffs * packing_dimension) as usize;
     let plaintext = HashMap::from([(DEFAULT_ID, input_values.as_slice())]);
     let packed_vector_configs = HashMap::from([(
         DEFAULT_ID.to_string(),
@@ -88,6 +89,7 @@ fn encrypt_decrypt_padding() -> Result<()> {
             base: input_domain as u64,
             dimension: packing_dimension as u64,
             num_packed_coeffs: num_packed_coeffs as u64,
+            length: padded_length as u64,
         },
     )]);
     let ciphertext = encrypt(&plaintext, &packed_vector_configs, &secret_key, &params, &mut prng)?;
@@ -97,7 +99,6 @@ fn encrypt_decrypt_padding() -> Result<()> {
     let output_values = &decrypted[DEFAULT_ID];
 
     // Check that message is correctly decrypted with right padding.
-    let padded_length = (num_packed_coeffs * packing_dimension) as usize;
     expect_that!(output_values.len(), eq(padded_length));
     expect_that!(output_values.len(), gt(num_input_values));
     expect_that!(output_values[..num_input_values], container_eq(input_values));
@@ -138,6 +139,7 @@ fn encrypt_decrypt_long() -> Result<()> {
             base: input_domain as u64,
             dimension: packing_dimension as u64,
             num_packed_coeffs: num_packed_coeffs as u64,
+            length: num_input_values as u64,
         },
     )]);
     let ciphertext = encrypt(&plaintext, &packed_vector_configs, &secret_key, &params, &mut prng)?;
@@ -145,15 +147,9 @@ fn encrypt_decrypt_long() -> Result<()> {
     let decrypted = decrypt(&ciphertext, &secret_key, &params, &packed_vector_configs)?;
     let output_values = &decrypted[DEFAULT_ID];
 
-    // Check that message is correctly decrypted with right padding.
-    let padded_length = num_packed_coeffs * packing_dimension;
-    expect_that!(output_values.len(), eq(padded_length));
-    expect_that!(output_values.len(), gt(num_input_values));
-    expect_that!(output_values[..num_input_values], container_eq(input_values));
-    expect_that!(
-        output_values[num_input_values..],
-        container_eq(vec![0; padded_length - num_input_values])
-    );
+    // Check that message is correctly decrypted (no padding).
+    expect_that!(output_values.len(), eq(num_input_values));
+    expect_that!(output_values, container_eq(input_values));
 
     // If the input is too long, we should fail.
     let num_values_too_long = num_public_polynomials * poly_capacity + 1;
@@ -195,6 +191,7 @@ fn encrypt_decrypt_two_vectors() -> Result<()> {
                 base: input_domains[0] as u64,
                 dimension: packing_dimensions[0] as u64,
                 num_packed_coeffs: num_packed_coeffs[0] as u64,
+                length: num_input_values[0] as u64,
             },
         ),
         (
@@ -203,6 +200,7 @@ fn encrypt_decrypt_two_vectors() -> Result<()> {
                 base: input_domains[1] as u64,
                 dimension: packing_dimensions[1] as u64,
                 num_packed_coeffs: num_packed_coeffs[1] as u64,
+                length: num_input_values[1] as u64,
             },
         ),
     ]);
@@ -218,26 +216,16 @@ fn encrypt_decrypt_two_vectors() -> Result<()> {
         HashMap::from([(ID0, input_values0.as_slice()), (ID1, input_values1.as_slice())]);
     let ciphertext = encrypt(&plaintext, &packed_vector_configs, &secret_key, &params, &mut prng)?;
 
-    // Decrypt and check the output contains the two vectors that are padded correctly.
+    // Decrypt and check the output contains the two vectors.
     let decrypted = decrypt(&ciphertext, &secret_key, &params, &packed_vector_configs)?;
     verify_that!(decrypted.contains_key(ID0), eq(true))?;
     verify_that!(decrypted.contains_key(ID1), eq(true))?;
 
     let output_values0 = &decrypted[ID0];
     let output_values1 = &decrypted[ID1];
-    expect_that!(output_values0.len(), eq(num_packed_coeffs[0] * packing_dimensions[0]));
-    expect_that!(output_values0.len(), gt(num_input_values[0]));
-    expect_that!(output_values0[..num_input_values[0]], container_eq(input_values0));
-    expect_that!(
-        output_values0[num_input_values[0]..],
-        container_eq(vec![0; num_packed_coeffs[0] * packing_dimensions[0] - num_input_values[0]])
-    );
-    expect_that!(output_values1.len(), eq(num_packed_coeffs[1] * packing_dimensions[1]));
-    expect_that!(output_values1.len(), gt(num_input_values[1]));
-    expect_that!(output_values1[..num_input_values[1]], container_eq(input_values1));
-    expect_that!(
-        output_values1[num_input_values[1]..],
-        container_eq(vec![0; num_packed_coeffs[1] * packing_dimensions[1] - num_input_values[1]])
-    );
+    expect_that!(output_values0.len(), eq(num_input_values[0]));
+    expect_that!(output_values0, container_eq(input_values0));
+    expect_that!(output_values1.len(), eq(num_input_values[1]));
+    expect_that!(output_values1, container_eq(input_values1));
     Ok(())
 }

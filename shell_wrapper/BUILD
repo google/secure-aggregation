@@ -242,6 +242,7 @@ cc_library(
         ":status_macros",
         "@abseil-cpp//absl/status",
         "@abseil-cpp//absl/status:statusor",
+        "@abseil-cpp//absl/strings:str_format",
         "@abseil-cpp//absl/strings:string_view",
         "@abseil-cpp//absl/types:span",
         "@shell-encryption//shell_encryption/rns:coefficient_encoder",

@@ -154,14 +154,16 @@ FfiStatus PackMessagesRaw(rust::Slice<const uint64_t> messages,
                           uint64_t num_packed_values,
                           BigIntVectorWrapper* packed_values);
 
-// Unpacks messages stored at `packed_values[0..num_packed_values]` and appends
-// them to `out`, and removes these packed values from `packed_values`.
+// Unpacks messages stored at `packed_values[0..num_packed_values]`, removes
+// these packed values from `packed_values` and appends the first
+// `num_unpacked_values` messages to `out`.
 // Expects `packed_values.ptr` to be a valid pointer to the vector of packed
 // values, and expects packing_base > 1, packing_dimension > 0,
 // num_packed_values > 0, packing_base^packing_dimension <
 // std::numeric_limits<BigInteger>::max().
 FfiStatus UnpackMessagesRaw(uint64_t packing_base, uint64_t packing_dimension,
                             uint64_t num_packed_values,
+                            uint64_t num_unpacked_values,
                             BigIntVectorWrapper& packed_values,
                             rust::Vec<uint64_t>& out);
 
