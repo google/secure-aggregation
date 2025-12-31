@@ -16,18 +16,21 @@
 
 #include "willow/src/testing_utils/shell_testing_decryptor.h"
 
+#include "absl/status/status.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "shell_wrapper/status_matchers.h"
 #include "willow/proto/willow/aggregation_config.pb.h"
 
 namespace secure_aggregation {
+namespace willow {
 namespace {
 
+using secure_aggregation::secagg_internal::StatusIs;
 using ::testing::NotNull;
 
 TEST(ShellTestingDecryptorTest, CreateAndGenerateKey) {
-  willow::AggregationConfigProto config;
+  AggregationConfigProto config;
   config.set_max_number_of_decryptors(1);
   config.set_max_number_of_clients(1);
   config.set_max_decryptor_dropouts(0);
@@ -44,5 +47,19 @@ TEST(ShellTestingDecryptorTest, CreateAndGenerateKey) {
   EXPECT_TRUE(pk.has_poly());
 }
 
+TEST(ShellTestingDecryptorTest, InvalidAggregationConfig) {
+  // Aggregation config with no metrics.
+  AggregationConfigProto config_proto;
+  config_proto.set_max_number_of_decryptors(1);
+  config_proto.set_max_decryptor_dropouts(0);
+  config_proto.set_max_number_of_clients(2);
+  config_proto.set_session_id("test");
+
+  // Initialization fails because aggregation config is invalid.
+  EXPECT_THAT(ShellTestingDecryptor::Create(config_proto),
+              StatusIs(absl::StatusCode::kInvalidArgument));
+}
+
 }  // namespace
+}  // namespace willow
 }  // namespace secure_aggregation

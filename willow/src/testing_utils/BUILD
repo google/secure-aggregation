@@ -150,6 +150,7 @@ cc_test(
     deps = [
         ":shell_testing_decryptor_cc",
         "@googletest//:gtest_main",
+        "@abseil-cpp//absl/status",
         "//shell_wrapper:status_matchers",
         "//willow/proto/willow:aggregation_config_cc_proto",
     ],

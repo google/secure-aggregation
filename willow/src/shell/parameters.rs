@@ -111,12 +111,10 @@ pub fn create_shell_kahe_config(
         .values()
         .map(|(length, _)| *length as i64)
         .sum();
-    let max_input_bound = aggregation_config
-        .vector_lengths_and_bounds
-        .values()
-        .map(|(_, bound)| bound)
-        .max()
-        .unwrap();
+    let max_input_bound =
+        aggregation_config.vector_lengths_and_bounds.values().map(|(_, bound)| bound).max().ok_or(
+            status::invalid_argument(format!("empty vector configs in aggregation config")),
+        )?;
 
     if total_input_length <= 1000
         && *max_input_bound <= (1i64 << 32)

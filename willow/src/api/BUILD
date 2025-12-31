@@ -59,7 +59,6 @@ cc_library(
         "@abseil-cpp//absl/status",
         "@abseil-cpp//absl/status:statusor",
         "@abseil-cpp//absl/strings",
-        "@cxx.rs//:cxx",
         "@cxx.rs//:core",
         "//willow/proto/willow:aggregation_config_cc_proto",
         "//willow/proto/willow:server_accumulator_cc_proto",
@@ -110,5 +109,76 @@ rust_library(
         "//willow/src/traits:verifier_traits",
         "//willow/src/willow_v1:willow_v1_server",
         "//willow/src/willow_v1:willow_v1_verifier",
+    ],
+)
+
+rust_library(
+    name = "client",
+    srcs = ["client.rs"],
+    deps = [
+        ":aggregation_config",
+        "@protobuf//rust:protobuf",
+        "@cxx.rs//:cxx",
+        "//shell_wrapper:status",
+        "//willow/proto/shell:shell_ciphertexts_rust_proto",
+        "//willow/proto/willow:aggregation_config_rust_proto",
+        "//willow/proto/willow:messages_rust_proto",
+        "//willow/src/shell:ahe_shell",
+        "//willow/src/shell:kahe_shell",
+        "//willow/src/shell:parameters_shell",
+        "//willow/src/shell:single_thread_hkdf",
+        "//willow/src/shell:vahe_shell",
+        "//willow/src/traits:ahe_traits",
+        "//willow/src/traits:client_traits",
+        "//willow/src/traits:kahe_traits",
+        "//willow/src/traits:messages",
+        "//willow/src/traits:prng_traits",
+        "//willow/src/traits:proto_serialization_traits",
+        "//willow/src/traits:vahe_traits",
+        "//willow/src/willow_v1:willow_v1_client",
+        "//willow/src/willow_v1:willow_v1_server",
+    ],
+)
+
+rust_cxx_bridge(
+    name = "client_cxx",
+    src = "client.rs",
+    deps = [
+        ":client",
+    ],
+)
+
+cc_library(
+    name = "client_cc",
+    srcs = ["client.cc"],
+    hdrs = ["client.h"],
+    deps = [
+        ":client_cxx",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:statusor",
+        "@cxx.rs//:core",
+        "//shell_wrapper:shell_types_cc",
+        "//willow/proto/shell:shell_ciphertexts_cc_proto",
+        "//willow/proto/willow:aggregation_config_cc_proto",
+        "//willow/proto/willow:messages_cc_proto",
+        "//willow/proto/willow:server_accumulator_cc_proto",
+        "//willow/src/input_encoding:codec",
+    ],
+)
+
+cc_test(
+    name = "client_test_cc",
+    srcs = ["client_test.cc"],
+    deps = [
+        ":client_cc",
+        ":client_cxx",
+        "@googletest//:gtest_main",
+        "@abseil-cpp//absl/status",
+        "@cxx.rs//:core",
+        "//shell_wrapper:status_matchers",
+        "//willow/proto/willow:aggregation_config_cc_proto",
+        "//willow/proto/willow:input_spec_cc_proto",
+        "//willow/src/input_encoding:codec",
+        "//willow/src/testing_utils:shell_testing_decryptor_cc",
     ],
 )
