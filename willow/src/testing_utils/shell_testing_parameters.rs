@@ -17,13 +17,13 @@ use ahe_shell::ShellAheConfig;
 use kahe::PackedVectorConfig;
 use kahe_shell::ShellKaheConfig;
 use shell_parameters_generation::{divide_and_roundup, generate_packing_config};
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 /// Creates an KAHE configuration with the given plaintext modulus bits, by
 /// looking up some pre-generated configurations.
 pub fn make_kahe_config_for(
     plaintext_modulus_bits: usize,
-    packed_vector_configs: HashMap<String, PackedVectorConfig>,
+    packed_vector_configs: BTreeMap<String, PackedVectorConfig>,
 ) -> Result<ShellKaheConfig, status::StatusError> {
     // Configurations below come from:
     // google3/experimental/users/baiyuli/async_rlwe_secagg/parameters.cc,

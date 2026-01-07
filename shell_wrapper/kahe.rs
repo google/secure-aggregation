@@ -18,7 +18,7 @@
 use shell_types::{Moduli, RnsContextRef, RnsPolynomial, RnsPolynomialVec};
 use single_thread_hkdf::{SeedWrapper, SingleThreadHkdfWrapper};
 use status::rust_status_from_cpp;
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::marker::PhantomData;
 use std::mem::MaybeUninit;
 
@@ -197,7 +197,7 @@ pub use ffi::BigIntVectorWrapper;
 /// Returns the resulting ciphertexts.
 pub fn encrypt(
     input_vectors: &HashMap<&str, &[u64]>,
-    packed_vector_configs: &HashMap<String, PackedVectorConfig>,
+    packed_vector_configs: &BTreeMap<String, PackedVectorConfig>,
     secret_key: &RnsPolynomial,
     params: &KahePublicParametersWrapper,
     prng: &mut SingleThreadHkdfWrapper,
@@ -246,7 +246,7 @@ pub fn decrypt(
     ciphertext: &RnsPolynomialVec,
     secret_key: &RnsPolynomial,
     params: &KahePublicParametersWrapper,
-    packed_vector_configs: &HashMap<String, PackedVectorConfig>,
+    packed_vector_configs: &BTreeMap<String, PackedVectorConfig>,
 ) -> Result<HashMap<String, Vec<u64>>, status::StatusError> {
     let mut packed_values = MaybeUninit::<BigIntVectorWrapper>::zeroed();
     // SAFETY: No lifetime constraints (`packed_values` does not keep any reference to the inputs).

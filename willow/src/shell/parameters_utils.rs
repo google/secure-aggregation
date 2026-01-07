@@ -19,7 +19,7 @@ use shell_parameters_rust_proto::{
     PackedVectorConfigProto, PackedVectorConfigProtoView, ShellKaheConfigProto,
     ShellKaheConfigProtoView,
 };
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 /// This file contains some utility functions for working with Willow parameters:
 /// - Conversions between Rust structs and their corresponding protos.
@@ -81,7 +81,7 @@ pub fn kahe_config_from_proto(
                     Err(status::invalid_argument("invalid id in `packed_vectors`."))
                 }
             })
-            .collect::<Result<HashMap<String, PackedVectorConfig>, _>>()?,
+            .collect::<Result<BTreeMap<String, PackedVectorConfig>, _>>()?,
     })
 }
 
@@ -110,7 +110,7 @@ mod test {
             moduli: vec![65537u64, 12289u64],
             log_t: 5usize,
             num_public_polynomials: 2usize,
-            packed_vector_configs: HashMap::from([
+            packed_vector_configs: BTreeMap::from([
                 (
                     String::from("vector0"),
                     PackedVectorConfig {

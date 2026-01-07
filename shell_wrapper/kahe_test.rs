@@ -21,7 +21,7 @@ use kahe::{create_public_parameters, decrypt, encrypt, generate_secret_key, Pack
 use rand::Rng;
 use status::StatusErrorCode;
 use status_matchers_rs::status_is;
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
 // RNS configuration. LOG_T is the bit length of the KAHE plaintext modulus.
 const LOG_T: u64 = 11;
@@ -45,7 +45,7 @@ fn encrypt_decrypt() -> Result<()> {
     // Encrypt small vector. `ciphertext` is a wrapper around a C++ pointer.
     let input_values = vec![1, 2, 3];
     let plaintext = HashMap::from([(DEFAULT_ID, input_values.as_slice())]);
-    let packed_vector_configs = HashMap::from([(
+    let packed_vector_configs = BTreeMap::from([(
         DEFAULT_ID.to_string(),
         PackedVectorConfig { base: 10, dimension: 2, num_packed_coeffs: 2, length: 3 },
     )]);
@@ -83,7 +83,7 @@ fn encrypt_decrypt_padding() -> Result<()> {
     // Encrypt the vector. Pass a longer length than what we need.
     let padded_length = (num_packed_coeffs * packing_dimension) as usize;
     let plaintext = HashMap::from([(DEFAULT_ID, input_values.as_slice())]);
-    let packed_vector_configs = HashMap::from([(
+    let packed_vector_configs = BTreeMap::from([(
         DEFAULT_ID.to_string(),
         PackedVectorConfig {
             base: input_domain as u64,
@@ -133,7 +133,7 @@ fn encrypt_decrypt_long() -> Result<()> {
     let input_values: Vec<u64> =
         (0..num_input_values).map(|_| rand::thread_rng().gen_range(0..input_domain)).collect();
     let plaintext = HashMap::from([(DEFAULT_ID, input_values.as_slice())]);
-    let packed_vector_configs = HashMap::from([(
+    let packed_vector_configs = BTreeMap::from([(
         DEFAULT_ID.to_string(),
         PackedVectorConfig {
             base: input_domain as u64,
@@ -184,7 +184,7 @@ fn encrypt_decrypt_two_vectors() -> Result<()> {
     // The number of packed coefficients for both vectors.
     let num_packed_coeffs = [5, 5];
 
-    let packed_vector_configs = HashMap::from([
+    let packed_vector_configs = BTreeMap::from([
         (
             ID0.to_string(),
             PackedVectorConfig {

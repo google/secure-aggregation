@@ -14,7 +14,7 @@
 
 use aggregation_config::AggregationConfig;
 use kahe::PackedVectorConfig;
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 /// Generating KAHE and AHE parameters given the Willow protocol configuration.
 
@@ -34,7 +34,7 @@ pub fn divide_and_roundup(x: usize, y: usize) -> usize {
 pub fn generate_packing_config(
     plaintext_bits: usize,
     agg_config: &AggregationConfig,
-) -> Result<HashMap<String, PackedVectorConfig>, status::StatusError> {
+) -> Result<BTreeMap<String, PackedVectorConfig>, status::StatusError> {
     if plaintext_bits == 0 {
         return Err(status::invalid_argument("`plaintext_bits` must be positive."));
     }
@@ -47,7 +47,7 @@ pub fn generate_packing_config(
     if agg_config.max_number_of_clients <= 0 {
         return Err(status::invalid_argument("`max_number_of_clients` must be positive."));
     }
-    let mut packing_configs = HashMap::<String, PackedVectorConfig>::new();
+    let mut packing_configs = BTreeMap::<String, PackedVectorConfig>::new();
     for (id, (length, bound)) in agg_config.vector_lengths_and_bounds.iter() {
         if *length <= 0 {
             return Err(status::invalid_argument(format!(
@@ -210,12 +210,7 @@ mod test {
         );
         expect_eq!(
             packed_vector_configs.get("large").unwrap(),
-            &PackedVectorConfig {
-                base: 1 << 24,
-                dimension: 1,
-                num_packed_coeffs: 32,
-                length: 32
-            }
+            &PackedVectorConfig { base: 1 << 24, dimension: 1, num_packed_coeffs: 32, length: 32 }
         );
         expect_eq!(
             packed_vector_configs.get("long").unwrap(),

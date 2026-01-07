@@ -26,7 +26,7 @@ use shell_types::{
     RnsPolynomialVec,
 };
 use single_thread_hkdf::SingleThreadHkdfPrng;
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
 /// Number of bits supported by the C++ big integer type used for KAHE
 /// plaintext.
@@ -38,7 +38,7 @@ pub struct ShellKaheConfig {
     pub moduli: Vec<u64>,
     pub log_t: usize,
     pub num_public_polynomials: usize,
-    pub packed_vector_configs: HashMap<String, PackedVectorConfig>,
+    pub packed_vector_configs: BTreeMap<String, PackedVectorConfig>,
 }
 
 /// Base type holding public KAHE configuration and C++ parameters.
@@ -376,7 +376,7 @@ mod test {
     use proto_serialization_traits::{FromProto, ToProto};
     use shell_testing_parameters::{make_kahe_config_for, set_kahe_num_public_polynomials};
     use single_thread_hkdf::SingleThreadHkdfPrng;
-    use std::collections::HashMap;
+    use std::collections::{BTreeMap, HashMap};
     use testing_utils::generate_random_unsigned_vector;
 
     /// Standard deviation of the discrete Gaussian distribution used for
@@ -400,7 +400,7 @@ mod test {
     #[gtest]
     fn test_encrypt_decrypt_short() -> googletest::Result<()> {
         let plaintext_modulus_bits = 39;
-        let packed_vector_configs = HashMap::from([(
+        let packed_vector_configs = BTreeMap::from([(
             DEFAULT_ID.to_string(),
             PackedVectorConfig { base: 10, dimension: 2, num_packed_coeffs: 5, length: 10 },
         )]);
@@ -420,7 +420,7 @@ mod test {
     #[gtest]
     fn test_encrypt_decrypt_short_padding() -> googletest::Result<()> {
         let plaintext_modulus_bits = 39;
-        let packed_vector_configs = HashMap::from([(
+        let packed_vector_configs = BTreeMap::from([(
             DEFAULT_ID.to_string(),
             PackedVectorConfig { base: 10, dimension: 2, num_packed_coeffs: 5, length: 8 },
         )]);
@@ -440,7 +440,7 @@ mod test {
     #[gtest]
     fn test_encrypt_decrypt_with_serialized_key() -> googletest::Result<()> {
         let plaintext_modulus_bits = 39;
-        let packed_vector_configs = HashMap::from([(
+        let packed_vector_configs = BTreeMap::from([(
             DEFAULT_ID.to_string(),
             PackedVectorConfig { base: 10, dimension: 2, num_packed_coeffs: 5, length: 10 },
         )]);
@@ -467,7 +467,7 @@ mod test {
     fn test_encrypt_decrypt_long() -> googletest::Result<()> {
         let plaintext_modulus_bits = 17;
         let input_domain = 5;
-        let packed_vector_configs = HashMap::from([(
+        let packed_vector_configs = BTreeMap::from([(
             DEFAULT_ID.to_string(),
             PackedVectorConfig {
                 base: input_domain,
@@ -507,7 +507,7 @@ mod test {
         let plaintext_modulus_bits = 93;
         let input_domain = 10;
         let num_messages = 50;
-        let packed_vector_configs = HashMap::from([(
+        let packed_vector_configs = BTreeMap::from([(
             DEFAULT_ID.to_string(),
             PackedVectorConfig {
                 base: input_domain * 2,
@@ -553,7 +553,7 @@ mod test {
     #[gtest]
     fn read_write_secret_key() -> googletest::Result<()> {
         let plaintext_modulus_bits = 17;
-        let packed_vector_configs = HashMap::from([]);
+        let packed_vector_configs = BTreeMap::from([]);
         let kahe_config = make_kahe_config_for(plaintext_modulus_bits, packed_vector_configs)?;
 
         let kahe = ShellKahe::new(kahe_config, CONTEXT_STRING)?;
@@ -595,7 +595,7 @@ mod test {
     #[gtest]
     fn test_encrypt_decrypt_serialized_proto() -> googletest::Result<()> {
         let plaintext_modulus_bits = 39;
-        let packed_vector_configs = HashMap::from([(
+        let packed_vector_configs = BTreeMap::from([(
             String::from(DEFAULT_ID),
             PackedVectorConfig { base: 10, dimension: 2, num_packed_coeffs: 5, length: 10 },
         )]);
@@ -624,7 +624,7 @@ mod test {
     fn test_key_serialization_is_homomorphic() -> googletest::Result<()> {
         // Set up a ShellKahe instance.
         let plaintext_modulus_bits = 39;
-        let packed_vector_configs = HashMap::from([]);
+        let packed_vector_configs = BTreeMap::from([]);
         let kahe_config = make_kahe_config_for(plaintext_modulus_bits, packed_vector_configs)?;
         let kahe = ShellKahe::new(kahe_config, CONTEXT_STRING)?;
 
