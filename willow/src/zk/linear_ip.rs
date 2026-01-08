@@ -36,6 +36,7 @@ pub struct LinearInnerProductParameters {
     F: RistrettoPoint,
     F_: RistrettoPoint,
     G: Vec<RistrettoPoint>,
+    seed: Vec<u8>,
 }
 
 pub fn inner_product(a: &[Scalar], b: &[Scalar]) -> Scalar {
@@ -59,6 +60,7 @@ fn common_setup(length: usize, parameter_seed: &[u8]) -> LinearInnerProductParam
                 )
             })
             .collect(),
+        seed: parameter_seed.to_vec(),
     }
 }
 
@@ -67,11 +69,9 @@ fn append_params_to_transcript(
     params: &LinearInnerProductParameters,
 ) {
     transcript.append_u64(b"n", params.n as u64);
-    for G_i in &params.G {
-        transcript.append_message(b"G_i", G_i.compress().as_bytes());
-    }
-    transcript.append_message(b"F", params.F.compress().as_bytes());
-    transcript.append_message(b"F_", params.F_.compress().as_bytes());
+    // We append the seed not the resulting params themselves because appending that many params
+    // more than doubles the run time of both prove and verify.
+    transcript.append_message(b"seed", &params.seed);
 }
 
 fn validate_and_append_point(
