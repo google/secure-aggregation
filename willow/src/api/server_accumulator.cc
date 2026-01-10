@@ -60,10 +60,16 @@ WillowShellServerAccumulator::CreateFromSerializedState(
 
 absl::Status WillowShellServerAccumulator::ProcessClientMessages(
     willow::ClientMessageList client_messages) {
+  auto serialized_client_messages = client_messages.SerializeAsString();
   client_messages.Clear();
+  return ProcessClientMessages(std::move(serialized_client_messages));
+}
+
+absl::Status WillowShellServerAccumulator::ProcessClientMessages(
+    std::string serialized_client_messages) {
   std::unique_ptr<std::string> status_message;
   int status_code = accumulator_->ProcessClientMessages(
-      std::make_unique<std::string>(client_messages.SerializeAsString()),
+      std::make_unique<std::string>(std::move(serialized_client_messages)),
       &status_message);
   if (status_code != 0) {
     return absl::Status(absl::StatusCode(status_code), *status_message);

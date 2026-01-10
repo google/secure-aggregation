@@ -50,6 +50,10 @@ class WillowShellServerAccumulator {
   // an error is logged and processing continues.
   absl::Status ProcessClientMessages(willow::ClientMessageList client_messages);
 
+  // Processes a list of client messages, given as a serialized
+  // ClientMessageList proto.
+  absl::Status ProcessClientMessages(std::string serialized_client_messages);
+
   // Merges the state of `other` into the current accumulator.
   absl::Status Merge(std::unique_ptr<WillowShellServerAccumulator> other);
 
