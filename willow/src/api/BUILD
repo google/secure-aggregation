@@ -69,13 +69,17 @@ cc_test(
     name = "server_accumulator_test",
     srcs = ["server_accumulator_test.cc"],
     deps = [
+        ":client_cc",
         ":server_accumulator",
         ":server_accumulator_cxx",  # fixdeps: keep
         "@googletest//:gtest_main",
         "@abseil-cpp//absl/status",
         "@abseil-cpp//absl/status:statusor",
+        "//shell_wrapper:status_matchers",
         "//willow/proto/willow:aggregation_config_cc_proto",
         "//willow/proto/willow:server_accumulator_cc_proto",
+        "//willow/src/input_encoding:codec",
+        "//willow/src/testing_utils:shell_testing_decryptor_cc",
     ],
 )
 
@@ -94,6 +98,7 @@ rust_library(
         ":aggregation_config",
         "@protobuf//rust:protobuf",
         "@cxx.rs//:cxx",
+        "@crate_index//:rangemap",
         "//shell_wrapper:status",
         "//willow/proto/willow:aggregation_config_rust_proto",
         "//willow/proto/willow:server_accumulator_rust_proto",

@@ -24,10 +24,22 @@ option java_outer_classname = "ServerAccumulatorProto";
 
 message ServerAccumulatorState {
   ServerStateProto server_state = 1;
-  VerifierStateProto verifier_state = 2;
   AggregationConfigProto aggregation_config = 3;
+  // We have one verifier state per range of nonces processed by this
+  // accumulator. States gat merged when adjacent ranges are processed.
+  repeated VerifierStateProto verifier_states = 2;
+  // The ranges of nonces processed by this accumulator. In the same order as
+  // the corresponding verifier states.
+  repeated NonceRange processed_nonce_ranges = 4;
 }
 
-message ClientMessageList {
+message ClientMessageRange {
   repeated ClientMessage client_messages = 1;
+  NonceRange nonce_range = 2;
+}
+
+// A range of nonces. Used to group client messages by nonce.
+message NonceRange {
+  bytes start = 1;  // Inclusive.
+  bytes end = 2;    // Exclusive.
 }

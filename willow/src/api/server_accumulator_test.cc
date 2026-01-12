@@ -19,17 +19,24 @@
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "gmock/gmock.h"
 #include "gtest/gtest.h"
+#include "shell_wrapper/status_matchers.h"
 #include "willow/proto/willow/aggregation_config.pb.h"
 #include "willow/proto/willow/server_accumulator.pb.h"
+#include "willow/src/api/client.h"
+#include "willow/src/input_encoding/codec.h"
+#include "willow/src/testing_utils/shell_testing_decryptor.h"
 
 namespace secure_aggregation {
 namespace {
 
+using ::secure_aggregation::secagg_internal::StatusIs;
 using ::secure_aggregation::willow::AggregationConfigProto;
-using ::secure_aggregation::willow::ClientMessageList;
+using ::secure_aggregation::willow::ClientMessageRange;
 using ::secure_aggregation::willow::ServerAccumulatorState;
 using ::secure_aggregation::willow::VectorConfig;
+using ::testing::HasSubstr;
 
 AggregationConfigProto CreateValidConfig() {
   AggregationConfigProto config;
@@ -52,7 +59,8 @@ TEST(WillowShellServerAccumulatorTest, CreateSucceedsWithValidConfig) {
 
 TEST(WillowShellServerAccumulatorTest, ToSerializedStateHasCorrectConfig) {
   AggregationConfigProto config = CreateValidConfig();
-  auto accumulator = *WillowShellServerAccumulator::Create(config);
+  SECAGG_ASSERT_OK_AND_ASSIGN(auto accumulator,
+                              WillowShellServerAccumulator::Create(config));
   auto serialized_state_or = accumulator->ToSerializedState();
   ASSERT_TRUE(serialized_state_or.ok()) << serialized_state_or.status();
 
@@ -67,7 +75,8 @@ TEST(WillowShellServerAccumulatorTest, ToSerializedStateHasCorrectConfig) {
 
 TEST(WillowShellServerAccumulatorTest, CreateFromSerializedStateRoundTrip) {
   AggregationConfigProto config = CreateValidConfig();
-  auto accumulator = *WillowShellServerAccumulator::Create(config);
+  SECAGG_ASSERT_OK_AND_ASSIGN(auto accumulator,
+                              WillowShellServerAccumulator::Create(config));
   auto serialized_state_or = accumulator->ToSerializedState();
   ASSERT_TRUE(serialized_state_or.ok()) << serialized_state_or.status();
 
@@ -84,8 +93,14 @@ TEST(WillowShellServerAccumulatorTest, CreateFromSerializedStateRoundTrip) {
 
 TEST(WillowShellServerAccumulatorTest, MergeSucceedsWithEmptyAccumulators) {
   AggregationConfigProto config = CreateValidConfig();
-  auto accumulator1 = *WillowShellServerAccumulator::Create(config);
-  auto accumulator2 = *WillowShellServerAccumulator::Create(config);
+  SECAGG_ASSERT_OK_AND_ASSIGN(auto accumulator1,
+                              WillowShellServerAccumulator::Create(config));
+  SECAGG_ASSERT_OK_AND_ASSIGN(auto accumulator2,
+                              WillowShellServerAccumulator::Create(config));
+  SECAGG_ASSERT_OK_AND_ASSIGN(auto serialized_1,
+                              accumulator1->ToSerializedState());
+  SECAGG_ASSERT_OK_AND_ASSIGN(auto serialized_2,
+                              accumulator2->ToSerializedState());
 
   EXPECT_TRUE(accumulator1->Merge(std::move(accumulator2)).ok());
 }
@@ -93,8 +108,354 @@ TEST(WillowShellServerAccumulatorTest, MergeSucceedsWithEmptyAccumulators) {
 TEST(WillowShellServerAccumulatorTest, ProcessClientMessagesWithEmptyList) {
   AggregationConfigProto config = CreateValidConfig();
   auto accumulator = *WillowShellServerAccumulator::Create(config);
-  ClientMessageList empty_list;
+  ClientMessageRange empty_list;
   EXPECT_TRUE(accumulator->ProcessClientMessages(empty_list).ok());
+}
+
+class ServerAccumulatorTest : public ::testing::Test {
+ protected:
+  void SetUp() override {
+    config_ = CreateValidConfig();
+    SECAGG_ASSERT_OK_AND_ASSIGN(accumulator_,
+                                WillowShellServerAccumulator::Create(config_));
+    SECAGG_ASSERT_OK_AND_ASSIGN(decryptor_,
+                                ShellTestingDecryptor::Create(config_));
+    SECAGG_ASSERT_OK_AND_ASSIGN(public_key_, decryptor_->GeneratePublicKey());
+  }
+
+  AggregationConfigProto config_;
+  std::unique_ptr<WillowShellServerAccumulator> accumulator_;
+  std::unique_ptr<ShellTestingDecryptor> decryptor_;
+  willow::ShellAhePublicKey public_key_;
+};
+
+TEST_F(ServerAccumulatorTest, ProcessSingleMessageSucceeds) {
+  willow::EncodedData encoded_data = {
+      {"test_vector", {0, 1, 2, 3, 4, 5, 6, 7, 8, 9}}};
+  std::string nonce = "nonce1";
+  SECAGG_ASSERT_OK_AND_ASSIGN(
+      auto client_message,
+      GenerateClientContribution(config_, encoded_data, public_key_, nonce));
+  ClientMessageRange messages;
+  *messages.add_client_messages() = client_message;
+  messages.mutable_nonce_range()->set_start("nonce1");
+  messages.mutable_nonce_range()->set_end("nonce2");
+
+  EXPECT_TRUE(accumulator_->ProcessClientMessages(messages).ok());
+  SECAGG_ASSERT_OK_AND_ASSIGN(auto serialized_state,
+                              accumulator_->ToSerializedState());
+  ServerAccumulatorState state;
+  ASSERT_TRUE(state.ParseFromString(serialized_state));
+  ASSERT_EQ(state.processed_nonce_ranges_size(), 1);
+  EXPECT_EQ(state.processed_nonce_ranges_size(), state.verifier_states_size());
+  EXPECT_EQ(state.processed_nonce_ranges(0).start(), "nonce1");
+  EXPECT_EQ(state.processed_nonce_ranges(0).end(), "nonce2");
+}
+
+TEST_F(ServerAccumulatorTest, ProcessMessageOutOfRangeFails) {
+  willow::EncodedData encoded_data = {
+      {"test_vector", {0, 1, 2, 3, 4, 5, 6, 7, 8, 9}}};
+  std::string nonce = "nonce1";
+  SECAGG_ASSERT_OK_AND_ASSIGN(
+      auto client_message,
+      GenerateClientContribution(config_, encoded_data, public_key_, nonce));
+  ClientMessageRange messages;
+  *messages.add_client_messages() = client_message;
+  messages.mutable_nonce_range()->set_start("nonce2");
+  messages.mutable_nonce_range()->set_end("nonce3");
+
+  EXPECT_THAT(accumulator_->ProcessClientMessages(messages),
+              StatusIs(absl::StatusCode::kInvalidArgument,
+                       HasSubstr("outside of range")));
+}
+
+TEST_F(ServerAccumulatorTest, ProcessRangeTwiceFails) {
+  willow::EncodedData encoded_data = {
+      {"test_vector", {0, 1, 2, 3, 4, 5, 6, 7, 8, 9}}};
+  std::string nonce = "nonce1";
+  SECAGG_ASSERT_OK_AND_ASSIGN(
+      auto client_message,
+      GenerateClientContribution(config_, encoded_data, public_key_, nonce));
+  ClientMessageRange messages;
+  *messages.add_client_messages() = client_message;
+  messages.mutable_nonce_range()->set_start("nonce1");
+  messages.mutable_nonce_range()->set_end("nonce2");
+
+  EXPECT_TRUE(accumulator_->ProcessClientMessages(messages).ok());
+  EXPECT_THAT(accumulator_->ProcessClientMessages(messages),
+              StatusIs(absl::StatusCode::kInvalidArgument,
+                       HasSubstr("already processed")));
+}
+
+TEST_F(ServerAccumulatorTest, ProcessMultipleMessagesSucceeds) {
+  willow::EncodedData encoded_data = {
+      {"test_vector", {0, 1, 2, 3, 4, 5, 6, 7, 8, 9}}};
+  SECAGG_ASSERT_OK_AND_ASSIGN(
+      auto client_message1,
+      GenerateClientContribution(config_, encoded_data, public_key_, "nonce1"));
+  SECAGG_ASSERT_OK_AND_ASSIGN(
+      auto client_message2,
+      GenerateClientContribution(config_, encoded_data, public_key_, "nonce2"));
+
+  ClientMessageRange messages;
+  *messages.add_client_messages() = client_message1;
+  *messages.add_client_messages() = client_message2;
+  messages.mutable_nonce_range()->set_start("nonce1");
+  messages.mutable_nonce_range()->set_end("nonce3");
+
+  EXPECT_TRUE(accumulator_->ProcessClientMessages(messages).ok());
+
+  SECAGG_ASSERT_OK_AND_ASSIGN(auto serialized_state,
+                              accumulator_->ToSerializedState());
+  ServerAccumulatorState state;
+  ASSERT_TRUE(state.ParseFromString(serialized_state));
+  ASSERT_EQ(state.processed_nonce_ranges_size(), 1);
+  EXPECT_EQ(state.processed_nonce_ranges_size(), state.verifier_states_size());
+  EXPECT_EQ(state.processed_nonce_ranges(0).start(), "nonce1");
+  EXPECT_EQ(state.processed_nonce_ranges(0).end(), "nonce3");
+}
+
+TEST_F(ServerAccumulatorTest, ProcessClientMessagesIgnoresInvalidMessage) {
+  willow::EncodedData encoded_data = {
+      {"test_vector", {0, 1, 2, 3, 4, 5, 6, 7, 8, 9}}};
+  SECAGG_ASSERT_OK_AND_ASSIGN(
+      auto client_message1,
+      GenerateClientContribution(config_, encoded_data, public_key_, "nonce1"));
+
+  // Use a valid message for nonce1, but change nonce to nonce2.
+  // This invalidates the proof which is bound to the nonce.
+  auto client_message2 = client_message1;
+  client_message2.set_nonce("nonce2");
+
+  ClientMessageRange messages;
+  *messages.add_client_messages() = client_message1;
+  *messages.add_client_messages() = client_message2;
+  messages.mutable_nonce_range()->set_start("nonce1");
+  messages.mutable_nonce_range()->set_end("nonce3");
+
+  EXPECT_TRUE(accumulator_->ProcessClientMessages(messages).ok());
+
+  // We expect the range to be processed despite the invalid message.
+  SECAGG_ASSERT_OK_AND_ASSIGN(auto serialized_state,
+                              accumulator_->ToSerializedState());
+  ServerAccumulatorState state;
+  ASSERT_TRUE(state.ParseFromString(serialized_state));
+  ASSERT_EQ(state.processed_nonce_ranges_size(), 1);
+  EXPECT_EQ(state.processed_nonce_ranges_size(), state.verifier_states_size());
+  EXPECT_EQ(state.processed_nonce_ranges(0).start(), "nonce1");
+  EXPECT_EQ(state.processed_nonce_ranges(0).end(), "nonce3");
+}
+
+TEST_F(ServerAccumulatorTest, ProcessClientMessagesMergesAdjacentRanges) {
+  willow::EncodedData encoded_data = {
+      {"test_vector", {0, 1, 2, 3, 4, 5, 6, 7, 8, 9}}};
+
+  SECAGG_ASSERT_OK_AND_ASSIGN(
+      auto client_message1,
+      GenerateClientContribution(config_, encoded_data, public_key_, "nonce1"));
+  ClientMessageRange messages1;
+  *messages1.add_client_messages() = client_message1;
+  messages1.mutable_nonce_range()->set_start("nonce1");
+  messages1.mutable_nonce_range()->set_end("nonce2");
+  EXPECT_TRUE(accumulator_->ProcessClientMessages(messages1).ok());
+
+  SECAGG_ASSERT_OK_AND_ASSIGN(
+      auto client_message2,
+      GenerateClientContribution(config_, encoded_data, public_key_, "nonce2"));
+  ClientMessageRange messages2;
+  *messages2.add_client_messages() = client_message2;
+  messages2.mutable_nonce_range()->set_start("nonce2");
+  messages2.mutable_nonce_range()->set_end("nonce3");
+  EXPECT_TRUE(accumulator_->ProcessClientMessages(messages2).ok());
+
+  SECAGG_ASSERT_OK_AND_ASSIGN(auto serialized_state,
+                              accumulator_->ToSerializedState());
+  ServerAccumulatorState state;
+  ASSERT_TRUE(state.ParseFromString(serialized_state));
+  ASSERT_EQ(state.processed_nonce_ranges_size(), 1);
+  EXPECT_EQ(state.processed_nonce_ranges_size(), state.verifier_states_size());
+  EXPECT_EQ(state.processed_nonce_ranges(0).start(), "nonce1");
+  EXPECT_EQ(state.processed_nonce_ranges(0).end(), "nonce3");
+}
+
+TEST_F(ServerAccumulatorTest, MergeSucceedsWithNonEmptyAccumulators) {
+  SECAGG_ASSERT_OK_AND_ASSIGN(auto accumulator2,
+                              WillowShellServerAccumulator::Create(config_));
+  willow::EncodedData encoded_data = {
+      {"test_vector", {0, 1, 2, 3, 4, 5, 6, 7, 8, 9}}};
+
+  SECAGG_ASSERT_OK_AND_ASSIGN(
+      auto client_message1,
+      GenerateClientContribution(config_, encoded_data, public_key_, "nonce1"));
+  ClientMessageRange messages1;
+  *messages1.add_client_messages() = client_message1;
+  messages1.mutable_nonce_range()->set_start("nonce1");
+  messages1.mutable_nonce_range()->set_end("nonce2");
+  EXPECT_TRUE(accumulator_->ProcessClientMessages(messages1).ok());
+
+  SECAGG_ASSERT_OK_AND_ASSIGN(
+      auto client_message2,
+      GenerateClientContribution(config_, encoded_data, public_key_, "nonce3"));
+  ClientMessageRange messages2;
+  *messages2.add_client_messages() = client_message2;
+  messages2.mutable_nonce_range()->set_start("nonce3");
+  messages2.mutable_nonce_range()->set_end("nonce4");
+  EXPECT_TRUE(accumulator2->ProcessClientMessages(messages2).ok());
+
+  EXPECT_TRUE(accumulator_->Merge(std::move(accumulator2)).ok());
+
+  SECAGG_ASSERT_OK_AND_ASSIGN(auto serialized_state,
+                              accumulator_->ToSerializedState());
+  ServerAccumulatorState state;
+  ASSERT_TRUE(state.ParseFromString(serialized_state));
+  ASSERT_EQ(state.processed_nonce_ranges_size(), 2);
+  EXPECT_EQ(state.processed_nonce_ranges_size(), state.verifier_states_size());
+  // Ranges should be sorted.
+  EXPECT_EQ(state.processed_nonce_ranges(0).start(), "nonce1");
+  EXPECT_EQ(state.processed_nonce_ranges(0).end(), "nonce2");
+  EXPECT_EQ(state.processed_nonce_ranges(1).start(), "nonce3");
+  EXPECT_EQ(state.processed_nonce_ranges(1).end(), "nonce4");
+}
+
+TEST_F(ServerAccumulatorTest, MergeSucceedsAndMergesAdjacentRanges) {
+  SECAGG_ASSERT_OK_AND_ASSIGN(auto accumulator2,
+                              WillowShellServerAccumulator::Create(config_));
+  willow::EncodedData encoded_data = {
+      {"test_vector", {0, 1, 2, 3, 4, 5, 6, 7, 8, 9}}};
+
+  SECAGG_ASSERT_OK_AND_ASSIGN(
+      auto client_message1,
+      GenerateClientContribution(config_, encoded_data, public_key_, "nonce1"));
+  ClientMessageRange messages1;
+  *messages1.add_client_messages() = client_message1;
+  messages1.mutable_nonce_range()->set_start("nonce1");
+  messages1.mutable_nonce_range()->set_end("nonce2");
+  EXPECT_TRUE(accumulator_->ProcessClientMessages(messages1).ok());
+
+  SECAGG_ASSERT_OK_AND_ASSIGN(
+      auto client_message2,
+      GenerateClientContribution(config_, encoded_data, public_key_, "nonce2"));
+  ClientMessageRange messages2;
+  *messages2.add_client_messages() = client_message2;
+  messages2.mutable_nonce_range()->set_start("nonce2");
+  messages2.mutable_nonce_range()->set_end("nonce3");
+  EXPECT_TRUE(accumulator2->ProcessClientMessages(messages2).ok());
+
+  EXPECT_TRUE(accumulator_->Merge(std::move(accumulator2)).ok());
+
+  SECAGG_ASSERT_OK_AND_ASSIGN(auto serialized_state,
+                              accumulator_->ToSerializedState());
+  ServerAccumulatorState state;
+  ASSERT_TRUE(state.ParseFromString(serialized_state));
+  ASSERT_EQ(state.processed_nonce_ranges_size(), 1);
+  EXPECT_EQ(state.processed_nonce_ranges_size(), state.verifier_states_size());
+  EXPECT_EQ(state.processed_nonce_ranges(0).start(), "nonce1");
+  EXPECT_EQ(state.processed_nonce_ranges(0).end(), "nonce3");
+}
+
+TEST_F(ServerAccumulatorTest, MergeFailsWithOverlappingRanges) {
+  SECAGG_ASSERT_OK_AND_ASSIGN(auto accumulator2,
+                              WillowShellServerAccumulator::Create(config_));
+  willow::EncodedData encoded_data = {
+      {"test_vector", {0, 1, 2, 3, 4, 5, 6, 7, 8, 9}}};
+
+  SECAGG_ASSERT_OK_AND_ASSIGN(
+      auto client_message1,
+      GenerateClientContribution(config_, encoded_data, public_key_, "nonce1"));
+  ClientMessageRange messages1;
+  *messages1.add_client_messages() = client_message1;
+  messages1.mutable_nonce_range()->set_start("nonce1");
+  messages1.mutable_nonce_range()->set_end("nonce3");
+  EXPECT_TRUE(accumulator_->ProcessClientMessages(messages1).ok());
+
+  SECAGG_ASSERT_OK_AND_ASSIGN(
+      auto client_message2,
+      GenerateClientContribution(config_, encoded_data, public_key_, "nonce2"));
+  ClientMessageRange messages2;
+  *messages2.add_client_messages() = client_message2;
+  messages2.mutable_nonce_range()->set_start("nonce2");
+  messages2.mutable_nonce_range()->set_end("nonce4");
+  EXPECT_TRUE(accumulator2->ProcessClientMessages(messages2).ok());
+
+  EXPECT_THAT(
+      accumulator_->Merge(std::move(accumulator2)),
+      StatusIs(absl::StatusCode::kInvalidArgument, HasSubstr("overlaps")));
+}
+
+TEST_F(ServerAccumulatorTest, MergeFailsWithConfigMismatch) {
+  AggregationConfigProto config2 = config_;
+  config2.set_session_id("other_session");
+  SECAGG_ASSERT_OK_AND_ASSIGN(auto accumulator2,
+                              WillowShellServerAccumulator::Create(config2));
+
+  EXPECT_THAT(accumulator_->Merge(std::move(accumulator2)),
+              StatusIs(absl::StatusCode::kInvalidArgument,
+                       HasSubstr("config mismatch")));
+}
+
+TEST_F(ServerAccumulatorTest, ProcessClientMessagesMergesThreeRanges) {
+  willow::EncodedData encoded_data = {
+      {"test_vector", {0, 1, 2, 3, 4, 5, 6, 7, 8, 9}}};
+
+  // Create messages for 3 ranges.
+  SECAGG_ASSERT_OK_AND_ASSIGN(
+      auto client_message1,
+      GenerateClientContribution(config_, encoded_data, public_key_, "nonce1"));
+  ClientMessageRange messages1;
+  *messages1.add_client_messages() = client_message1;
+  messages1.mutable_nonce_range()->set_start("nonce1");
+  messages1.mutable_nonce_range()->set_end("nonce2");
+
+  SECAGG_ASSERT_OK_AND_ASSIGN(
+      auto client_message2,
+      GenerateClientContribution(config_, encoded_data, public_key_, "nonce2"));
+  ClientMessageRange messages2;
+  *messages2.add_client_messages() = client_message2;
+  messages2.mutable_nonce_range()->set_start("nonce2");
+  messages2.mutable_nonce_range()->set_end("nonce3");
+
+  SECAGG_ASSERT_OK_AND_ASSIGN(
+      auto client_message3,
+      GenerateClientContribution(config_, encoded_data, public_key_, "nonce3"));
+  ClientMessageRange messages3;
+  *messages3.add_client_messages() = client_message3;
+  messages3.mutable_nonce_range()->set_start("nonce3");
+  messages3.mutable_nonce_range()->set_end("nonce4");
+
+  // Process range 1 and 3.
+  EXPECT_TRUE(accumulator_->ProcessClientMessages(messages1).ok());
+  EXPECT_TRUE(accumulator_->ProcessClientMessages(messages3).ok());
+
+  // Check state: should have 2 ranges.
+  {
+    SECAGG_ASSERT_OK_AND_ASSIGN(auto serialized_state,
+                                accumulator_->ToSerializedState());
+    ServerAccumulatorState state;
+    ASSERT_TRUE(state.ParseFromString(serialized_state));
+    ASSERT_EQ(state.processed_nonce_ranges_size(), 2);
+    EXPECT_EQ(state.processed_nonce_ranges_size(),
+              state.verifier_states_size());
+    EXPECT_EQ(state.processed_nonce_ranges(0).start(), "nonce1");
+    EXPECT_EQ(state.processed_nonce_ranges(0).end(), "nonce2");
+    EXPECT_EQ(state.processed_nonce_ranges(1).start(), "nonce3");
+    EXPECT_EQ(state.processed_nonce_ranges(1).end(), "nonce4");
+  }
+
+  // Process range 2 (filling the gap).
+  EXPECT_TRUE(accumulator_->ProcessClientMessages(messages2).ok());
+
+  // Check state: should have 1 range [nonce1, nonce4).
+  {
+    SECAGG_ASSERT_OK_AND_ASSIGN(auto serialized_state,
+                                accumulator_->ToSerializedState());
+    ServerAccumulatorState state;
+    ASSERT_TRUE(state.ParseFromString(serialized_state));
+    ASSERT_EQ(state.processed_nonce_ranges_size(), 1);
+    EXPECT_EQ(state.processed_nonce_ranges_size(),
+              state.verifier_states_size());
+    EXPECT_EQ(state.processed_nonce_ranges(0).start(), "nonce1");
+    EXPECT_EQ(state.processed_nonce_ranges(0).end(), "nonce4");
+  }
 }
 
 }  // namespace

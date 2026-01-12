@@ -48,7 +48,8 @@ class WillowShellServerAccumulator {
 
   // Processes a list of client messages. If an invalid message is encountered,
   // an error is logged and processing continues.
-  absl::Status ProcessClientMessages(willow::ClientMessageList client_messages);
+  absl::Status ProcessClientMessages(
+      willow::ClientMessageRange client_messages);
 
   // Processes a list of client messages, given as a serialized
   // ClientMessageList proto.

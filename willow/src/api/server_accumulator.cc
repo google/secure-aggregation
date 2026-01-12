@@ -59,7 +59,7 @@ WillowShellServerAccumulator::CreateFromSerializedState(
 }
 
 absl::Status WillowShellServerAccumulator::ProcessClientMessages(
-    willow::ClientMessageList client_messages) {
+    willow::ClientMessageRange client_messages) {
   auto serialized_client_messages = client_messages.SerializeAsString();
   client_messages.Clear();
   return ProcessClientMessages(std::move(serialized_client_messages));

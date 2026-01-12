@@ -107,5 +107,9 @@ crate.spec(
     package = "sha3",
     version = "0.10.8",
 )
+crate.spec(
+    package = "rangemap",
+    version = "1.7.1",
+)
 crate.from_specs()
 use_repo(crate, crate_index = "crates")
