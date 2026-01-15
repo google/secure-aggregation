@@ -356,6 +356,44 @@ impl EncryptVerify for ShellVahe {
         }
         Ok(())
     }
+
+    fn verify_multiple_encrypts(
+        &self,
+        items: &[(&Self::EncryptionProof, &Self::PartialDecCiphertext, &[u8])],
+    ) -> Status {
+        if items.is_empty() {
+            return Ok(());
+        }
+
+        let (transcript, proof_seed) = self.get_transcript_and_proof_seed(b"encryption")?;
+        let verifier = RlweRelationVerifier::new(proof_seed.as_bytes(), self.ahe.num_coeffs());
+
+        for &(proof, ciphertext, nonce) in items {
+            let num_polynomials = ciphertext.0.len();
+            if proof.0.len() != num_polynomials {
+                return Err(status::permission_denied(
+                    "Invalid proof. Proof length does not match number of polynomials in ciphertext.",
+                ));
+            }
+
+            let mut transcript = transcript.clone();
+            transcript.append_message(b"nonce:", nonce);
+            for i in 0..num_polynomials {
+                let statement = RlweRelationProofStatement {
+                    n: self.ahe.num_coeffs(),
+                    context: self.ahe.rns_context(),
+                    a: &self.ahe.public_key_component_a()?,
+                    flip_a: false,
+                    c: &ciphertext.0[i],
+                    q: self.q,
+                    bound_r: 1,
+                    bound_e: 16,
+                };
+                verifier.verify(&statement, &proof.0[i], &mut transcript)?;
+            }
+        }
+        Ok(())
+    }
 }
 
 impl VerifiablePartialDec for ShellVahe {
@@ -623,6 +661,77 @@ mod test {
         let (ciphertext, mut proof) = vahe.verifiable_encrypt(&plaintext, &pk, NONCE, &mut prng)?;
         proof.0[0] = key_gen_proof.0;
         let status = vahe.verify_encrypt(&proof, &ciphertext.component_a, NONCE);
+        assert!(status.is_err());
+        Ok(())
+    }
+
+    #[gtest]
+    fn test_verify_multiple_encrypts() -> googletest::Result<()> {
+        let vahe = ShellVahe::new(make_ahe_config(), CONTEXT_STRING)?;
+        let seed = SingleThreadHkdfPrng::generate_seed()?;
+        let mut prng = SingleThreadHkdfPrng::create(&seed)?;
+        let (_, pk_share, _) = vahe.verifiable_key_gen(&mut prng)?;
+        let pk = vahe.aggregate_public_key_shares(&[pk_share])?;
+        let plaintext = vec![47i64; 8];
+        let nonce1 = b"nonce1";
+        let nonce2 = b"nonce2";
+
+        let (ciphertext1, proof1) = vahe.verifiable_encrypt(&plaintext, &pk, nonce1, &mut prng)?;
+        let (ciphertext2, proof2) = vahe.verifiable_encrypt(&plaintext, &pk, nonce2, &mut prng)?;
+
+        let items = vec![
+            (&proof1, &ciphertext1.component_a, nonce1 as &[u8]),
+            (&proof2, &ciphertext2.component_a, nonce2 as &[u8]),
+        ];
+
+        vahe.verify_multiple_encrypts(&items)?;
+        Ok(())
+    }
+
+    #[gtest]
+    fn test_verify_multiple_encrypts_with_bad_nonce() -> googletest::Result<()> {
+        let vahe = ShellVahe::new(make_ahe_config(), CONTEXT_STRING)?;
+        let seed = SingleThreadHkdfPrng::generate_seed()?;
+        let mut prng = SingleThreadHkdfPrng::create(&seed)?;
+        let (_, pk_share, _) = vahe.verifiable_key_gen(&mut prng)?;
+        let pk = vahe.aggregate_public_key_shares(&[pk_share])?;
+        let plaintext = vec![47i64; 8];
+        let nonce1 = b"nonce1";
+        let nonce2 = b"nonce2";
+
+        let (ciphertext1, proof1) = vahe.verifiable_encrypt(&plaintext, &pk, nonce1, &mut prng)?;
+        let (ciphertext2, proof2) = vahe.verifiable_encrypt(&plaintext, &pk, nonce2, &mut prng)?;
+
+        let items = vec![
+            (&proof1, &ciphertext1.component_a, nonce1 as &[u8]),
+            (&proof2, &ciphertext2.component_a, b"bad_nonce" as &[u8]),
+        ];
+
+        let status = vahe.verify_multiple_encrypts(&items);
+        assert!(status.is_err());
+        Ok(())
+    }
+
+    #[gtest]
+    fn test_verify_multiple_encrypts_with_bad_proof() -> googletest::Result<()> {
+        let vahe = ShellVahe::new(make_ahe_config(), CONTEXT_STRING)?;
+        let seed = SingleThreadHkdfPrng::generate_seed()?;
+        let mut prng = SingleThreadHkdfPrng::create(&seed)?;
+        let (_, pk_share, _) = vahe.verifiable_key_gen(&mut prng)?;
+        let pk = vahe.aggregate_public_key_shares(&[pk_share])?;
+        let plaintext = vec![47i64; 8];
+        let nonce1 = b"nonce1";
+        let nonce2 = b"nonce2";
+
+        let (ciphertext1, proof1) = vahe.verifiable_encrypt(&plaintext, &pk, nonce1, &mut prng)?;
+        let (ciphertext2, _) = vahe.verifiable_encrypt(&plaintext, &pk, nonce2, &mut prng)?;
+
+        let items = vec![
+            (&proof1, &ciphertext1.component_a, nonce1 as &[u8]),
+            (&proof1, &ciphertext2.component_a, nonce2 as &[u8]), // Using proof1 for ciphertext2
+        ];
+
+        let status = vahe.verify_multiple_encrypts(&items);
         assert!(status.is_err());
         Ok(())
     }

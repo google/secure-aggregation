@@ -68,6 +68,14 @@ pub trait EncryptVerify: VaheBase {
         ciphertext: &Self::PartialDecCiphertext,
         nonce: &[u8],
     ) -> Status;
+
+    /// Verify that multiple encryption proofs are valid.
+    ///
+    /// `nonce` must match the nonce passed to `verifiable_encrypt` for each proof.
+    fn verify_multiple_encrypts(
+        &self,
+        items: &[(&Self::EncryptionProof, &Self::PartialDecCiphertext, &[u8])],
+    ) -> Status;
 }
 
 pub trait VerifiablePartialDec: VaheBase {
