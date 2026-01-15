@@ -112,12 +112,12 @@ pub struct ServerAccumulator {
 
 impl ServerAccumulator {
     fn new(aggregation_config: AggregationConfig) -> Result<Self, StatusError> {
-        let context_string = aggregation_config.session_id.as_bytes();
+        let context_string = aggregation_config.compute_context_bytes()?;
         let vahe_config = create_shell_ahe_config(aggregation_config.max_number_of_decryptors)?;
         let kahe_config = create_shell_kahe_config(&aggregation_config)?;
-        let server_kahe = ShellKahe::new(kahe_config, context_string)?;
-        let server_vahe = ShellVahe::new(vahe_config.clone(), context_string)?;
-        let verifier_vahe = ShellVahe::new(vahe_config, context_string)?;
+        let server_kahe = ShellKahe::new(kahe_config, &context_string)?;
+        let server_vahe = ShellVahe::new(vahe_config.clone(), &context_string)?;
+        let verifier_vahe = ShellVahe::new(vahe_config, &context_string)?;
         let server = WillowV1Server { kahe: server_kahe, vahe: server_vahe };
         let verifier = WillowV1Verifier { vahe: verifier_vahe };
         Ok(Self {

@@ -458,5 +458,31 @@ TEST_F(ServerAccumulatorTest, ProcessClientMessagesMergesThreeRanges) {
   }
 }
 
+TEST_F(ServerAccumulatorTest, VerifiesCorrectly) {
+  willow::EncodedData encoded_data = {
+      {"test_vector", {0, 1, 2, 3, 4, 5, 6, 7, 8, 9}}};
+  std::string nonce = "nonce1";
+  SECAGG_ASSERT_OK_AND_ASSIGN(
+      auto client_message,
+      GenerateClientContribution(config_, encoded_data, public_key_, nonce));
+  ClientMessageRange messages;
+  *messages.add_client_messages() = client_message;
+  messages.mutable_nonce_range()->set_start("nonce1");
+  messages.mutable_nonce_range()->set_end("nonce2");
+
+  SECAGG_ASSERT_OK(accumulator_->ProcessClientMessages(messages));
+
+  SECAGG_ASSERT_OK_AND_ASSIGN(auto serialized_state,
+                              accumulator_->ToSerializedState());
+  ServerAccumulatorState state;
+  ASSERT_TRUE(state.ParseFromString(serialized_state));
+
+  ASSERT_EQ(state.verifier_states_size(), 1);
+  willow::VerifierStateProto verifier_state = state.verifier_states(0);
+
+  // Proto should be non-empty, i.e. the underlying Rust Option should be Some.
+  ASSERT_GE(verifier_state.ByteSizeLong(), 1);
+}
+
 }  // namespace
 }  // namespace secure_aggregation
