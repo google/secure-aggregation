@@ -61,7 +61,9 @@ cc_library(
         "@abseil-cpp//absl/strings",
         "@cxx.rs//:core",
         "//willow/proto/willow:aggregation_config_cc_proto",
+        "//willow/proto/willow:messages_cc_proto",
         "//willow/proto/willow:server_accumulator_cc_proto",
+        "//willow/src/input_encoding:codec",
     ],
 )
 
@@ -77,6 +79,7 @@ cc_test(
         "@abseil-cpp//absl/status:statusor",
         "//shell_wrapper:status_matchers",
         "//willow/proto/willow:aggregation_config_cc_proto",
+        "//willow/proto/willow:messages_cc_proto",
         "//willow/proto/willow:server_accumulator_cc_proto",
         "//willow/src/input_encoding:codec",
         "//willow/src/testing_utils:shell_testing_decryptor_cc",
@@ -102,6 +105,7 @@ rust_library(
         "//shell_wrapper:status",
         "//willow/proto/willow:aggregation_config_rust_proto",
         "//willow/proto/willow:server_accumulator_rust_proto",
+        "//willow/proto/willow:messages_rust_proto",
         "//willow/src/shell:kahe_shell",
         "//willow/src/shell:parameters_shell",
         "//willow/src/shell:vahe_shell",

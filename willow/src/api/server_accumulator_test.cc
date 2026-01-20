@@ -15,6 +15,7 @@
 #include "willow/src/api/server_accumulator.h"
 
 #include <memory>
+#include <string>
 #include <utility>
 
 #include "absl/status/status.h"
@@ -23,19 +24,17 @@
 #include "gtest/gtest.h"
 #include "shell_wrapper/status_matchers.h"
 #include "willow/proto/willow/aggregation_config.pb.h"
+#include "willow/proto/willow/messages.pb.h"
 #include "willow/proto/willow/server_accumulator.pb.h"
 #include "willow/src/api/client.h"
 #include "willow/src/input_encoding/codec.h"
 #include "willow/src/testing_utils/shell_testing_decryptor.h"
 
 namespace secure_aggregation {
+namespace willow {
 namespace {
 
 using ::secure_aggregation::secagg_internal::StatusIs;
-using ::secure_aggregation::willow::AggregationConfigProto;
-using ::secure_aggregation::willow::ClientMessageRange;
-using ::secure_aggregation::willow::ServerAccumulatorState;
-using ::secure_aggregation::willow::VectorConfig;
 using ::testing::HasSubstr;
 
 AggregationConfigProto CreateValidConfig() {
@@ -50,17 +49,17 @@ AggregationConfigProto CreateValidConfig() {
   return config;
 }
 
-TEST(WillowShellServerAccumulatorTest, CreateSucceedsWithValidConfig) {
+TEST(BasicServerAccumulatorTest, CreateSucceedsWithValidConfig) {
   AggregationConfigProto config = CreateValidConfig();
-  auto accumulator_or = WillowShellServerAccumulator::Create(config);
+  auto accumulator_or = ServerAccumulator::Create(config);
   ASSERT_TRUE(accumulator_or.ok()) << accumulator_or.status();
   EXPECT_NE(*accumulator_or, nullptr);
 }
 
-TEST(WillowShellServerAccumulatorTest, ToSerializedStateHasCorrectConfig) {
+TEST(BasicServerAccumulatorTest, ToSerializedStateHasCorrectConfig) {
   AggregationConfigProto config = CreateValidConfig();
   SECAGG_ASSERT_OK_AND_ASSIGN(auto accumulator,
-                              WillowShellServerAccumulator::Create(config));
+                              ServerAccumulator::Create(config));
   auto serialized_state_or = accumulator->ToSerializedState();
   ASSERT_TRUE(serialized_state_or.ok()) << serialized_state_or.status();
 
@@ -73,16 +72,15 @@ TEST(WillowShellServerAccumulatorTest, ToSerializedStateHasCorrectConfig) {
             config.max_number_of_clients());
 }
 
-TEST(WillowShellServerAccumulatorTest, CreateFromSerializedStateRoundTrip) {
+TEST(BasicServerAccumulatorTest, CreateFromSerializedStateRoundTrip) {
   AggregationConfigProto config = CreateValidConfig();
   SECAGG_ASSERT_OK_AND_ASSIGN(auto accumulator,
-                              WillowShellServerAccumulator::Create(config));
+                              ServerAccumulator::Create(config));
   auto serialized_state_or = accumulator->ToSerializedState();
   ASSERT_TRUE(serialized_state_or.ok()) << serialized_state_or.status();
 
   auto accumulator2_or =
-      WillowShellServerAccumulator::CreateFromSerializedState(
-          *serialized_state_or);
+      ServerAccumulator::CreateFromSerializedState(*serialized_state_or);
   ASSERT_TRUE(accumulator2_or.ok()) << accumulator2_or.status();
   EXPECT_NE(*accumulator2_or, nullptr);
 
@@ -91,12 +89,12 @@ TEST(WillowShellServerAccumulatorTest, CreateFromSerializedStateRoundTrip) {
   EXPECT_EQ(*serialized_state_or, *serialized_state2_or);
 }
 
-TEST(WillowShellServerAccumulatorTest, MergeSucceedsWithEmptyAccumulators) {
+TEST(BasicServerAccumulatorTest, MergeSucceedsWithEmptyAccumulators) {
   AggregationConfigProto config = CreateValidConfig();
   SECAGG_ASSERT_OK_AND_ASSIGN(auto accumulator1,
-                              WillowShellServerAccumulator::Create(config));
+                              ServerAccumulator::Create(config));
   SECAGG_ASSERT_OK_AND_ASSIGN(auto accumulator2,
-                              WillowShellServerAccumulator::Create(config));
+                              ServerAccumulator::Create(config));
   SECAGG_ASSERT_OK_AND_ASSIGN(auto serialized_1,
                               accumulator1->ToSerializedState());
   SECAGG_ASSERT_OK_AND_ASSIGN(auto serialized_2,
@@ -105,9 +103,9 @@ TEST(WillowShellServerAccumulatorTest, MergeSucceedsWithEmptyAccumulators) {
   EXPECT_TRUE(accumulator1->Merge(std::move(accumulator2)).ok());
 }
 
-TEST(WillowShellServerAccumulatorTest, ProcessClientMessagesWithEmptyList) {
+TEST(BasicServerAccumulatorTest, ProcessClientMessagesWithEmptyList) {
   AggregationConfigProto config = CreateValidConfig();
-  auto accumulator = *WillowShellServerAccumulator::Create(config);
+  auto accumulator = *ServerAccumulator::Create(config);
   ClientMessageRange empty_list;
   EXPECT_TRUE(accumulator->ProcessClientMessages(empty_list).ok());
 }
@@ -117,15 +115,15 @@ class ServerAccumulatorTest : public ::testing::Test {
   void SetUp() override {
     config_ = CreateValidConfig();
     SECAGG_ASSERT_OK_AND_ASSIGN(accumulator_,
-                                WillowShellServerAccumulator::Create(config_));
-    SECAGG_ASSERT_OK_AND_ASSIGN(decryptor_,
-                                ShellTestingDecryptor::Create(config_));
+                                ServerAccumulator::Create(config_));
+    SECAGG_ASSERT_OK_AND_ASSIGN(
+        decryptor_, testing::ShellTestingDecryptor::Create(config_));
     SECAGG_ASSERT_OK_AND_ASSIGN(public_key_, decryptor_->GeneratePublicKey());
   }
 
   AggregationConfigProto config_;
-  std::unique_ptr<WillowShellServerAccumulator> accumulator_;
-  std::unique_ptr<ShellTestingDecryptor> decryptor_;
+  std::unique_ptr<ServerAccumulator> accumulator_;
+  std::unique_ptr<testing::ShellTestingDecryptor> decryptor_;
   willow::ShellAhePublicKey public_key_;
 };
 
@@ -280,7 +278,7 @@ TEST_F(ServerAccumulatorTest, ProcessClientMessagesMergesAdjacentRanges) {
 
 TEST_F(ServerAccumulatorTest, MergeSucceedsWithNonEmptyAccumulators) {
   SECAGG_ASSERT_OK_AND_ASSIGN(auto accumulator2,
-                              WillowShellServerAccumulator::Create(config_));
+                              ServerAccumulator::Create(config_));
   willow::EncodedData encoded_data = {
       {"test_vector", {0, 1, 2, 3, 4, 5, 6, 7, 8, 9}}};
 
@@ -319,7 +317,7 @@ TEST_F(ServerAccumulatorTest, MergeSucceedsWithNonEmptyAccumulators) {
 
 TEST_F(ServerAccumulatorTest, MergeSucceedsAndMergesAdjacentRanges) {
   SECAGG_ASSERT_OK_AND_ASSIGN(auto accumulator2,
-                              WillowShellServerAccumulator::Create(config_));
+                              ServerAccumulator::Create(config_));
   willow::EncodedData encoded_data = {
       {"test_vector", {0, 1, 2, 3, 4, 5, 6, 7, 8, 9}}};
 
@@ -355,7 +353,7 @@ TEST_F(ServerAccumulatorTest, MergeSucceedsAndMergesAdjacentRanges) {
 
 TEST_F(ServerAccumulatorTest, MergeFailsWithOverlappingRanges) {
   SECAGG_ASSERT_OK_AND_ASSIGN(auto accumulator2,
-                              WillowShellServerAccumulator::Create(config_));
+                              ServerAccumulator::Create(config_));
   willow::EncodedData encoded_data = {
       {"test_vector", {0, 1, 2, 3, 4, 5, 6, 7, 8, 9}}};
 
@@ -386,7 +384,7 @@ TEST_F(ServerAccumulatorTest, MergeFailsWithConfigMismatch) {
   AggregationConfigProto config2 = config_;
   config2.set_session_id("other_session");
   SECAGG_ASSERT_OK_AND_ASSIGN(auto accumulator2,
-                              WillowShellServerAccumulator::Create(config2));
+                              ServerAccumulator::Create(config2));
 
   EXPECT_THAT(accumulator_->Merge(std::move(accumulator2)),
               StatusIs(absl::StatusCode::kInvalidArgument,
@@ -484,5 +482,66 @@ TEST_F(ServerAccumulatorTest, VerifiesCorrectly) {
   ASSERT_GE(verifier_state.ByteSizeLong(), 1);
 }
 
+TEST_F(ServerAccumulatorTest, FinalizeSucceeds) {
+  willow::EncodedData encoded_data = {
+      {"test_vector", {0, 1, 2, 3, 4, 5, 6, 7, 8, 9}}};
+  std::string nonce = "nonce1";
+  SECAGG_ASSERT_OK_AND_ASSIGN(
+      auto client_message,
+      GenerateClientContribution(config_, encoded_data, public_key_, nonce));
+  ClientMessageRange messages;
+  *messages.add_client_messages() = client_message;
+  messages.mutable_nonce_range()->set_start("nonce1");
+  messages.mutable_nonce_range()->set_end("nonce2");
+
+  SECAGG_ASSERT_OK(accumulator_->ProcessClientMessages(messages));
+
+  SECAGG_ASSERT_OK_AND_ASSIGN(auto finalized_accumulator_result,
+                              std::move(*accumulator_).Finalize());
+}
+
+TEST_F(ServerAccumulatorTest, FinalizeFailsWithEmptyAccumulator) {
+  EXPECT_THAT(std::move(*accumulator_).Finalize(),
+              StatusIs(absl::StatusCode::kFailedPrecondition,
+                       HasSubstr("Must handle at least one client message")));
+}
+
+TEST_F(ServerAccumulatorTest, FinalizesAndDecryptsCorrectly) {
+  willow::EncodedData encoded_data = {
+      {"test_vector", {0, 1, 2, 3, 4, 5, 6, 7, 8, 9}}};
+  std::string nonce = "nonce1";
+  SECAGG_ASSERT_OK_AND_ASSIGN(
+      auto client_message,
+      GenerateClientContribution(config_, encoded_data, public_key_, nonce));
+  ClientMessageRange messages;
+  *messages.add_client_messages() = client_message;
+  messages.mutable_nonce_range()->set_start("nonce1");
+  messages.mutable_nonce_range()->set_end("nonce2");
+
+  SECAGG_ASSERT_OK(accumulator_->ProcessClientMessages(messages));
+
+  SECAGG_ASSERT_OK_AND_ASSIGN(auto finalized_result,
+                              std::move(*accumulator_).Finalize());
+
+  std::string partial_decryption_request =
+      finalized_result.decryption_request();
+
+  SECAGG_ASSERT_OK_AND_ASSIGN(
+      std::string partial_decryption_response,
+      decryptor_->GenerateSerializedPartialDecryptionResponse(
+          partial_decryption_request));
+
+  SECAGG_ASSERT_OK_AND_ASSIGN(
+      auto final_result_decryptor,
+      FinalResultDecryptor::CreateFromSerialized(
+          finalized_result.final_result_decryptor_state()));
+
+  SECAGG_ASSERT_OK_AND_ASSIGN(auto result, final_result_decryptor->Decrypt(
+                                               partial_decryption_response));
+
+  EXPECT_EQ(result, encoded_data);
+}
+
 }  // namespace
+}  // namespace willow
 }  // namespace secure_aggregation

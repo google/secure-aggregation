@@ -17,13 +17,16 @@ use aggregation_config_rust_proto::AggregationConfigProto;
 use ahe_traits::AheBase;
 use kahe_shell::ShellKahe;
 use kahe_traits::KaheBase;
-use messages::ClientMessage;
-use parameters_shell::{create_shell_ahe_config, create_shell_kahe_config};
+use messages::{ClientMessage, PartialDecryptionResponse};
+use messages_rust_proto::PartialDecryptionResponse as PartialDecryptionResponseProto;
+use parameters_shell::create_shell_configs;
 use proto_serialization_traits::{FromProto, ToProto};
 use protobuf::prelude::*;
 use protobuf::AsView;
 use rangemap::RangeSet;
-use server_accumulator_rust_proto::{ClientMessageRange, NonceRange, ServerAccumulatorState};
+use server_accumulator_rust_proto::{
+    ClientMessageRange, FinalResultDecryptorState, NonceRange, ServerAccumulatorState,
+};
 use server_traits::SecureAggregationServer;
 use status::StatusError;
 use std::collections::BTreeMap;
@@ -33,10 +36,16 @@ use verifier_traits::SecureAggregationVerifier;
 use willow_v1_server::{ServerState, WillowV1Server};
 use willow_v1_verifier::{VerifierState, WillowV1Verifier};
 
-#[cxx::bridge]
+#[cxx::bridge(namespace = "secure_aggregation")]
 pub mod ffi {
+
+    // CXX requires shared structs to be defined in the same module.
+    struct EncodedDataEntry {
+        key: String,
+        values: Vec<u64>,
+    }
+
     extern "Rust" {
-        #[namespace = "secure_aggregation"]
         type ServerAccumulator;
 
         // We cannot use status::FfiStatus because CXX requires shared structs to be defined in the
@@ -45,7 +54,6 @@ pub mod ffi {
         //   ensuring that output pointers are correctly wrapped by a rust::Box, and that pointer
         //   arguments are not null.
 
-        #[namespace = "secure_aggregation"]
         #[cxx_name = "NewServerAccumulatorFromSerializedConfig"]
         unsafe fn new_server_accumulator_from_serialized_config(
             serialized_aggregation_config: UniquePtr<CxxString>,
@@ -53,7 +61,6 @@ pub mod ffi {
             out_status_message: *mut UniquePtr<CxxString>,
         ) -> i32;
 
-        #[namespace = "secure_aggregation"]
         #[cxx_name = "NewServerAccumulatorFromSerializedState"]
         unsafe fn new_server_accumulator_from_serialized_state(
             serialized_server_accumulator: UniquePtr<CxxString>,
@@ -61,7 +68,6 @@ pub mod ffi {
             out_status_message: *mut UniquePtr<CxxString>,
         ) -> i32;
 
-        #[namespace = "secure_aggregation"]
         #[cxx_name = "ProcessClientMessages"]
         unsafe fn process_client_messages_ffi(
             self: &mut ServerAccumulator,
@@ -69,7 +75,6 @@ pub mod ffi {
             out_status_message: *mut UniquePtr<CxxString>,
         ) -> i32;
 
-        #[namespace = "secure_aggregation"]
         #[cxx_name = "ToSerializedState"]
         unsafe fn to_serialized_state_ffi(
             self: &ServerAccumulator,
@@ -77,7 +82,6 @@ pub mod ffi {
             out_status_message: *mut UniquePtr<CxxString>,
         ) -> i32;
 
-        #[namespace = "secure_aggregation"]
         #[cxx_name = "Merge"]
         unsafe fn merge_ffi(
             self: &mut ServerAccumulator,
@@ -85,9 +89,38 @@ pub mod ffi {
             out_status_message: *mut UniquePtr<CxxString>,
         ) -> i32;
 
-        #[namespace = "secure_aggregation"]
         #[cxx_name = "IntoBox"]
         unsafe fn into_box(ptr: *mut ServerAccumulator) -> Box<ServerAccumulator>;
+
+        type FinalResultDecryptor;
+
+        #[cxx_name = "FinalizeServerAccumulator"]
+        unsafe fn finalize_accumulator_ffi(
+            accumulator: Box<ServerAccumulator>,
+            out_decryption_request: *mut Vec<u8>,
+            out_final_result_decryptor_state: *mut Vec<u8>,
+            out_status_message: *mut UniquePtr<CxxString>,
+        ) -> i32;
+
+        #[cxx_name = "Decrypt"]
+        unsafe fn decrypt_ffi(
+            self: &mut FinalResultDecryptor,
+            serialized_partial_decryption_response: UniquePtr<CxxString>,
+            out: *mut Vec<EncodedDataEntry>,
+            out_status_message: *mut UniquePtr<CxxString>,
+        ) -> i32;
+
+        #[cxx_name = "CreateFinalResultDecryptorFromSerialized"]
+        unsafe fn create_final_result_decryptor_from_serialized(
+            serialized_final_result_decryptor_state: UniquePtr<CxxString>,
+            out: *mut *mut FinalResultDecryptor,
+            out_status_message: *mut UniquePtr<CxxString>,
+        ) -> i32;
+
+        #[cxx_name = "FinalResultDecryptorIntoBox"]
+        unsafe fn final_result_decryptor_into_box(
+            ptr: *mut FinalResultDecryptor,
+        ) -> Box<FinalResultDecryptor>;
     }
 }
 
@@ -113,8 +146,7 @@ pub struct ServerAccumulator {
 impl ServerAccumulator {
     fn new(aggregation_config: AggregationConfig) -> Result<Self, StatusError> {
         let context_string = aggregation_config.compute_context_bytes()?;
-        let vahe_config = create_shell_ahe_config(aggregation_config.max_number_of_decryptors)?;
-        let kahe_config = create_shell_kahe_config(&aggregation_config)?;
+        let (kahe_config, vahe_config) = create_shell_configs(&aggregation_config)?;
         let server_kahe = ShellKahe::new(kahe_config, &context_string)?;
         let server_vahe = ShellVahe::new(vahe_config.clone(), &context_string)?;
         let verifier_vahe = ShellVahe::new(vahe_config, &context_string)?;
@@ -535,4 +567,170 @@ unsafe fn new_server_accumulator_from_serialized_state(
 //   - `ptr` must have been created by Box::into_raw or one of the functions in this module.
 unsafe fn into_box(ptr: *mut ServerAccumulator) -> Box<ServerAccumulator> {
     Box::from_raw(ptr)
+}
+
+/// SAFETY:
+///   - `ptr` must have been created by Box::into_raw or one of the functions in this module.
+unsafe fn final_result_decryptor_into_box(
+    ptr: *mut FinalResultDecryptor,
+) -> Box<FinalResultDecryptor> {
+    Box::from_raw(ptr)
+}
+
+/// Final result decryptor.
+pub struct FinalResultDecryptor {
+    /// Contains aggregated KAHE ciphertexts and aggregated AHE recover ciphertexts (ct_0)
+    ///
+    /// NOTE: We technically only need client_sum, not decryptor_public_key_shares or
+    /// partial_decryption_sum, but because of the monolithic SecureAggregationServer trait
+    /// (b/476137863) we need a complete ServerState to call the decryption functions.
+    server_state: ServerState<ShellKahe, ShellVahe>,
+
+    /// Server used to hold the necessary KAHE and AHE contexts.
+    server: WillowV1Server<ShellKahe, ShellVahe>,
+}
+
+fn finalize_accumulator(accumulator: ServerAccumulator) -> Result<(Vec<u8>, Vec<u8>), StatusError> {
+    // Consume and merge all verifier states into one.
+    let mut final_verifier_state = VerifierState::default();
+    let verifier_states = accumulator.verifier_states;
+    for (_, verifier_state) in verifier_states.into_iter() {
+        final_verifier_state =
+            accumulator.verifier.merge_states(verifier_state, final_verifier_state)?;
+    }
+
+    // Use merged verifier to prepare partial decryption request (i.e. sum of AHE ct_1 ciphertexts)
+    // The decryption service expects a serialized PartialDecryptionRequestProto
+    // (https://github.com/google-parfait/trusted-computations-platform/blob/60804e2364ad789cf0682d19d5957dba5d076553/apps/willow/decryptor/actor/src/actor.rs#L290)
+    let partial_decryption_request =
+        accumulator.verifier.create_partial_decryption_request(final_verifier_state)?;
+    let serialized_decryption_request = partial_decryption_request
+        .to_proto(&accumulator.server)?
+        .serialize()
+        .map_err(|e| status::internal(format!("Failed to serialize: {}", e)))?;
+
+    // Extract the server state (i.e. sum of KAHE ciphertexts and sum of AHE ct_0 ciphertexts).
+    let server_state_proto = accumulator.server_state.to_proto(&accumulator.server)?;
+    let aggregation_config_proto = accumulator.aggregation_config.to_proto(())?;
+    let final_result_decryptor_state = proto!(FinalResultDecryptorState {
+        server_state: server_state_proto,
+        aggregation_config: aggregation_config_proto,
+    });
+    let serialized_final_result_decryptor_state = final_result_decryptor_state
+        .serialize()
+        .map_err(|e| status::internal(format!("Failed to serialize: {}", e)))?;
+
+    Ok((serialized_decryption_request, serialized_final_result_decryptor_state))
+}
+
+/// SAFETY: all pointer arguments (`out_decryption_request`, `out_final_result_decryptor_state`,
+/// `out_status_message`) must be valid for writes.
+pub unsafe fn finalize_accumulator_ffi(
+    accumulator: Box<ServerAccumulator>,
+    out_decryption_request: *mut Vec<u8>,
+    out_final_result_decryptor_state: *mut Vec<u8>,
+    out_status_message: *mut cxx::UniquePtr<cxx::CxxString>,
+) -> i32 {
+    match finalize_accumulator(*accumulator) {
+        Ok((decryption_request, final_result_decryptor_state)) => {
+            *out_decryption_request = decryption_request;
+            *out_final_result_decryptor_state = final_result_decryptor_state;
+            0
+        }
+        Err(status_error) => {
+            let ffi_status: FfiStatus = status_error.into();
+            *out_status_message = ffi_status.message;
+            ffi_status.code
+        }
+    }
+}
+
+impl FinalResultDecryptor {
+    fn new_from_serialized(
+        serialized_proto: cxx::UniquePtr<cxx::CxxString>,
+    ) -> Result<Self, StatusError> {
+        // Parse aggregation config and server state protos.
+        let final_result_decryptor_state_proto =
+            FinalResultDecryptorState::parse(serialized_proto.as_bytes()).map_err(|e| {
+                status::internal(format!("Failed to parse FinalResultDecryptorState: {}", e))
+            })?;
+        let server_state_proto = final_result_decryptor_state_proto.server_state();
+        let aggregation_config_proto = final_result_decryptor_state_proto.aggregation_config();
+
+        // Build server that holds the necessary KAHE and AHE contexts, and recover server state.
+        let aggregation_config = AggregationConfig::from_proto(aggregation_config_proto, ())?;
+        let context_string = aggregation_config.compute_context_bytes()?;
+        let (kahe_config, vahe_config) = create_shell_configs(&aggregation_config)?;
+        let kahe = ShellKahe::new(kahe_config, &context_string)?;
+        let vahe = ShellVahe::new(vahe_config, &context_string)?;
+        let server = WillowV1Server { kahe, vahe };
+        let server_state = ServerState::from_proto(server_state_proto, &server)?;
+
+        Ok(FinalResultDecryptor { server_state, server })
+    }
+
+    fn decrypt(
+        &mut self,
+        serialized_partial_decryption_response: cxx::UniquePtr<cxx::CxxString>,
+    ) -> Result<Vec<ffi::EncodedDataEntry>, StatusError> {
+        let pd_proto = PartialDecryptionResponseProto::parse(
+            serialized_partial_decryption_response.as_bytes(),
+        )
+        .map_err(|e| {
+            status::internal(format!("Failed to parse PartialDecryptionResponse: {}", e))
+        })?;
+        let pd = PartialDecryptionResponse::from_proto(pd_proto, &self.server)?;
+
+        // Receives a single partial decryption response and attempts to recover right away.
+        // This only works in the single-decryptor case.
+        self.server.handle_partial_decryption(pd, &mut self.server_state)?;
+        let aggregation_result = self.server.recover_aggregation_result(&self.server_state)?;
+
+        // `aggregation_result` is a Kahe::Plaintext, i.e. HashMap<String, Vec<u64>>
+        // Flatten hashmap for FFI like in shell_testing_decryptor.rs
+        let entries = aggregation_result
+            .into_iter()
+            .map(|(key, values)| ffi::EncodedDataEntry { key, values })
+            .collect();
+        Ok(entries)
+    }
+
+    /// SAFETY: `out` and `out_status_message` must not be null.
+    pub unsafe fn decrypt_ffi(
+        &mut self,
+        serialized_partial_decryption_response: cxx::UniquePtr<cxx::CxxString>,
+        out: *mut Vec<ffi::EncodedDataEntry>,
+        out_status_message: *mut cxx::UniquePtr<cxx::CxxString>,
+    ) -> i32 {
+        match self.decrypt(serialized_partial_decryption_response) {
+            Ok(result) => {
+                *out = result;
+                0
+            }
+            Err(status_error) => {
+                let ffi_status: FfiStatus = status_error.into();
+                *out_status_message = ffi_status.message;
+                ffi_status.code
+            }
+        }
+    }
+}
+
+/// SAFETY: all pointer arguments (`out`, `out_status_message`) must be valid for writes.
+unsafe fn create_final_result_decryptor_from_serialized(
+    serialized_proto: cxx::UniquePtr<cxx::CxxString>,
+    out: *mut *mut FinalResultDecryptor,
+    out_status_message: *mut cxx::UniquePtr<cxx::CxxString>,
+) -> i32 {
+    match FinalResultDecryptor::new_from_serialized(serialized_proto) {
+        Ok(final_result_decryptor) => {
+            *out = Box::into_raw(Box::new(final_result_decryptor));
+            0
+        }
+        Err(status_error) => {
+            let ffi_status: FfiStatus = status_error.into();
+            *out_status_message = ffi_status.message;
+            ffi_status.code
+        }
+    }
 }

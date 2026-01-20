@@ -35,7 +35,9 @@ namespace willow {
 namespace {
 
 using secure_aggregation::secagg_internal::StatusIs;
+using secure_aggregation::testing::ShellTestingDecryptor;
 using ::testing::ElementsAre;
+using ::testing::ElementsAreArray;
 using ::testing::Pair;
 using ::testing::UnorderedElementsAre;
 
@@ -108,7 +110,7 @@ TEST(WillowShellClientTest, InitializeAndGenerateContribution) {
   for (const auto& [name, values] : encoded_data) {
     EXPECT_TRUE(decrypted_encoded_data.contains(name));
     const auto& decrypted_values = decrypted_encoded_data[name];
-    EXPECT_THAT(decrypted_values, testing::ElementsAreArray(values));
+    EXPECT_THAT(decrypted_values, ElementsAreArray(values));
   }
 
   // Decode decrypted data.

@@ -23,14 +23,13 @@
 #include "willow/proto/willow/aggregation_config.pb.h"
 
 namespace secure_aggregation {
-namespace willow {
 namespace {
 
 using secure_aggregation::secagg_internal::StatusIs;
 using ::testing::NotNull;
 
 TEST(ShellTestingDecryptorTest, CreateAndGenerateKey) {
-  AggregationConfigProto config;
+  willow::AggregationConfigProto config;
   config.set_max_number_of_decryptors(1);
   config.set_max_number_of_clients(1);
   config.set_max_decryptor_dropouts(0);
@@ -40,7 +39,7 @@ TEST(ShellTestingDecryptorTest, CreateAndGenerateKey) {
   vector_config.set_bound(100);
 
   SECAGG_ASSERT_OK_AND_ASSIGN(auto decryptor,
-                              ShellTestingDecryptor::Create(config));
+                              testing::ShellTestingDecryptor::Create(config));
   ASSERT_THAT(decryptor, NotNull());
 
   SECAGG_ASSERT_OK_AND_ASSIGN(const auto& pk, decryptor->GeneratePublicKey());
@@ -49,17 +48,16 @@ TEST(ShellTestingDecryptorTest, CreateAndGenerateKey) {
 
 TEST(ShellTestingDecryptorTest, InvalidAggregationConfig) {
   // Aggregation config with no metrics.
-  AggregationConfigProto config_proto;
+  willow::AggregationConfigProto config_proto;
   config_proto.set_max_number_of_decryptors(1);
   config_proto.set_max_decryptor_dropouts(0);
   config_proto.set_max_number_of_clients(2);
   config_proto.set_session_id("test");
 
   // Initialization fails because aggregation config is invalid.
-  EXPECT_THAT(ShellTestingDecryptor::Create(config_proto),
+  EXPECT_THAT(testing::ShellTestingDecryptor::Create(config_proto),
               StatusIs(absl::StatusCode::kInvalidArgument));
 }
 
 }  // namespace
-}  // namespace willow
 }  // namespace secure_aggregation

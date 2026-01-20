@@ -26,7 +26,7 @@ message ServerAccumulatorState {
   ServerStateProto server_state = 1;
   AggregationConfigProto aggregation_config = 3;
   // We have one verifier state per range of nonces processed by this
-  // accumulator. States gat merged when adjacent ranges are processed.
+  // accumulator. States get merged when adjacent ranges are processed.
   repeated VerifierStateProto verifier_states = 2;
   // The ranges of nonces processed by this accumulator. In the same order as
   // the corresponding verifier states.
@@ -42,4 +42,10 @@ message ClientMessageRange {
 message NonceRange {
   bytes start = 1;  // Inclusive.
   bytes end = 2;    // Exclusive.
+}
+
+// State for creating a FinalResultDecryptor.
+message FinalResultDecryptorState {
+  ServerStateProto server_state = 1;
+  AggregationConfigProto aggregation_config = 2;
 }

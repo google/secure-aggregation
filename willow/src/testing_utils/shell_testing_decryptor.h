@@ -18,6 +18,7 @@
 #define SECURE_AGGREGATION_WILLOW_SRC_TESTING_UTILS_SHELL_TESTING_DECRYPTOR_H_
 
 #include <memory>
+#include <string>
 
 #include "absl/status/statusor.h"
 #include "willow/proto/shell/ciphertexts.pb.h"
@@ -27,10 +28,11 @@
 #include "willow/src/testing_utils/shell_testing_decryptor.rs.h"
 
 namespace secure_aggregation {
+namespace testing {
 
 // Basic implementation of a single decryptor that uses Shell operations
-// directly. Useful for testing Shell clients, by checking that encrypted
-// messages can be decrypted properly.
+// directly. Useful for testing Shell clients or servers, by checking that
+// encrypted messages can be decrypted properly.
 class ShellTestingDecryptor {
  public:
   // Creates a new ShellTestingDecryptor from the given config, hashing the
@@ -47,6 +49,11 @@ class ShellTestingDecryptor {
   absl::StatusOr<willow::EncodedData> Decrypt(
       const willow::ClientMessage& message);
 
+  // Computes partial decryption for a request containing an AHE partial
+  // decryption ciphertext.
+  absl::StatusOr<std::string> GenerateSerializedPartialDecryptionResponse(
+      std::string serialized_partial_decryption_request);
+
  private:
   explicit ShellTestingDecryptor(
       rust::Box<ShellTestingDecryptorRust> decryptor);
@@ -54,6 +61,7 @@ class ShellTestingDecryptor {
   rust::Box<ShellTestingDecryptorRust> decryptor_;
 };
 
+}  // namespace testing
 }  // namespace secure_aggregation
 
 #endif  // SECURE_AGGREGATION_WILLOW_SRC_TESTING_UTILS_SHELL_TESTING_DECRYPTOR_H_

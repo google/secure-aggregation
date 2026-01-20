@@ -58,7 +58,7 @@ pub struct ServerState<Kahe: KaheBase, Vahe: VaheBase + PartialDec> {
     decryptor_public_key_shares: HashMap<String, DecryptorPublicKeyShare<Vahe>>,
     /// Running sum of client ciphertexts.
     client_sum: Option<(Kahe::Ciphertext, Vahe::RecoverCiphertext)>,
-    /// Running sum of partial decryption ciphertexts.
+    /// Running sum of partial decryptions.
     partial_decryption_sum: Option<Vahe::PartialDecryption>,
 }
 

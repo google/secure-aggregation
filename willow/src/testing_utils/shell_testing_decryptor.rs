@@ -21,8 +21,9 @@ use ahe_traits::{AheBase, AheKeygen, PartialDec};
 use kahe_shell::Ciphertext as KaheCiphertext;
 use kahe_shell::ShellKahe;
 use kahe_traits::{KaheBase, KaheDecrypt, TrySecretKeyFrom};
-use messages::ClientMessage;
+use messages::{ClientMessage, PartialDecryptionRequest, PartialDecryptionResponse};
 use messages_rust_proto::ClientMessage as ClientMessageProto;
+use messages_rust_proto::PartialDecryptionRequest as PartialDecryptionRequestProto;
 use parameters_shell::create_shell_configs;
 use prng_traits::SecurePrng;
 use proto_serialization_traits::{FromProto, ToProto};
@@ -32,7 +33,7 @@ use status::ffi::FfiStatus;
 use status::{StatusError, StatusErrorCode};
 use vahe_shell::ShellVahe;
 use vahe_traits::Recover;
-use vahe_traits::VaheBase;
+use vahe_traits::{HasVahe, VaheBase};
 
 /// Basic implementation of a single decryptor that uses Shell operations directly. Useful for
 /// testing Shell clients, by checking that encrypted messages can be decrypted properly. Comes with
@@ -42,6 +43,13 @@ pub struct ShellTestingDecryptor {
     vahe: ShellVahe,
     prng: SingleThreadHkdfPrng,
     secret_key: Option<<ShellVahe as AheBase>::SecretKeyShare>,
+}
+
+impl HasVahe for ShellTestingDecryptor {
+    type Vahe = ShellVahe;
+    fn vahe(&self) -> &Self::Vahe {
+        &self.vahe
+    }
 }
 
 impl ShellTestingDecryptor {
@@ -76,7 +84,7 @@ impl ShellTestingDecryptor {
         &mut self,
         client_message: &ClientMessage<ShellKahe, ShellVahe>,
     ) -> Result<<ShellKahe as KaheBase>::Plaintext, StatusError> {
-        let decryption_request =
+        let partial_dec_ciphertext =
             self.vahe.get_partial_dec_ciphertext(&client_message.ahe_ciphertext)?;
         let rest_of_ciphertext =
             self.vahe.get_recover_ciphertext(&client_message.ahe_ciphertext)?;
@@ -87,7 +95,7 @@ impl ShellTestingDecryptor {
             )),
             Some(sk_share) => {
                 let partial_decryption =
-                    self.vahe.partial_decrypt(&decryption_request, sk_share, &mut self.prng)?;
+                    self.vahe.partial_decrypt(&partial_dec_ciphertext, sk_share, &mut self.prng)?;
                 let decrypted_kahe_key =
                     self.vahe.recover(&partial_decryption, &rest_of_ciphertext, None)?;
                 let decrypted_kahe_key = self.kahe.try_secret_key_from(decrypted_kahe_key)?;
@@ -151,7 +159,7 @@ impl ShellTestingDecryptor {
         Ok(entries)
     }
 
-    /// SAFETY: `out` and `out_status_message` must not be null.
+    /// SAFETY: all pointer arguments (`out`, `out_status_message`) must be valid for writes.
     unsafe fn decrypt_ffi(
         &mut self,
         contribution: &[u8],
@@ -170,6 +178,62 @@ impl ShellTestingDecryptor {
             }
         }
     }
+
+    fn generate_partial_decryption_response(
+        &mut self,
+        request: &PartialDecryptionRequest<ShellVahe>,
+    ) -> Result<PartialDecryptionResponse<ShellVahe>, StatusError> {
+        match &self.secret_key {
+            None => Err(StatusError::new_with_current_location(
+                StatusErrorCode::InvalidArgument,
+                "No secret key available",
+            )),
+            Some(sk_share) => {
+                let partial_decryption = self.vahe.partial_decrypt(
+                    &request.partial_dec_ciphertext,
+                    sk_share,
+                    &mut self.prng,
+                )?;
+                Ok(PartialDecryptionResponse { partial_decryption })
+            }
+        }
+    }
+
+    fn generate_partial_decryption_response_serialized(
+        &mut self,
+        request: &[u8],
+    ) -> Result<Vec<u8>, StatusError> {
+        let request_proto = PartialDecryptionRequestProto::parse(request).map_err(|e| {
+            status::internal(format!("Failed to parse PartialDecryptionRequestProto: {}", e))
+        })?;
+        let request = PartialDecryptionRequest::from_proto(request_proto, self)?;
+        let response = self.generate_partial_decryption_response(&request)?;
+        response
+            .to_proto(self)
+            .map_err(|e| status::internal(format!("ToProto error: {}", e)))?
+            .serialize()
+            .map_err(|e| status::internal(format!("Serialize error: {}", e)))
+    }
+
+    /// SAFETY: all pointer arguments (`out`, `out_status_message`) must be valid for writes.
+    unsafe fn generate_partial_decryption_response_ffi(
+        &mut self,
+        request: &[u8],
+        out: *mut Vec<u8>,
+        out_status_message: *mut cxx::UniquePtr<cxx::CxxString>,
+    ) -> i32 {
+        match self.generate_partial_decryption_response_serialized(request) {
+            Ok(response) => {
+                *out = response;
+                0
+            }
+            Err(status_error) => {
+                let ffi_status: FfiStatus = status_error.into();
+                *out_status_message = ffi_status.message;
+                ffi_status.code
+            }
+        }
+    }
 }
 
 /// CXX bridge to call ShellTestingDecryptor from C++, using serialized protos as input and output.
@@ -177,7 +241,7 @@ impl ShellTestingDecryptor {
 /// SAFETY: all functions in this module are only called from the wrapping C++ library,
 ///   ensuring that output pointers are correctly wrapped by a rust::Box, and that pointer
 ///   arguments are not null.
-#[cxx::bridge(namespace = "secure_aggregation")]
+#[cxx::bridge(namespace = "secure_aggregation::testing")]
 pub mod ffi {
     struct EncodedDataEntry {
         key: String,
@@ -206,6 +270,14 @@ pub mod ffi {
             self: &mut ShellTestingDecryptor,
             contribution: &[u8],
             out: *mut Vec<EncodedDataEntry>,
+            out_status_message: *mut UniquePtr<CxxString>,
+        ) -> i32;
+
+        #[rust_name = "generate_partial_decryption_response_ffi"]
+        unsafe fn generate_partial_decryption_response(
+            self: &mut ShellTestingDecryptor,
+            request: &[u8],
+            out: *mut Vec<u8>,
             out_status_message: *mut UniquePtr<CxxString>,
         ) -> i32;
 

@@ -65,3 +65,15 @@ message VerifierStateProto {
   bytes nonce_lower_bound = 2;
   bytes nonce_upper_bound = 3;
 }
+
+// Result of finalizing an accumulator.
+message FinalizedAccumulatorResult {
+  // Serialized decryption request to include in a DecryptRequest to be sent to
+  // the decryptor service.
+  bytes decryption_request = 1;
+
+  // Serialized state for creating a final result decryptor, which will handle
+  // the response from the decryptor service and produce a plaintext aggregation
+  // result.
+  bytes final_result_decryptor_state = 2;
+}
