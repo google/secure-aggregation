@@ -58,7 +58,6 @@ cc_library(
         "@abseil-cpp//absl/memory",
         "@abseil-cpp//absl/status",
         "@abseil-cpp//absl/status:statusor",
-        "@abseil-cpp//absl/strings",
         "@cxx.rs//:core",
         "//willow/proto/willow:aggregation_config_cc_proto",
         "//willow/proto/willow:messages_cc_proto",

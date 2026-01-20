@@ -61,8 +61,8 @@ ServerAccumulator::CreateFromSerializedState(std::string serialized_state) {
 
 absl::Status ServerAccumulator::ProcessClientMessages(
     ClientMessageRange client_messages) {
-  auto serialized_client_messages = client_messages.SerializeAsString();
-  client_messages.Clear();
+  auto serialized_client_messages =
+      std::move(client_messages).SerializeAsString();
   return ProcessClientMessages(std::move(serialized_client_messages));
 }
 
