@@ -15,13 +15,15 @@
 use client_traits::SecureAggregationClient;
 use kahe_traits::{HasKahe, KaheBase, KaheEncrypt, KaheKeygen, TrySecretKeyInto};
 use messages::{ClientMessage, DecryptorPublicKey};
+use prng_traits::SecurePrng;
+use std::cell::RefCell;
 use vahe_traits::{HasVahe, VaheBase, VerifiableEncrypt};
 
 /// Lightweight client directly exposing KAHE/VAHE types.
 pub struct WillowV1Client<Kahe: KaheBase, Vahe: VaheBase> {
     pub kahe: Kahe,
     pub vahe: Vahe,
-    pub prng: Kahe::Rng, // Using a single PRNG for both VAHE and KAHE.
+    pub prng: RefCell<Kahe::Rng>, // Using a single PRNG for both VAHE and KAHE.
 }
 
 impl<Kahe: KaheBase, Vahe: VaheBase> HasKahe for WillowV1Client<Kahe, Vahe> {
@@ -38,6 +40,17 @@ impl<Kahe: KaheBase, Vahe: VaheBase> HasVahe for WillowV1Client<Kahe, Vahe> {
     }
 }
 
+impl<Kahe: KaheBase, Vahe: VaheBase> WillowV1Client<Kahe, Vahe> {
+    pub fn new_with_randomly_generated_seed(
+        kahe: Kahe,
+        vahe: Vahe,
+    ) -> Result<Self, status::StatusError> {
+        let seed = Kahe::Rng::generate_seed()?;
+        let prng = RefCell::new(Kahe::Rng::create(&seed)?);
+        Ok(Self { kahe, vahe, prng })
+    }
+}
+
 /// Implementation of the `SecureAggregationClient` trait for the generic
 /// KAHE/VAHE client, using WillowCommon as the common types (e.g. protocol
 /// messages are directly the AHE public key and ciphertexts).
@@ -51,16 +64,17 @@ where
     type PlaintextSlice<'a> = <Kahe as KaheBase>::PlaintextSlice<'a>;
 
     fn create_client_message(
-        &mut self,
+        &self,
         plaintext: &Self::PlaintextSlice<'_>,
         signed_public_key: &DecryptorPublicKey<Vahe>,
         nonce: &[u8],
     ) -> Result<ClientMessage<Kahe, Vahe>, status::StatusError> {
         // Generate a new KAHE key.
-        let kahe_secret_key = self.kahe.key_gen(&mut self.prng)?;
+        let kahe_secret_key = self.kahe.key_gen(&mut self.prng.borrow_mut())?;
 
         // Encrypt long plaintext with KAHE.
-        let kahe_ciphertext = self.kahe.encrypt(plaintext, &kahe_secret_key, &mut self.prng)?;
+        let kahe_ciphertext =
+            self.kahe.encrypt(plaintext, &kahe_secret_key, &mut self.prng.borrow_mut())?;
 
         // Convert KAHE secret key into short AHE plaintext.
         let ahe_plaintext: Vahe::Plaintext = self.kahe.try_secret_key_into(kahe_secret_key)?;
@@ -70,7 +84,7 @@ where
             &ahe_plaintext,
             signed_public_key,
             nonce,
-            &mut self.prng,
+            &mut self.prng.borrow_mut(),
         )?;
 
         // Keep a copy of the nonce so the message can be forwarded as-is.
@@ -112,9 +126,7 @@ mod test {
         let (kahe_config, ahe_config) = create_shell_configs(&aggregation_config)?;
         let kahe = ShellKahe::new(kahe_config, CONTEXT_STRING)?;
         let vahe = ShellVahe::new(ahe_config, CONTEXT_STRING)?;
-        let client_seed = SingleThreadHkdfPrng::generate_seed()?;
-        let prng = SingleThreadHkdfPrng::create(&client_seed)?;
-        let mut client = WillowV1Client { kahe, vahe, prng };
+        let client = WillowV1Client::new_with_randomly_generated_seed(kahe, vahe)?;
 
         // Generate AHE keys.
         let mut testing_decryptor =
@@ -153,17 +165,13 @@ mod test {
         let (kahe_config, ahe_config) = create_shell_configs(&aggregation_config)?;
         let kahe = ShellKahe::new(kahe_config, CONTEXT_STRING)?;
         let vahe = ShellVahe::new(ahe_config, CONTEXT_STRING)?;
-        let client1_seed = SingleThreadHkdfPrng::generate_seed()?;
-        let prng = SingleThreadHkdfPrng::create(&client1_seed)?;
-        let mut client1 = WillowV1Client { kahe, vahe, prng };
+        let client1 = WillowV1Client::new_with_randomly_generated_seed(kahe, vahe)?;
 
         // Create a second client.
         let (kahe_config, ahe_config) = create_shell_configs(&aggregation_config)?;
         let kahe = ShellKahe::new(kahe_config, CONTEXT_STRING)?;
         let vahe = ShellVahe::new(ahe_config, CONTEXT_STRING)?;
-        let client2_seed = SingleThreadHkdfPrng::generate_seed()?;
-        let prng = SingleThreadHkdfPrng::create(&client2_seed)?;
-        let mut client2 = WillowV1Client { kahe, vahe, prng };
+        let client2 = WillowV1Client::new_with_randomly_generated_seed(kahe, vahe)?;
 
         // Generate AHE keys.
         let mut testing_decryptor =

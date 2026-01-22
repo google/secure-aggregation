@@ -392,9 +392,7 @@ mod tests {
             CONTEXT_STRING,
         )
         .unwrap();
-        let seed = SingleThreadHkdfPrng::generate_seed()?;
-        let prng = SingleThreadHkdfPrng::create(&seed)?;
-        let mut client = WillowV1Client { kahe, vahe, prng };
+        let client = WillowV1Client::new_with_randomly_generated_seed(kahe, vahe)?;
 
         // Create decryptor.
         let vahe = ShellVahe::new(

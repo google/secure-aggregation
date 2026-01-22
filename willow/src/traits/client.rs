@@ -26,7 +26,7 @@ pub trait SecureAggregationClient: HasKahe + HasVahe {
     /// Creates a client message to be sent to the Server.
     /// nonce is used for the VAHE encryption, has to be unique.
     fn create_client_message(
-        &mut self,
+        &self,
         plaintext: &Self::PlaintextSlice<'_>,
         signed_public_key: &DecryptorPublicKey<<Self as HasVahe>::Vahe>,
         nonce: &[u8],

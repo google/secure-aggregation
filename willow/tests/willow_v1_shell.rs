@@ -57,9 +57,7 @@ fn encrypt_decrypt_one() -> googletest::Result<()> {
     let kahe =
         ShellKahe::new(create_shell_kahe_config(&aggregation_config).unwrap(), CONTEXT_STRING)
             .unwrap();
-    let seed = SingleThreadHkdfPrng::generate_seed().unwrap();
-    let prng = SingleThreadHkdfPrng::create(&seed).unwrap();
-    let mut client = WillowV1Client { kahe, vahe, prng };
+    let client = WillowV1Client::new_with_randomly_generated_seed(kahe, vahe).unwrap();
 
     // Create decryptor, which needs its own `vahe` (with same public polynomials
     // generated from the seeds) and `prng`.
@@ -147,9 +145,7 @@ fn encrypt_decrypt_one_serialized() -> googletest::Result<()> {
     let vahe =
         ShellVahe::new(create_shell_ahe_config(max_number_of_decryptors).unwrap(), CONTEXT_STRING)
             .unwrap();
-    let seed = SingleThreadHkdfPrng::generate_seed().unwrap();
-    let prng = SingleThreadHkdfPrng::create(&seed).unwrap();
-    let mut client = WillowV1Client { kahe, vahe, prng };
+    let client = WillowV1Client::new_with_randomly_generated_seed(kahe, vahe).unwrap();
 
     // Create decryptor, which needs its own `vahe` (with same public polynomials
     // generated from the seeds) and `prng`.
@@ -287,9 +283,7 @@ fn encrypt_decrypt_multiple_clients() -> googletest::Result<()> {
         let kahe =
             ShellKahe::new(create_shell_kahe_config(&aggregation_config).unwrap(), CONTEXT_STRING)
                 .unwrap();
-        let seed = SingleThreadHkdfPrng::generate_seed().unwrap();
-        let prng = SingleThreadHkdfPrng::create(&seed).unwrap();
-        let client = WillowV1Client { kahe, vahe, prng };
+        let client = WillowV1Client::new_with_randomly_generated_seed(kahe, vahe).unwrap();
         clients.push(client);
     }
 
@@ -420,9 +414,7 @@ fn encrypt_decrypt_multiple_clients_including_invalid_proofs() -> googletest::Re
         let kahe =
             ShellKahe::new(create_shell_kahe_config(&aggregation_config).unwrap(), CONTEXT_STRING)
                 .unwrap();
-        let seed = SingleThreadHkdfPrng::generate_seed().unwrap();
-        let prng = SingleThreadHkdfPrng::create(&seed).unwrap();
-        let client = WillowV1Client { kahe, vahe, prng };
+        let client = WillowV1Client::new_with_randomly_generated_seed(kahe, vahe).unwrap();
         good_clients.push(client);
     }
 
@@ -437,9 +429,7 @@ fn encrypt_decrypt_multiple_clients_including_invalid_proofs() -> googletest::Re
         let kahe =
             ShellKahe::new(create_shell_kahe_config(&aggregation_config).unwrap(), CONTEXT_STRING)
                 .unwrap();
-        let seed = SingleThreadHkdfPrng::generate_seed().unwrap();
-        let prng = SingleThreadHkdfPrng::create(&seed).unwrap();
-        let client = WillowV1Client { kahe, vahe, prng };
+        let client = WillowV1Client::new_with_randomly_generated_seed(kahe, vahe).unwrap();
         bad_clients.push(client);
     }
 
@@ -652,9 +642,7 @@ fn encrypt_decrypt_many_clients_decryptors() -> googletest::Result<()> {
         let kahe =
             ShellKahe::new(create_shell_kahe_config(&aggregation_config).unwrap(), CONTEXT_STRING)
                 .unwrap();
-        let seed = SingleThreadHkdfPrng::generate_seed().unwrap();
-        let prng = SingleThreadHkdfPrng::create(&seed).unwrap();
-        let mut client = WillowV1Client { kahe, vahe, prng };
+        let client = WillowV1Client::new_with_randomly_generated_seed(kahe, vahe).unwrap();
 
         let client_input_values =
             generate_random_unsigned_vector(INPUT_LENGTH as usize, INPUT_DOMAIN as u64);
@@ -730,9 +718,7 @@ fn encrypt_decrypt_no_dropout() -> googletest::Result<()> {
         let kahe =
             ShellKahe::new(create_shell_kahe_config(&aggregation_config).unwrap(), CONTEXT_STRING)
                 .unwrap();
-        let seed = SingleThreadHkdfPrng::generate_seed().unwrap();
-        let prng = SingleThreadHkdfPrng::create(&seed).unwrap();
-        let client = WillowV1Client { kahe, vahe, prng };
+        let client = WillowV1Client::new_with_randomly_generated_seed(kahe, vahe).unwrap();
         clients.push(client);
     }
 

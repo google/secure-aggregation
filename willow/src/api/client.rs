@@ -86,9 +86,7 @@ impl WillowShellClient {
         let context_bytes = aggregation_config.compute_context_bytes()?;
         let kahe = ShellKahe::new(kahe_config, &context_bytes)?;
         let vahe = ShellVahe::new(ahe_config, &context_bytes)?;
-        let client_seed = SingleThreadHkdfPrng::generate_seed()?;
-        let prng = SingleThreadHkdfPrng::create(&client_seed)?;
-        let client = WillowV1Client { kahe, vahe, prng };
+        let client = WillowV1Client::new_with_randomly_generated_seed(kahe, vahe)?;
         Ok(WillowShellClient(client))
     }
 

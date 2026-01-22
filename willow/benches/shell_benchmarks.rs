@@ -131,9 +131,7 @@ fn setup_base(args: &Args) -> BaseInputs {
     // Create client.
     let kahe = ShellKahe::new(kahe_config.clone(), CONTEXT_STRING).unwrap();
     let vahe = ShellVahe::new(ahe_config.clone(), CONTEXT_STRING).unwrap();
-    let seed = SingleThreadHkdfPrng::generate_seed().unwrap();
-    let prng = SingleThreadHkdfPrng::create(&seed).unwrap();
-    let client = WillowV1Client { kahe, vahe, prng };
+    let client = WillowV1Client::new_with_randomly_generated_seed(kahe, vahe).unwrap();
 
     // Create decryptor.
     let vahe = ShellVahe::new(ahe_config.clone(), CONTEXT_STRING).unwrap();
@@ -218,7 +216,7 @@ struct VerifierInputs {
 }
 
 fn setup_verifier_verify_client_message(args: &Args) -> VerifierInputs {
-    let mut inputs = setup_base(args);
+    let inputs = setup_base(args);
     let mut decryption_request_contributions = vec![];
     for _ in 0..args.n_iterations {
         // Generates a plaintext and encrypts.
@@ -257,7 +255,7 @@ fn run_verifier_verify_client_message(inputs: &mut VerifierInputs) {
 }
 
 fn setup_server_handle_client_message(args: &Args) -> ServerInputs {
-    let mut inputs = setup_base(args);
+    let inputs = setup_base(args);
     let mut ciphertext_contributions = vec![];
     for _ in 0..args.n_iterations {
         // Generates a plaintext and encrypts.
