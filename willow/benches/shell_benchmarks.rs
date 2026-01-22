@@ -123,7 +123,7 @@ fn setup_base(args: &Args) -> BaseInputs {
         max_number_of_decryptors: 1,
         max_number_of_clients: args.max_num_clients as i64,
         max_decryptor_dropouts: 0,
-        session_id: String::from("benchmark"),
+        key_id: b"benchmark".to_vec(),
     };
     let ahe_config = create_shell_ahe_config(aggregation_config.max_number_of_decryptors).unwrap();
     let kahe_config = create_shell_kahe_config(&aggregation_config).unwrap();

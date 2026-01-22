@@ -33,7 +33,7 @@ TEST(ShellTestingDecryptorTest, CreateAndGenerateKey) {
   config.set_max_number_of_decryptors(1);
   config.set_max_number_of_clients(1);
   config.set_max_decryptor_dropouts(0);
-  config.set_session_id("test_session");
+  config.set_key_id("test_key");
   auto& vector_config = (*config.mutable_vector_configs())["test_vec"];
   vector_config.set_length(10);
   vector_config.set_bound(100);
@@ -52,7 +52,7 @@ TEST(ShellTestingDecryptorTest, InvalidAggregationConfig) {
   config_proto.set_max_number_of_decryptors(1);
   config_proto.set_max_decryptor_dropouts(0);
   config_proto.set_max_number_of_clients(2);
-  config_proto.set_session_id("test");
+  config_proto.set_key_id("test");
 
   // Initialization fails because aggregation config is invalid.
   EXPECT_THAT(testing::ShellTestingDecryptor::Create(config_proto),

@@ -22,9 +22,9 @@ use status::StatusError;
 pub trait KaheBase: Sized {
     type Config;
 
-    /// Creates a KAHE instance. `context_string` is used for domain separation and must be unique
+    /// Creates a KAHE instance. `context_bytes` is used for domain separation and must be unique
     /// to each instantiation of the KAHE scheme.
-    fn new(config: Self::Config, context_string: &[u8]) -> Result<Self, StatusError>;
+    fn new(config: Self::Config, context_bytes: &[u8]) -> Result<Self, StatusError>;
 
     /// Secret key for symmetric encryption. Supports addition (key
     /// homomorphism). Addition needs additional context and works on

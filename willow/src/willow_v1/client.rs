@@ -119,7 +119,7 @@ mod test {
             max_number_of_decryptors: 1,
             max_number_of_clients: 1,
             max_decryptor_dropouts: 0,
-            session_id: String::from("test"),
+            key_id: b"test".to_vec(),
         };
 
         // Create a client.
@@ -158,7 +158,7 @@ mod test {
             max_number_of_decryptors: 1,
             max_number_of_clients: 2,
             max_decryptor_dropouts: 0,
-            session_id: String::from("test"),
+            key_id: b"test".to_vec(),
         };
 
         // Create a client.

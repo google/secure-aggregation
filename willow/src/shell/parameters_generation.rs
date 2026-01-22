@@ -109,7 +109,7 @@ mod test {
             max_number_of_decryptors: 1,
             max_decryptor_dropouts: 0,
             max_number_of_clients: 1,
-            session_id: String::from("test"),
+            key_id: b"test".to_vec(),
         };
         let invalid_plaintext_bits = 0;
         let result = generate_packing_config(invalid_plaintext_bits, &agg_config);
@@ -130,7 +130,7 @@ mod test {
             max_number_of_decryptors: 1,
             max_decryptor_dropouts: 0,
             max_number_of_clients: 1,
-            session_id: String::from("test"),
+            key_id: b"test".to_vec(),
         };
         let result = generate_packing_config(plaintext_bits, &bad_agg_config);
         expect_true!(result.is_err());
@@ -151,7 +151,7 @@ mod test {
             max_number_of_decryptors: 1,
             max_decryptor_dropouts: 0,
             max_number_of_clients: 0,
-            session_id: String::from("test"),
+            key_id: b"test".to_vec(),
         };
         let result = generate_packing_config(plaintext_bits, &bad_agg_config);
         expect_true!(result.is_err());
@@ -168,7 +168,7 @@ mod test {
             max_number_of_decryptors: 1,
             max_decryptor_dropouts: 0,
             max_number_of_clients: 2,
-            session_id: String::from("test"),
+            key_id: b"test".to_vec(),
         };
         let result = generate_packing_config(plaintext_bits, &agg_config);
         expect_true!(result.is_err());
@@ -187,7 +187,7 @@ mod test {
             max_number_of_decryptors: 1,
             max_decryptor_dropouts: 0,
             max_number_of_clients: 1 << 8,
-            session_id: String::from("test"),
+            key_id: b"test".to_vec(),
         };
         let plaintext_bits = 24;
         let packed_vector_configs = generate_packing_config(plaintext_bits, &agg_config)?;

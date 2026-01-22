@@ -29,7 +29,8 @@ use std::collections::HashMap;
 ///                            aggregation failing.
 /// max_number_of_clients:     The maximum number of clients that will participate in the
 ///                            aggregation.
-/// session_id:                The session id of the aggregation.
+/// key_id:                    The key id of the aggregation, used as context_bytes to seed Kahe
+///                            and Vahe public parameters. Must be unique for each instantiation.
 /// willow_version:            The version of the willow protocol.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AggregationConfig {
@@ -37,7 +38,7 @@ pub struct AggregationConfig {
     pub max_number_of_decryptors: i64,
     pub max_decryptor_dropouts: i64,
     pub max_number_of_clients: i64,
-    pub session_id: String,
+    pub key_id: Vec<u8>,
 }
 
 impl FromProto for AggregationConfig {
@@ -57,7 +58,7 @@ impl FromProto for AggregationConfig {
             max_number_of_decryptors: proto.max_number_of_decryptors(),
             max_decryptor_dropouts: proto.max_decryptor_dropouts(),
             max_number_of_clients: proto.max_number_of_clients(),
-            session_id: proto.session_id().to_string(),
+            key_id: proto.key_id().to_vec(),
         })
     }
 }
@@ -71,7 +72,7 @@ impl ToProto for AggregationConfig {
             max_number_of_decryptors: self.max_number_of_decryptors,
             max_decryptor_dropouts: self.max_decryptor_dropouts,
             max_number_of_clients: self.max_number_of_clients,
-            session_id: self.session_id.clone(),
+            key_id: self.key_id.clone(),
         });
         aggregation_config_proto.vector_configs_mut().copy_from(
             self.vector_lengths_and_bounds.iter().map(|(key, (length, bound))| {
@@ -79,19 +80,6 @@ impl ToProto for AggregationConfig {
             }),
         );
         Ok(aggregation_config_proto)
-    }
-}
-
-impl AggregationConfig {
-    /// Computes context bytes by hashing the session ID in the config.
-    pub fn compute_context_bytes(&self) -> Result<Vec<u8>, StatusError> {
-        let context_seed = single_thread_hkdf::compute_hkdf(
-            self.session_id.as_bytes(),
-            b"",
-            b"AggregationConfig.context_string",
-            single_thread_hkdf::seed_length(),
-        )?;
-        Ok(context_seed.as_bytes().to_vec())
     }
 }
 
@@ -109,7 +97,7 @@ mod tests {
             max_number_of_decryptors: 1,
             max_decryptor_dropouts: 0,
             max_number_of_clients: 1,
-            session_id: String::from("test"),
+            key_id: b"test".to_vec(),
         };
 
         verify_that!(

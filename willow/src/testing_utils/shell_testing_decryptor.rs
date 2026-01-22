@@ -57,11 +57,11 @@ impl ShellTestingDecryptor {
     /// public parameters.
     pub fn new(
         aggregation_config: &AggregationConfig,
-        context_string: &[u8],
+        context_bytes: &[u8],
     ) -> Result<ShellTestingDecryptor, StatusError> {
         let (kahe_config, ahe_config) = create_shell_configs(aggregation_config)?;
-        let kahe = ShellKahe::new(kahe_config, context_string)?;
-        let vahe = ShellVahe::new(ahe_config, context_string)?;
+        let kahe = ShellKahe::new(kahe_config, context_bytes)?;
+        let vahe = ShellVahe::new(ahe_config, context_bytes)?;
         let seed = SingleThreadHkdfPrng::generate_seed()?;
         let prng = SingleThreadHkdfPrng::create(&seed)?;
         Ok(ShellTestingDecryptor { kahe, vahe, prng, secret_key: None })
@@ -292,8 +292,8 @@ fn create_shell_testing_decryptor_impl(
     let aggregation_config_proto = AggregationConfigProto::parse(config)
         .map_err(|e| status::internal(format!("Failed to parse AggregationConfigProto: {}", e)))?;
     let aggregation_config = AggregationConfig::from_proto(aggregation_config_proto, ())?;
-    let context_bytes = aggregation_config.compute_context_bytes()?;
-    let decryptor = ShellTestingDecryptor::new(&aggregation_config, &context_bytes)?;
+    let context_bytes = &aggregation_config.key_id;
+    let decryptor = ShellTestingDecryptor::new(&aggregation_config, context_bytes)?;
     Ok(Box::new(decryptor))
 }
 

@@ -17,7 +17,7 @@ use decryptor_traits::SecureAggregationDecryptor;
 use messages::{DecryptorPublicKeyShare, PartialDecryptionRequest, PartialDecryptionResponse};
 use messages_rust_proto::DecryptorStateProto;
 use proto_serialization_traits::{FromProto, ToProto};
-use protobuf::{proto, AsView};
+use protobuf::AsView;
 use shell_ciphertexts_rust_proto::ShellAheSecretKeyShare;
 use status::StatusError;
 use vahe_traits::{EncryptVerify, HasVahe, VaheBase};
@@ -129,7 +129,6 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use crate::{DecryptorState, WillowV1Decryptor};
     use ahe_traits::AheBase;
     use decryptor_traits::SecureAggregationDecryptor;

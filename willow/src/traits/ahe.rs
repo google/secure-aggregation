@@ -20,9 +20,9 @@ use status::StatusError;
 pub trait AheBase: Sized {
     type Config;
 
-    /// Creates an AHE instance. `context_string` is used for domain separation and must be unique
+    /// Creates an AHE instance. `context_bytes` is used for domain separation and must be unique
     /// to each instantiation of the AHE scheme.
-    fn new(config: Self::Config, context_string: &[u8]) -> Result<Self, StatusError>;
+    fn new(config: Self::Config, context_bytes: &[u8]) -> Result<Self, StatusError>;
 
     /// Secret key share.
     type SecretKeyShare;

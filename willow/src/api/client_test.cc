@@ -49,7 +49,7 @@ AggregationConfigProto CreateTestConfig() {
   (*config.mutable_vector_configs())["metric1"] = vector_config;
   config.set_max_number_of_decryptors(1);
   config.set_max_number_of_clients(10);
-  config.set_session_id("test");
+  config.set_key_id("test");
   return config;
 }
 

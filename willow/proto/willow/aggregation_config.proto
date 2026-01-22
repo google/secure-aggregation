@@ -22,10 +22,11 @@ option java_outer_classname = "AggregationConfigProto";
 // The configuration of the aggregation as a proto.
 message AggregationConfigProto {
   map<string, VectorConfig> vector_configs = 1;
-  int64 max_number_of_decryptors = 5;
   int64 max_decryptor_dropouts = 2;
   int64 max_number_of_clients = 3;
-  string session_id = 4;
+  string session_id = 4 [deprecated = true];
+  int64 max_number_of_decryptors = 5;
+  bytes key_id = 6;
 }
 
 // The configuration for a single vector in an aggregation.

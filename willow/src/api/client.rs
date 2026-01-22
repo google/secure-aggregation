@@ -83,7 +83,7 @@ impl WillowShellClient {
             })?;
         let aggregation_config = AggregationConfig::from_proto(aggregation_config_proto, ())?;
         let (kahe_config, ahe_config) = create_shell_configs(&aggregation_config)?;
-        let context_bytes = aggregation_config.compute_context_bytes()?;
+        let context_bytes = &aggregation_config.key_id;
         let kahe = ShellKahe::new(kahe_config, &context_bytes)?;
         let vahe = ShellVahe::new(ahe_config, &context_bytes)?;
         let client = WillowV1Client::new_with_randomly_generated_seed(kahe, vahe)?;

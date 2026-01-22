@@ -145,11 +145,11 @@ pub struct ServerAccumulator {
 
 impl ServerAccumulator {
     fn new(aggregation_config: AggregationConfig) -> Result<Self, StatusError> {
-        let context_string = aggregation_config.compute_context_bytes()?;
         let (kahe_config, vahe_config) = create_shell_configs(&aggregation_config)?;
-        let server_kahe = ShellKahe::new(kahe_config, &context_string)?;
-        let server_vahe = ShellVahe::new(vahe_config.clone(), &context_string)?;
-        let verifier_vahe = ShellVahe::new(vahe_config, &context_string)?;
+        let context_bytes = &aggregation_config.key_id;
+        let server_kahe = ShellKahe::new(kahe_config, context_bytes)?;
+        let server_vahe = ShellVahe::new(vahe_config.clone(), context_bytes)?;
+        let verifier_vahe = ShellVahe::new(vahe_config, context_bytes)?;
         let server = WillowV1Server { kahe: server_kahe, vahe: server_vahe };
         let verifier = WillowV1Verifier { vahe: verifier_vahe };
         Ok(Self {
@@ -659,10 +659,10 @@ impl FinalResultDecryptor {
 
         // Build server that holds the necessary KAHE and AHE contexts, and recover server state.
         let aggregation_config = AggregationConfig::from_proto(aggregation_config_proto, ())?;
-        let context_string = aggregation_config.compute_context_bytes()?;
         let (kahe_config, vahe_config) = create_shell_configs(&aggregation_config)?;
-        let kahe = ShellKahe::new(kahe_config, &context_string)?;
-        let vahe = ShellVahe::new(vahe_config, &context_string)?;
+        let context_bytes = &aggregation_config.key_id;
+        let kahe = ShellKahe::new(kahe_config, context_bytes)?;
+        let vahe = ShellVahe::new(vahe_config, context_bytes)?;
         let server = WillowV1Server { kahe, vahe };
         let server_state = ServerState::from_proto(server_state_proto, &server)?;
 

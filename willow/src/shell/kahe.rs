@@ -180,12 +180,12 @@ impl KaheBase for ShellKahe {
 
     fn new(
         shell_kahe_config: Self::Config,
-        context_string: &[u8],
+        context_bytes: &[u8],
     ) -> Result<Self, status::StatusError> {
         Self::validate_kahe_config(&shell_kahe_config)?;
         let num_coeffs = 1 << shell_kahe_config.log_n;
         let public_seed = single_thread_hkdf::compute_hkdf(
-            context_string,
+            context_bytes,
             b"",
             b"ShellKahe.public_seed",
             single_thread_hkdf::seed_length(),
@@ -395,7 +395,7 @@ mod test {
     /// Default ID used in tests.
     const DEFAULT_ID: &str = "default";
 
-    const CONTEXT_STRING: &[u8] = b"test_context_string";
+    const CONTEXT_BYTES: &[u8] = b"test_context_bytes";
 
     #[gtest]
     fn test_encrypt_decrypt_short() -> googletest::Result<()> {
@@ -405,7 +405,7 @@ mod test {
             PackedVectorConfig { base: 10, dimension: 2, num_packed_coeffs: 5, length: 10 },
         )]);
         let kahe_config = make_kahe_config_for(plaintext_modulus_bits, packed_vector_configs)?;
-        let kahe = ShellKahe::new(kahe_config, CONTEXT_STRING)?;
+        let kahe = ShellKahe::new(kahe_config, CONTEXT_BYTES)?;
 
         let pt = HashMap::from([(DEFAULT_ID.to_string(), vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9])]);
         let seed = SingleThreadHkdfPrng::generate_seed()?;
@@ -425,7 +425,7 @@ mod test {
             PackedVectorConfig { base: 10, dimension: 2, num_packed_coeffs: 5, length: 8 },
         )]);
         let kahe_config = make_kahe_config_for(plaintext_modulus_bits, packed_vector_configs)?;
-        let kahe = ShellKahe::new(kahe_config, CONTEXT_STRING)?;
+        let kahe = ShellKahe::new(kahe_config, CONTEXT_BYTES)?;
 
         let pt = HashMap::from([(DEFAULT_ID.to_string(), vec![0, 1, 2, 3, 4, 5, 6, 7])]);
         let seed = SingleThreadHkdfPrng::generate_seed()?;
@@ -445,7 +445,7 @@ mod test {
             PackedVectorConfig { base: 10, dimension: 2, num_packed_coeffs: 5, length: 10 },
         )]);
         let kahe_config = make_kahe_config_for(plaintext_modulus_bits, packed_vector_configs)?;
-        let kahe = ShellKahe::new(kahe_config, CONTEXT_STRING)?;
+        let kahe = ShellKahe::new(kahe_config, CONTEXT_BYTES)?;
 
         let pt = HashMap::from([(DEFAULT_ID.to_string(), vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9])]);
         let seed = SingleThreadHkdfPrng::generate_seed()?;
@@ -484,7 +484,7 @@ mod test {
         packed_vector_config.length = num_messages;
         set_kahe_num_public_polynomials(&mut kahe_config);
 
-        let kahe = ShellKahe::new(kahe_config, CONTEXT_STRING)?;
+        let kahe = ShellKahe::new(kahe_config, CONTEXT_BYTES)?;
 
         let seed = SingleThreadHkdfPrng::generate_seed()?;
         let mut prng = SingleThreadHkdfPrng::create(&seed)?;
@@ -518,7 +518,7 @@ mod test {
         )]);
         let kahe_config = make_kahe_config_for(plaintext_modulus_bits, packed_vector_configs)?;
 
-        let kahe = ShellKahe::new(kahe_config, CONTEXT_STRING)?;
+        let kahe = ShellKahe::new(kahe_config, CONTEXT_BYTES)?;
         let seed = SingleThreadHkdfPrng::generate_seed()?;
         let mut prng = SingleThreadHkdfPrng::create(&seed)?;
 
@@ -556,7 +556,7 @@ mod test {
         let packed_vector_configs = BTreeMap::from([]);
         let kahe_config = make_kahe_config_for(plaintext_modulus_bits, packed_vector_configs)?;
 
-        let kahe = ShellKahe::new(kahe_config, CONTEXT_STRING)?;
+        let kahe = ShellKahe::new(kahe_config, CONTEXT_BYTES)?;
         let seed = SingleThreadHkdfPrng::generate_seed()?;
         let mut prng = SingleThreadHkdfPrng::create(&seed)?;
 
@@ -600,7 +600,7 @@ mod test {
             PackedVectorConfig { base: 10, dimension: 2, num_packed_coeffs: 5, length: 10 },
         )]);
         let kahe_config = make_kahe_config_for(plaintext_modulus_bits, packed_vector_configs)?;
-        let kahe = ShellKahe::new(kahe_config, CONTEXT_STRING)?;
+        let kahe = ShellKahe::new(kahe_config, CONTEXT_BYTES)?;
 
         let pt = HashMap::from([(String::from(DEFAULT_ID), vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9])]);
         let seed = SingleThreadHkdfPrng::generate_seed()?;
@@ -626,7 +626,7 @@ mod test {
         let plaintext_modulus_bits = 39;
         let packed_vector_configs = BTreeMap::from([]);
         let kahe_config = make_kahe_config_for(plaintext_modulus_bits, packed_vector_configs)?;
-        let kahe = ShellKahe::new(kahe_config, CONTEXT_STRING)?;
+        let kahe = ShellKahe::new(kahe_config, CONTEXT_BYTES)?;
 
         // The seed used to sample the secret keys.
         let seed = SingleThreadHkdfPrng::generate_seed()?;

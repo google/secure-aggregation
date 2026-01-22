@@ -45,7 +45,7 @@ AggregationConfigProto CreateValidConfig() {
   (*config.mutable_vector_configs())["test_vector"] = vector_config;
   config.set_max_number_of_decryptors(1);
   config.set_max_number_of_clients(10);
-  config.set_session_id("test_session");
+  config.set_key_id("test_key");
   return config;
 }
 
@@ -67,7 +67,7 @@ TEST(BasicServerAccumulatorTest, ToSerializedStateHasCorrectConfig) {
   ASSERT_TRUE(state.ParseFromString(*serialized_state_or));
   // Check if the config matches. We serialize and deserialize to compare protos
   // easily or check fields.
-  EXPECT_EQ(state.aggregation_config().session_id(), config.session_id());
+  EXPECT_EQ(state.aggregation_config().key_id(), config.key_id());
   EXPECT_EQ(state.aggregation_config().max_number_of_clients(),
             config.max_number_of_clients());
 }
@@ -382,7 +382,7 @@ TEST_F(ServerAccumulatorTest, MergeFailsWithOverlappingRanges) {
 
 TEST_F(ServerAccumulatorTest, MergeFailsWithConfigMismatch) {
   AggregationConfigProto config2 = config_;
-  config2.set_session_id("other_session");
+  config2.set_key_id("other_key");
   SECAGG_ASSERT_OK_AND_ASSIGN(auto accumulator2,
                               ServerAccumulator::Create(config2));
 

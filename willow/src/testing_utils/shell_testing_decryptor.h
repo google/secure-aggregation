@@ -35,8 +35,8 @@ namespace testing {
 // encrypted messages can be decrypted properly.
 class ShellTestingDecryptor {
  public:
-  // Creates a new ShellTestingDecryptor from the given config, hashing the
-  // session ID from the config to seed KAHE and AHE public parameters.
+  // Creates a new ShellTestingDecryptor from the given config. The key_id from
+  // the config is used to seed KAHE and AHE public parameters.
   static absl::StatusOr<std::unique_ptr<ShellTestingDecryptor>> Create(
       const willow::AggregationConfigProto& aggregation_config);
 
