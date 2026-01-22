@@ -49,4 +49,9 @@
     return status;                                 \
   }
 
+// Internal helper to handle results from Rust FFI calls, which return a
+// secure_aggregation::FfiStatus instead of a absl::Status.
+#define SECAGG_RETURN_IF_FFI_ERROR(expr) \
+  SECAGG_RETURN_IF_ERROR(secure_aggregation::UnwrapFfiStatus(expr))
+
 #endif  // SECURE_AGGREGATION_SHELL_WRAPPER_STATUS_MACROS_H_

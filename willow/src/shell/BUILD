@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+load("@cxx.rs//tools/bazel:rust_cxx_bridge.bzl", "rust_cxx_bridge")
+load("@rules_cc//cc:defs.bzl", "cc_library", "cc_test")
 load("@rules_rust//rust:defs.bzl", "rust_library", "rust_test")
 
 package(
@@ -113,10 +115,50 @@ rust_library(
     crate_root = "parameters_utils.rs",
     deps = [
         ":kahe_shell",
+        ":parameters_shell",
         "@protobuf//rust:protobuf",
+        "@cxx.rs//:cxx",
         "//shell_wrapper:kahe",
         "//shell_wrapper:status",
         "//willow/proto/shell:shell_parameters_rust_proto",
+        "//willow/proto/willow:aggregation_config_rust_proto",
+        "//willow/src/api:aggregation_config",
+        "//willow/src/traits:proto_serialization_traits",
+    ],
+)
+
+rust_cxx_bridge(
+    name = "shell_parameters_utils_cxx",
+    src = "parameters_utils.rs",
+    deps = [
+        ":shell_parameters_utils",
+        "//shell_wrapper:status_cxx",
+    ],
+)
+
+cc_library(
+    name = "shell_parameters_utils_cc",
+    srcs = ["parameters_utils.cc"],
+    hdrs = ["parameters_utils.h"],
+    deps = [
+        ":shell_parameters_utils_cxx",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:statusor",
+        "@cxx.rs//:core",
+        "//shell_wrapper:status_cc",
+        "//shell_wrapper:status_macros",
+        "//willow/proto/willow:aggregation_config_cc_proto",
+    ],
+)
+
+cc_test(
+    name = "parameters_utils_test",
+    srcs = ["parameters_utils_test.cc"],
+    deps = [
+        ":shell_parameters_utils_cc",
+        "@googletest//:gtest_main",
+        "@abseil-cpp//absl/status",
+        "//willow/proto/willow:aggregation_config_cc_proto",
     ],
 )
 

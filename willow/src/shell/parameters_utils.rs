@@ -12,17 +12,67 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! This file contains some utility functions for working with Willow parameters:
+//! - Conversions between Rust structs and their corresponding protos.
+//! - FFI bridge to generate and print Shell parameters from C++.
+
+use aggregation_config::AggregationConfig;
+use aggregation_config_rust_proto::AggregationConfigProto;
+use cxx::{CxxString, UniquePtr};
 use kahe::PackedVectorConfig;
 use kahe_shell::ShellKaheConfig;
-use protobuf::{proto, ProtoStr};
+use parameters_shell::create_shell_configs;
+use proto_serialization_traits::FromProto;
+use protobuf::{proto, Parse, ProtoStr};
 use shell_parameters_rust_proto::{
     PackedVectorConfigProto, PackedVectorConfigProtoView, ShellKaheConfigProto,
     ShellKaheConfigProtoView,
 };
 use std::collections::BTreeMap;
 
-/// This file contains some utility functions for working with Willow parameters:
-/// - Conversions between Rust structs and their corresponding protos.
+#[cxx::bridge]
+pub mod ffi {
+    // Re-define FfiStatus since CXX requires shared structs to be defined in the same module
+    // (https://github.com/dtolnay/cxx/issues/297#issuecomment-727042059)
+    unsafe extern "C++" {
+        include!("shell_wrapper/status.rs.h");
+        type FfiStatus = status::ffi::FfiStatus;
+    }
+
+    #[namespace = "secure_aggregation"]
+    extern "Rust" {
+        unsafe fn create_human_readable_shell_config(
+            aggregation_config_proto: UniquePtr<CxxString>,
+            out: *mut Vec<u8>,
+        ) -> FfiStatus;
+    }
+}
+
+fn create_human_readable_shell_config_impl(
+    aggregation_config_proto: UniquePtr<CxxString>,
+) -> Result<Vec<u8>, status::StatusError> {
+    let config_proto =
+        AggregationConfigProto::parse(aggregation_config_proto.as_bytes()).map_err(|e| {
+            status::invalid_argument(format!("Failed to parse AggregationConfigProto: {}", e))
+        })?;
+    let config = AggregationConfig::from_proto(config_proto, ())?;
+    let (kahe_config, ahe_config) = create_shell_configs(&config)?;
+    let kahe_config_string = format!("{:#?}", kahe_config);
+    let ahe_config_string = format!("{:#?}", ahe_config);
+    let result =
+        format!("ShellKaheConfig: {}\nShellAheConfig: {}", kahe_config_string, ahe_config_string);
+    Ok(result.into_bytes())
+}
+
+/// SAFETY: `out` must not be null.
+unsafe fn create_human_readable_shell_config(
+    aggregation_config_proto: UniquePtr<CxxString>,
+    out: *mut Vec<u8>,
+) -> ffi::FfiStatus {
+    create_human_readable_shell_config_impl(aggregation_config_proto)
+        .map(|result| *out = result)
+        .into()
+}
 
 /// Convert a rust struct `PackedVectorConfig` to the corresponding proto.
 pub fn packed_vector_config_to_proto(config: &PackedVectorConfig) -> PackedVectorConfigProto {
