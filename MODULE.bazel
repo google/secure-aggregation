@@ -6,9 +6,9 @@ module(
     compatibility_level = 1,
 )
 
-bazel_dep(name = "rules_rust", version = "0.67.0")
-bazel_dep(name = "rules_cc", version = "0.2.9")
 bazel_dep(name = "rules_license", version = "1.0.0")
+bazel_dep(name = "rules_cc", version = "0.2.14")
+bazel_dep(name = "rules_rust", version = "0.68.1")
 bazel_dep(name = "protobuf", version = "33.1")
 archive_override(
     # Patches protobuf to make the Rust libraries visible. See
@@ -20,15 +20,15 @@ archive_override(
 )
 
 bazel_dep(name = "abseil-cpp", version = "20250814.1")
-bazel_dep(name = "googletest", version = "1.17.0.bcr.1")
+bazel_dep(name = "googletest", version = "1.17.0.bcr.2")
 bazel_dep(name = "tink_cc", version = "2.4.0")
 bazel_dep(name = "shell-encryption", version = "0.0.0")
 archive_override(
     module_name = "shell-encryption",
-    integrity = "sha256-fR28P87WkRNGlF38tO/cMz9mrt6g/+LF8jhK4eeAows=",
-    strip_prefix = "shell-encryption-8607279e72f79efc51077f2b4f982a6a6296774e",
+    integrity = "sha256-2rPwT9YWCS8IgN+bFDAU6Pc7QJ/iiP0nXV98JqlYBeE=",
+    strip_prefix = "shell-encryption-6b521659f4bb37d88ccb981f30319c29c373c06f",
     urls = [
-        "https://github.com/google/shell-encryption/archive/8607279e72f79efc51077f2b4f982a6a6296774e.zip",
+        "https://github.com/google/shell-encryption/archive/6b521659f4bb37d88ccb981f30319c29c373c06f.zip",
     ],
 )
 
