@@ -17,33 +17,34 @@ use kahe_traits::{HasKahe, KaheBase, KaheEncrypt, KaheKeygen, TrySecretKeyInto};
 use messages::{ClientMessage, DecryptorPublicKey};
 use prng_traits::SecurePrng;
 use std::cell::RefCell;
+use std::rc::Rc;
 use vahe_traits::{HasVahe, VaheBase, VerifiableEncrypt};
 
 /// Lightweight client directly exposing KAHE/VAHE types.
 pub struct WillowV1Client<Kahe: KaheBase, Vahe: VaheBase> {
-    pub kahe: Kahe,
-    pub vahe: Vahe,
+    pub kahe: Rc<Kahe>,
+    pub vahe: Rc<Vahe>,
     pub prng: RefCell<Kahe::Rng>, // Using a single PRNG for both VAHE and KAHE.
 }
 
 impl<Kahe: KaheBase, Vahe: VaheBase> HasKahe for WillowV1Client<Kahe, Vahe> {
     type Kahe = Kahe;
     fn kahe(&self) -> &Self::Kahe {
-        &self.kahe
+        self.kahe.as_ref()
     }
 }
 
 impl<Kahe: KaheBase, Vahe: VaheBase> HasVahe for WillowV1Client<Kahe, Vahe> {
     type Vahe = Vahe;
     fn vahe(&self) -> &Self::Vahe {
-        &self.vahe
+        self.vahe.as_ref()
     }
 }
 
 impl<Kahe: KaheBase, Vahe: VaheBase> WillowV1Client<Kahe, Vahe> {
     pub fn new_with_randomly_generated_seed(
-        kahe: Kahe,
-        vahe: Vahe,
+        kahe: Rc<Kahe>,
+        vahe: Rc<Vahe>,
     ) -> Result<Self, status::StatusError> {
         let seed = Kahe::Rng::generate_seed()?;
         let prng = RefCell::new(Kahe::Rng::create(&seed)?);
@@ -122,8 +123,8 @@ mod test {
 
         // Create a client.
         let (kahe_config, ahe_config) = create_shell_configs(&aggregation_config)?;
-        let kahe = ShellKahe::new(kahe_config, CONTEXT_STRING)?;
-        let vahe = ShellVahe::new(ahe_config, CONTEXT_STRING)?;
+        let kahe = Rc::new(ShellKahe::new(kahe_config, CONTEXT_STRING)?);
+        let vahe = Rc::new(ShellVahe::new(ahe_config, CONTEXT_STRING)?);
         let client = WillowV1Client::new_with_randomly_generated_seed(kahe, vahe)?;
 
         // Generate AHE keys.
@@ -159,16 +160,14 @@ mod test {
             key_id: b"test".to_vec(),
         };
 
-        // Create a client.
+        // Create common KAHE/VAHE instances.
         let (kahe_config, ahe_config) = create_shell_configs(&aggregation_config)?;
-        let kahe = ShellKahe::new(kahe_config, CONTEXT_STRING)?;
-        let vahe = ShellVahe::new(ahe_config, CONTEXT_STRING)?;
-        let client1 = WillowV1Client::new_with_randomly_generated_seed(kahe, vahe)?;
+        let kahe = Rc::new(ShellKahe::new(kahe_config, CONTEXT_STRING)?);
+        let vahe = Rc::new(ShellVahe::new(ahe_config, CONTEXT_STRING)?);
 
-        // Create a second client.
-        let (kahe_config, ahe_config) = create_shell_configs(&aggregation_config)?;
-        let kahe = ShellKahe::new(kahe_config, CONTEXT_STRING)?;
-        let vahe = ShellVahe::new(ahe_config, CONTEXT_STRING)?;
+        // Create clients.
+        let client1 =
+            WillowV1Client::new_with_randomly_generated_seed(Rc::clone(&kahe), Rc::clone(&vahe))?;
         let client2 = WillowV1Client::new_with_randomly_generated_seed(kahe, vahe)?;
 
         // Generate AHE keys.

@@ -31,6 +31,7 @@ use server_traits::SecureAggregationServer;
 use status::StatusError;
 use std::collections::BTreeMap;
 use std::ops::Range;
+use std::rc::Rc;
 use vahe_shell::ShellVahe;
 use verifier_traits::SecureAggregationVerifier;
 use willow_v1_server::{ServerState, WillowV1Server};
@@ -147,11 +148,10 @@ impl ServerAccumulator {
     fn new(aggregation_config: AggregationConfig) -> Result<Self, StatusError> {
         let (kahe_config, vahe_config) = create_shell_configs(&aggregation_config)?;
         let context_bytes = &aggregation_config.key_id;
-        let server_kahe = ShellKahe::new(kahe_config, context_bytes)?;
-        let server_vahe = ShellVahe::new(vahe_config.clone(), context_bytes)?;
-        let verifier_vahe = ShellVahe::new(vahe_config, context_bytes)?;
-        let server = WillowV1Server { kahe: server_kahe, vahe: server_vahe };
-        let verifier = WillowV1Verifier { vahe: verifier_vahe };
+        let kahe = Rc::new(ShellKahe::new(kahe_config, &context_bytes)?);
+        let vahe = Rc::new(ShellVahe::new(vahe_config, &context_bytes)?);
+        let server = WillowV1Server { kahe: Rc::clone(&kahe), vahe: Rc::clone(&vahe) };
+        let verifier = WillowV1Verifier { vahe };
         Ok(Self {
             server: server,
             server_state: Default::default(),
@@ -661,8 +661,8 @@ impl FinalResultDecryptor {
         let aggregation_config = AggregationConfig::from_proto(aggregation_config_proto, ())?;
         let (kahe_config, vahe_config) = create_shell_configs(&aggregation_config)?;
         let context_bytes = &aggregation_config.key_id;
-        let kahe = ShellKahe::new(kahe_config, context_bytes)?;
-        let vahe = ShellVahe::new(vahe_config, context_bytes)?;
+        let kahe = Rc::new(ShellKahe::new(kahe_config, context_bytes)?);
+        let vahe = Rc::new(ShellVahe::new(vahe_config, context_bytes)?);
         let server = WillowV1Server { kahe, vahe };
         let server_state = ServerState::from_proto(server_state_proto, &server)?;
 

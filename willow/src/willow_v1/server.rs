@@ -28,14 +28,15 @@ use shell_ciphertexts_rust_proto::{
 };
 use status::StatusError;
 use std::collections::HashMap;
+use std::rc::Rc;
 use vahe_traits::{EncryptVerify, HasVahe, Recover, VaheBase};
 
 /// Implements the `server` role in the Willow protocol. This includes aggregating public key shares
 /// from the decryptors, aggregating client ciphertexts, and recovering the aggregation result after
 /// receiving partial decryption responses from the decryptors.
 pub struct WillowV1Server<Kahe: KaheBase, Vahe: VaheBase> {
-    pub kahe: Kahe,
-    pub vahe: Vahe,
+    pub kahe: Rc<Kahe>,
+    pub vahe: Rc<Vahe>,
 }
 
 impl<Kahe: KaheBase, Vahe: VaheBase> HasKahe for WillowV1Server<Kahe, Vahe> {
@@ -381,45 +382,33 @@ mod tests {
             generate_aggregation_config(DEFAULT_VECTOR_ID.to_string(), 16, 10, 1, 1);
         let max_number_of_decryptors = aggregation_config.max_number_of_decryptors;
 
-        // Create client.
-        let kahe =
+        // Create common KAHE/VAHE instances.
+        let kahe = Rc::new(
             ShellKahe::new(create_shell_kahe_config(&aggregation_config).unwrap(), CONTEXT_STRING)
-                .unwrap();
-        let vahe = ShellVahe::new(
-            create_shell_ahe_config(max_number_of_decryptors).unwrap(),
-            CONTEXT_STRING,
-        )
-        .unwrap();
-        let client = WillowV1Client::new_with_randomly_generated_seed(kahe, vahe)?;
+                .unwrap(),
+        );
+        let vahe = Rc::new(
+            ShellVahe::new(
+                create_shell_ahe_config(max_number_of_decryptors).unwrap(),
+                CONTEXT_STRING,
+            )
+            .unwrap(),
+        );
+
+        // Create client.
+        let client = WillowV1Client::new_with_randomly_generated_seed(kahe.clone(), vahe.clone())?;
 
         // Create decryptor.
-        let vahe = ShellVahe::new(
-            create_shell_ahe_config(max_number_of_decryptors).unwrap(),
-            CONTEXT_STRING,
-        )
-        .unwrap();
+
         let mut decryptor_state = DecryptorState::default();
-        let decryptor = WillowV1Decryptor::new_with_randomly_generated_seed(vahe)?;
+        let decryptor = WillowV1Decryptor::new_with_randomly_generated_seed(Rc::clone(&vahe))?;
 
         // Create server.
-        let kahe =
-            ShellKahe::new(create_shell_kahe_config(&aggregation_config).unwrap(), CONTEXT_STRING)
-                .unwrap();
-        let vahe = ShellVahe::new(
-            create_shell_ahe_config(max_number_of_decryptors).unwrap(),
-            CONTEXT_STRING,
-        )
-        .unwrap();
-        let server = WillowV1Server { kahe, vahe };
+        let server = WillowV1Server { kahe: kahe.clone(), vahe: Rc::clone(&vahe) };
         let mut server_state = ServerState::default();
 
         // Create verifier.
-        let vahe = ShellVahe::new(
-            create_shell_ahe_config(max_number_of_decryptors).unwrap(),
-            CONTEXT_STRING,
-        )
-        .unwrap();
-        let verifier = WillowV1Verifier { vahe };
+        let verifier = WillowV1Verifier { vahe: vahe.clone() };
         let mut verifier_state = VerifierState::default();
 
         // Check empty state serialization

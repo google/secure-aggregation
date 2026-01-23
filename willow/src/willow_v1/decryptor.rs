@@ -22,12 +22,13 @@ use protobuf::AsView;
 use shell_ciphertexts_rust_proto::ShellAheSecretKeyShare;
 use status::StatusError;
 use std::cell::RefCell;
+use std::rc::Rc;
 use vahe_traits::{EncryptVerify, HasVahe, VaheBase};
 
 /// Lightweight decryptor directly exposing KAHE/VAHE types. It verifies only the client proofs,
 /// does not provide verifiable partial decryptions.
 pub struct WillowV1Decryptor<Vahe: VaheBase> {
-    pub vahe: Vahe,
+    pub vahe: Rc<Vahe>,
     pub prng: RefCell<Vahe::Rng>,
 }
 
@@ -39,7 +40,7 @@ impl<Vahe: VaheBase> HasVahe for WillowV1Decryptor<Vahe> {
 }
 
 impl<Vahe: VaheBase> WillowV1Decryptor<Vahe> {
-    pub fn new_with_randomly_generated_seed(vahe: Vahe) -> Result<Self, status::StatusError> {
+    pub fn new_with_randomly_generated_seed(vahe: Rc<Vahe>) -> Result<Self, status::StatusError> {
         let seed = Vahe::Rng::generate_seed()?;
         let prng = RefCell::new(Vahe::Rng::create(&seed)?);
         Ok(Self { vahe, prng })
@@ -145,13 +146,15 @@ mod tests {
     use googletest::{gtest, verify_true};
     use parameters_shell::create_shell_ahe_config;
     use proto_serialization_traits::{FromProto, ToProto};
+    use std::rc::Rc;
     use vahe_shell::ShellVahe;
 
     const CONTEXT_STRING: &[u8] = b"testing_context_string";
 
     #[gtest]
     fn decryptor_state_serialization_roundtrip() -> googletest::Result<()> {
-        let vahe = ShellVahe::new(create_shell_ahe_config(1).unwrap(), CONTEXT_STRING).unwrap();
+        let vahe =
+            Rc::new(ShellVahe::new(create_shell_ahe_config(1).unwrap(), CONTEXT_STRING).unwrap());
         let decryptor = WillowV1Decryptor::new_with_randomly_generated_seed(vahe)?;
         let mut decryptor_state = DecryptorState::default();
 

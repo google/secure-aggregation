@@ -15,6 +15,7 @@
 use clap::Parser;
 use std::collections::HashMap;
 use std::hint::black_box;
+use std::rc::Rc;
 use std::time::Duration;
 
 use aggregation_config::AggregationConfig;
@@ -126,25 +127,25 @@ fn setup_base(args: &Args) -> BaseInputs {
     let ahe_config = create_shell_ahe_config(aggregation_config.max_number_of_decryptors).unwrap();
     let kahe_config = create_shell_kahe_config(&aggregation_config).unwrap();
 
+    // Create common KAHE/VAHE instances.
+    let kahe = Rc::new(ShellKahe::new(kahe_config.clone(), CONTEXT_STRING).unwrap());
+    let vahe = Rc::new(ShellVahe::new(ahe_config.clone(), CONTEXT_STRING).unwrap());
+
     // Create client.
-    let kahe = ShellKahe::new(kahe_config.clone(), CONTEXT_STRING).unwrap();
-    let vahe = ShellVahe::new(ahe_config.clone(), CONTEXT_STRING).unwrap();
-    let client = WillowV1Client::new_with_randomly_generated_seed(kahe, vahe).unwrap();
+    let client =
+        WillowV1Client::new_with_randomly_generated_seed(Rc::clone(&kahe), Rc::clone(&vahe))
+            .unwrap();
 
     // Create decryptor.
-    let vahe = ShellVahe::new(ahe_config.clone(), CONTEXT_STRING).unwrap();
     let mut decryptor_state = DecryptorState::default();
-    let decryptor = WillowV1Decryptor::new_with_randomly_generated_seed(vahe).unwrap();
+    let decryptor = WillowV1Decryptor::new_with_randomly_generated_seed(Rc::clone(&vahe)).unwrap();
 
     // Create server.
-    let kahe = ShellKahe::new(kahe_config.clone(), CONTEXT_STRING).unwrap();
-    let vahe = ShellVahe::new(ahe_config.clone(), CONTEXT_STRING).unwrap();
-    let server = WillowV1Server { kahe, vahe };
+    let server = WillowV1Server { kahe: Rc::clone(&kahe), vahe: Rc::clone(&vahe) };
     let mut server_state = ServerState::default();
 
     // Create verifier.
-    let vahe = ShellVahe::new(ahe_config.clone(), CONTEXT_STRING).unwrap();
-    let verifier = WillowV1Verifier { vahe };
+    let verifier = WillowV1Verifier { vahe: Rc::clone(&vahe) };
     let verifier_state = VerifierState::default();
 
     // Decryptor generates public key share.

@@ -28,6 +28,7 @@ use shell_ciphertexts_rust_proto::ShellAhePublicKey;
 use status::ffi::FfiStatus;
 use status::StatusError;
 use std::collections::HashMap;
+use std::rc::Rc;
 use vahe_shell::ShellVahe;
 use willow_v1_client::WillowV1Client;
 
@@ -82,8 +83,8 @@ impl WillowShellClient {
         let aggregation_config = AggregationConfig::from_proto(aggregation_config_proto, ())?;
         let (kahe_config, ahe_config) = create_shell_configs(&aggregation_config)?;
         let context_bytes = &aggregation_config.key_id;
-        let kahe = ShellKahe::new(kahe_config, &context_bytes)?;
-        let vahe = ShellVahe::new(ahe_config, &context_bytes)?;
+        let kahe = Rc::new(ShellKahe::new(kahe_config, &context_bytes)?);
+        let vahe = Rc::new(ShellVahe::new(ahe_config, &context_bytes)?);
         let client = WillowV1Client::new_with_randomly_generated_seed(kahe, vahe)?;
         Ok(WillowShellClient(client))
     }
@@ -102,7 +103,7 @@ impl WillowShellClient {
         }
         let public_key_proto = ShellAhePublicKey::parse(public_key.as_bytes())
             .map_err(|e| status::internal(format!("Failed to parse ShellAhePublicKey: {}", e)))?;
-        let public_key_rust = PublicKey::from_proto(public_key_proto, &self.0.vahe)?;
+        let public_key_rust = PublicKey::from_proto(public_key_proto, self.0.vahe.as_ref())?;
         let message = self.0.create_client_message(&plaintext_slice, &public_key_rust, nonce)?;
         Ok(message
             .to_proto(&self.0)?
