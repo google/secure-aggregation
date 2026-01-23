@@ -67,7 +67,7 @@ mod tests {
     use super::*;
     use curve25519_dalek::scalar::Scalar;
     use googletest::gtest;
-    use linear_innerproduct::{LinearInnerProductProver, LinearInnerProductVerifier};
+    use linear_innerproduct::LinearInnerProductProverVerifier;
     use merlin::Transcript as MerlinTranscript;
     use rand;
     use zk_traits::{
@@ -80,14 +80,14 @@ mod tests {
         let a: Vec<Scalar> = (1..5).map(|x| Scalar::from(x as u64)).collect();
         let mut rng = rand::thread_rng();
 
-        let prover = LinearInnerProductProver::new(b"42", a.len());
+        let prover = LinearInnerProductProverVerifier::new(b"42", a.len());
         let delta_a = Scalar::random(&mut rng);
         let comm_a = prover.commit(&a, delta_a)?;
         let b: Vec<Scalar> = (5..9).map(|x| Scalar::from(x as u64)).collect();
         let c: Scalar = Scalar::from(5 + 12 + 21 + 32 as u64);
         let mut transcript = MerlinTranscript::new(b"linear_ip_zkp_test");
 
-        let verifier = LinearInnerProductVerifier::new(b"42", a.len());
+        let verifier = LinearInnerProductProverVerifier::new(b"42", a.len());
         let statement = LinearInnerProductProofStatement { n: a.len(), b: b, c: c, comm_a: comm_a };
         let proof = prover.prove(
             &statement,

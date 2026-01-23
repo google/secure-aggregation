@@ -124,7 +124,7 @@ mod tests {
     use ahe::{create_public_parameters, get_moduli, get_rns_context_ref};
     use googletest::gtest;
     use merlin::Transcript as MerlinTranscript;
-    use rlwe_relation::{RlweRelationProver, RlweRelationVerifier};
+    use rlwe_relation::RlweRelationProverVerifier;
     use shell_types::read_small_rns_polynomial_from_buffer;
     use single_thread_hkdf::generate_seed;
     use zk_traits::{
@@ -168,7 +168,7 @@ mod tests {
         let witness = RlweRelationProofWitness { r: &r, e: &e, v: &v };
         let transcript_initializer = b"Rlwe Test Transcript";
 
-        let prover = RlweRelationProver::new(b"42", statement.n);
+        let prover = RlweRelationProverVerifier::new(b"42", statement.n);
         let mut transcript = MerlinTranscript::new(transcript_initializer);
         let proof = prover.prove(&statement, &witness, &mut transcript)?;
 
@@ -176,7 +176,7 @@ mod tests {
         let proto = rlwe_relation_proof_to_proto(&proof);
         let proof_from_proto = rlwe_relation_proof_from_proto(proto)?;
 
-        let verifier = RlweRelationVerifier::new(b"42", statement.n);
+        let verifier = RlweRelationProverVerifier::new(b"42", statement.n);
         let mut transcript = MerlinTranscript::new(transcript_initializer);
         verifier.verify(&statement, &proof_from_proto, &mut transcript)?;
         Ok(())

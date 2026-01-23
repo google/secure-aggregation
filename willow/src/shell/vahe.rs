@@ -19,7 +19,7 @@ use merlin::Transcript as MerlinTranscript;
 use proofs_rust_proto::{RlweRelationProofListProto, RlweRelationProofProto};
 use proto_serialization_traits::{FromProto, ToProto};
 use protobuf::{proto, AsView};
-use rlwe_relation::{RlweRelationProof, RlweRelationProver, RlweRelationVerifier};
+use rlwe_relation::{RlweRelationProof, RlweRelationProverVerifier};
 use rlwe_relation_serialization::{rlwe_relation_proof_from_proto, rlwe_relation_proof_to_proto};
 use single_thread_hkdf::{compute_hkdf, Seed};
 use status::Status;
@@ -254,7 +254,7 @@ impl VerifiableKeyGen for ShellVahe {
             RlweRelationProofWitness { r: &sk_share.0, e: &pk_share_error.0, v: &pk_wraparound };
 
         let (mut transcript, proof_seed) = self.get_transcript_and_proof_seed(b"key_gen")?;
-        let prover = RlweRelationProver::new(proof_seed.as_bytes(), self.ahe.num_coeffs());
+        let prover = RlweRelationProverVerifier::new(proof_seed.as_bytes(), self.ahe.num_coeffs());
         let key_gen_proof = prover.prove(&rlwe_statement, &rlwe_witness, &mut transcript)?;
         Ok((sk_share, pk_share_b, ShellKeyGenProof(key_gen_proof)))
     }
@@ -274,7 +274,8 @@ impl KeyGenVerify for ShellVahe {
         };
 
         let (mut transcript, proof_seed) = self.get_transcript_and_proof_seed(b"key_gen")?;
-        let verifier = RlweRelationVerifier::new(proof_seed.as_bytes(), self.ahe.num_coeffs());
+        let verifier =
+            RlweRelationProverVerifier::new(proof_seed.as_bytes(), self.ahe.num_coeffs());
         verifier.verify(&statement, &proof.0, &mut transcript)
     }
 }
@@ -300,7 +301,7 @@ impl VerifiableEncrypt for ShellVahe {
 
         let (mut transcript, proof_seed) = self.get_transcript_and_proof_seed(b"encryption")?;
         transcript.append_message(b"nonce:", nonce);
-        let prover = RlweRelationProver::new(proof_seed.as_bytes(), self.ahe.num_coeffs());
+        let prover = RlweRelationProverVerifier::new(proof_seed.as_bytes(), self.ahe.num_coeffs());
         let mut proof = vec![];
         for i in 0..num_polynomials {
             let rlwe_statement = RlweRelationProofStatement {
@@ -340,7 +341,8 @@ impl EncryptVerify for ShellVahe {
 
         let (mut transcript, proof_seed) = self.get_transcript_and_proof_seed(b"encryption")?;
         transcript.append_message(b"nonce:", nonce);
-        let verifier = RlweRelationVerifier::new(proof_seed.as_bytes(), self.ahe.num_coeffs());
+        let verifier =
+            RlweRelationProverVerifier::new(proof_seed.as_bytes(), self.ahe.num_coeffs());
         for i in 0..num_polynomials {
             let statement = RlweRelationProofStatement {
                 n: self.ahe.num_coeffs(),
@@ -377,7 +379,7 @@ impl VerifiablePartialDec for ShellVahe {
 
         let (mut transcript, proof_seed) =
             self.get_transcript_and_proof_seed(b"partial_decryption")?;
-        let prover = RlweRelationProver::new(proof_seed.as_bytes(), self.ahe.num_coeffs());
+        let prover = RlweRelationProverVerifier::new(proof_seed.as_bytes(), self.ahe.num_coeffs());
         let mut proof = vec![];
         for i in 0..num_polynomials {
             let rlwe_statement = RlweRelationProofStatement {
@@ -414,7 +416,8 @@ impl PartialDecVerify for ShellVahe {
 
         let (mut transcript, proof_seed) =
             self.get_transcript_and_proof_seed(b"partial_decryption")?;
-        let verifier = RlweRelationVerifier::new(proof_seed.as_bytes(), self.ahe.num_coeffs());
+        let verifier =
+            RlweRelationProverVerifier::new(proof_seed.as_bytes(), self.ahe.num_coeffs());
         for i in 0..num_polynomials {
             let statement = RlweRelationProofStatement {
                 n: self.ahe.num_coeffs(),

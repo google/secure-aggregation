@@ -91,11 +91,12 @@ fn validate_and_append_point(
     }
 }
 
-pub struct QuadraticInnerProductProver {
+/// A single object that can both prove and verify quadratic inner product arguments.
+pub struct QuadraticInnerProductProverVerifier {
     pub params: QuadraticInnerProductParameters,
 }
 
-impl QuadraticInnerProductProver {
+impl QuadraticInnerProductProverVerifier {
     fn new(parameter_seed: &[u8], length: usize) -> Self {
         let params = generate_params(length, parameter_seed);
         Self { params }
@@ -135,7 +136,7 @@ impl
     ZeroKnowledgeProver<
         QuadraticInnerProductProofStatement,
         QuadraticInnerProductProofWitness<Scalar>,
-    > for QuadraticInnerProductProver
+    > for QuadraticInnerProductProverVerifier
 {
     type Proof = QuadraticInnerProductProof;
 
@@ -201,19 +202,8 @@ impl
     }
 }
 
-pub struct QuadraticInnerProductVerifier {
-    pub params: QuadraticInnerProductParameters,
-}
-
-impl QuadraticInnerProductVerifier {
-    fn new(parameter_seed: &[u8], length: usize) -> Self {
-        let params = generate_params(length, parameter_seed);
-        Self { params }
-    }
-}
-
 impl ZeroKnowledgeVerifier<QuadraticInnerProductProofStatement, QuadraticInnerProductProof>
-    for QuadraticInnerProductVerifier
+    for QuadraticInnerProductProverVerifier
 {
     fn verify(
         &self,
@@ -296,8 +286,8 @@ mod tests {
         let mut c: Scalar = Scalar::from(5 + 12 + 21 + 32 as u64);
         c += Scalar::from(142398865683096878195835365925000457236 as u128);
 
-        let prover = QuadraticInnerProductProver::new(b"42", a.len());
-        let verifier = QuadraticInnerProductVerifier::new(b"42", a.len());
+        let prover = QuadraticInnerProductProverVerifier::new(b"42", a.len());
+        let verifier = QuadraticInnerProductProverVerifier::new(b"42", a.len());
 
         let delta: Scalar = Scalar::from(42 as u64);
         let C = prover.commit(&a, &b, c, delta)?;
@@ -325,8 +315,8 @@ mod tests {
         let mut c: Scalar = Scalar::from(5 + 12 + 21 + 32 + 1 as u64);
         c += Scalar::from(142398865683096878195835365925000457236 as u128);
 
-        let prover = QuadraticInnerProductProver::new(b"42", a.len());
-        let verifier = QuadraticInnerProductVerifier::new(b"42", a.len());
+        let prover = QuadraticInnerProductProverVerifier::new(b"42", a.len());
+        let verifier = QuadraticInnerProductProverVerifier::new(b"42", a.len());
 
         let delta: Scalar = Scalar::from(42 as u64);
         let C = prover.commit(&a, &b, c, delta)?;

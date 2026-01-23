@@ -47,7 +47,7 @@ pub fn inner_product(a: &[Scalar], b: &[Scalar]) -> Scalar {
     out
 }
 
-fn common_setup(length: usize, parameter_seed: &[u8]) -> LinearInnerProductParameters {
+fn generate_params(length: usize, parameter_seed: &[u8]) -> LinearInnerProductParameters {
     use sha3::Sha3_512;
     LinearInnerProductParameters {
         n: length,
@@ -88,13 +88,13 @@ fn validate_and_append_point(
     }
 }
 
-pub struct LinearInnerProductProver {
+pub struct LinearInnerProductProverVerifier {
     pub params: LinearInnerProductParameters,
 }
 
-impl LinearInnerProductProver {
+impl LinearInnerProductProverVerifier {
     pub fn new(parameter_seed: &[u8], length: usize) -> Self {
-        let params = common_setup(length, parameter_seed);
+        let params = generate_params(length, parameter_seed);
         Self { params }
     }
 
@@ -145,7 +145,7 @@ impl
     ZeroKnowledgeProver<
         LinearInnerProductProofStatement<Scalar>,
         LinearInnerProductProofWitness<Scalar>,
-    > for LinearInnerProductProver
+    > for LinearInnerProductProverVerifier
 {
     type Proof = LinearInnerProductProof;
 
@@ -214,19 +214,8 @@ impl
     }
 }
 
-pub struct LinearInnerProductVerifier {
-    pub params: LinearInnerProductParameters,
-}
-
-impl LinearInnerProductVerifier {
-    pub fn new(parameter_seed: &[u8], length: usize) -> Self {
-        let params = common_setup(length, parameter_seed);
-        Self { params }
-    }
-}
-
 impl ZeroKnowledgeVerifier<LinearInnerProductProofStatement<Scalar>, LinearInnerProductProof>
-    for LinearInnerProductVerifier
+    for LinearInnerProductProverVerifier
 {
     fn verify(
         &self,
@@ -309,14 +298,14 @@ mod tests {
         let a: Vec<Scalar> = (1..5).map(|x| Scalar::from(x as u64)).collect();
         let mut rng = rand::thread_rng();
 
-        let prover = LinearInnerProductProver::new(b"42", a.len());
+        let prover = LinearInnerProductProverVerifier::new(b"42", a.len());
         let delta_a = Scalar::random(&mut rng);
         let comm_a = prover.commit(&a, delta_a)?;
         let b: Vec<Scalar> = (5..9).map(|x| Scalar::from(x as u64)).collect();
         let c: Scalar = Scalar::from(5 + 12 + 21 + 32 as u64);
         let mut transcript = MerlinTranscript::new(b"linear_ip_zkp_test");
 
-        let verifier = LinearInnerProductVerifier::new(b"42", a.len());
+        let verifier = LinearInnerProductProverVerifier::new(b"42", a.len());
         verify_eq!(prover.params.F, verifier.params.F)?;
         verify_eq!(prover.params.F_, verifier.params.F_)?;
         verify_eq!(prover.params.G, verifier.params.G)?;
@@ -339,7 +328,7 @@ mod tests {
         let r: Vec<_> = (0..a.len()).map(|_| Scalar::random(&mut rng)).collect();
         let mut transcript = MerlinTranscript::new(b"linear_ip_zkp_test");
 
-        let prover = LinearInnerProductProver::new(b"42", a.len());
+        let prover = LinearInnerProductProverVerifier::new(b"42", a.len());
         let delta_a = Scalar::random(&mut rng);
         let comm_a = prover.commit(&a, delta_a)?;
         let delta_r = Scalar::random(&mut rng);
@@ -347,7 +336,7 @@ mod tests {
         let b: Vec<Scalar> = (5..9).map(|x| Scalar::from(x as u64)).collect();
         let c: Scalar = Scalar::from(5 + 12 + 21 + 32 + 1 as u64);
 
-        let verifier = LinearInnerProductVerifier::new(b"42", a.len());
+        let verifier = LinearInnerProductProverVerifier::new(b"42", a.len());
         let statement = LinearInnerProductProofStatement { n: a.len(), b: b, c: c, comm_a: comm_a };
         let proof = prover.prove(
             &statement,

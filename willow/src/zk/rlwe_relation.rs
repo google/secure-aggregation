@@ -14,9 +14,7 @@
 
 use curve25519_dalek::ristretto::{CompressedRistretto, RistrettoPoint};
 use curve25519_dalek::scalar::Scalar;
-use linear_innerproduct::{
-    LinearInnerProductProof, LinearInnerProductProver, LinearInnerProductVerifier,
-};
+use linear_innerproduct::{LinearInnerProductProof, LinearInnerProductProverVerifier};
 use rand::Rng;
 use shell_types::{write_rns_polynomial_to_buffer_128, RnsContextRef, RnsPolynomial};
 use zk_traits::{
@@ -447,7 +445,7 @@ struct RangeProductMetadata {
 fn generate_range_product(
     v: &[i128],
     bound: u128,
-    prover: &LinearInnerProductProver,
+    prover: &LinearInnerProductProverVerifier,
     start: usize,
     transcript: &mut (impl Transcript + Clone),
     challenge_label: &'static [u8],
@@ -473,7 +471,7 @@ fn generate_range_product(
     let mut attempts = 0;
     loop {
         attempts += 1;
-        y = (0..128).map(|_| (rng.gen_range(0..possible_y) as i128)).collect();
+        y = (0..128).map(|_| rng.gen_range(0..possible_y) as i128).collect();
         for i in 0..128 {
             scalar_y[i] = Scalar::from(y[i] as u128);
             y[i] -= max_y;
@@ -586,21 +584,21 @@ pub struct RlweRelationProof {
     pub lip_proof: LinearInnerProductProof,
 }
 
-pub struct RlweRelationProver {
-    prover: LinearInnerProductProver,
+pub struct RlweRelationProverVerifier {
+    lip: LinearInnerProductProverVerifier,
     n: usize,
 }
 
-impl RlweRelationProver {
+impl RlweRelationProverVerifier {
     // The seed is public information and must match the seed used to create the verifier that will
     // verify the proof. The size n is the degree if the RLWE polynomials.
     pub fn new(seed: &[u8], n: usize) -> Self {
-        Self { prover: LinearInnerProductProver::new(seed, 3 * (n + 128) + MAX_RHOS), n: n }
+        Self { lip: LinearInnerProductProverVerifier::new(seed, 3 * (n + 128) + MAX_RHOS), n: n }
     }
 }
 
 impl<'a> ZeroKnowledgeProver<RlweRelationProofStatement<'a>, RlweRelationProofWitness<'a>>
-    for RlweRelationProver
+    for RlweRelationProverVerifier
 {
     type Proof = RlweRelationProof;
 
@@ -648,9 +646,9 @@ impl<'a> ZeroKnowledgeProver<RlweRelationProofStatement<'a>, RlweRelationProofWi
             let delta_r = Scalar::random(&mut rng);
             let delta_e = Scalar::random(&mut rng);
             let delta_v = Scalar::random(&mut rng);
-            let comm_r = self.prover.commit_partial(&scalar_r, delta_r, 0, n)?;
-            let comm_e = self.prover.commit_partial(&scalar_e, delta_e, n, 2 * n)?;
-            let comm_v = self.prover.commit_partial(&scalar_v, delta_v, 2 * n, 3 * n)?;
+            let comm_r = self.lip.commit_partial(&scalar_r, delta_r, 0, n)?;
+            let comm_e = self.lip.commit_partial(&scalar_e, delta_e, n, 2 * n)?;
+            let comm_v = self.lip.commit_partial(&scalar_v, delta_v, 2 * n, 3 * n)?;
             comm_rev = comm_r + comm_e + comm_v;
             delta_rev = delta_r + delta_e + delta_v;
             transcript.append_message(b"witness commitment", &comm_rev.compress().to_bytes());
@@ -730,7 +728,7 @@ impl<'a> ZeroKnowledgeProver<RlweRelationProofStatement<'a>, RlweRelationProofWi
                 Scalar::from((wrho_vec[j] + (bound_w as i128)) as u128) - Scalar::from(bound_w);
         }
         let comm_wrho =
-            self.prover.commit_partial(&scalar_wrho_vec, delta_w, 3 * n, 3 * n + MAX_RHOS)?;
+            self.lip.commit_partial(&scalar_wrho_vec, delta_w, 3 * n, 3 * n + MAX_RHOS)?;
         transcript.append_message(b"w(rho) commitment", &comm_wrho.compress().to_bytes());
 
         // We will use powers of tau to linearly combine the required polynomial evaluations into
@@ -773,7 +771,7 @@ impl<'a> ZeroKnowledgeProver<RlweRelationProofStatement<'a>, RlweRelationProofWi
         let range_product_r = generate_range_product(
             &signed_r,
             bound_r,
-            &self.prover,
+            &self.lip,
             range_comm_offset,
             transcript,
             b"range matrix r",
@@ -781,7 +779,7 @@ impl<'a> ZeroKnowledgeProver<RlweRelationProofStatement<'a>, RlweRelationProofWi
         let range_product_e = generate_range_product(
             &signed_e,
             bound_e,
-            &self.prover,
+            &self.lip,
             range_comm_offset + 128,
             transcript,
             b"range matrix e",
@@ -789,7 +787,7 @@ impl<'a> ZeroKnowledgeProver<RlweRelationProofStatement<'a>, RlweRelationProofWi
         let range_product_vw = generate_range_product(
             &signed_vw,
             q * (n as u128),
-            &self.prover,
+            &self.lip,
             range_comm_offset + 256,
             transcript,
             b"range matrix v || w",
@@ -851,7 +849,7 @@ impl<'a> ZeroKnowledgeProver<RlweRelationProofStatement<'a>, RlweRelationProofWi
         };
         let lip_witness =
             LinearInnerProductProofWitness { a: private_vec, delta_a: blinding_factor };
-        let lip_proof = self.prover.prove(&lip_statement, &lip_witness, transcript)?;
+        let lip_proof = self.lip.prove(&lip_statement, &lip_witness, transcript)?;
 
         // Return the proof
         Ok(RlweRelationProof {
@@ -868,21 +866,8 @@ impl<'a> ZeroKnowledgeProver<RlweRelationProofStatement<'a>, RlweRelationProofWi
     }
 }
 
-pub struct RlweRelationVerifier {
-    lip_verifier: LinearInnerProductVerifier,
-    n: usize,
-}
-
-impl RlweRelationVerifier {
-    // The seed is public information and must match the seed used to create the prover which
-    // created the proof that is to be verified. The size n is the degree if the RLWE polynomials.
-    pub fn new(seed: &[u8], n: usize) -> Self {
-        Self { lip_verifier: LinearInnerProductVerifier::new(seed, 3 * (n + 128) + MAX_RHOS), n: n }
-    }
-}
-
 impl<'a> ZeroKnowledgeVerifier<RlweRelationProofStatement<'a>, RlweRelationProof>
-    for RlweRelationVerifier
+    for RlweRelationProverVerifier
 {
     fn verify(
         &self,
@@ -1011,7 +996,7 @@ impl<'a> ZeroKnowledgeVerifier<RlweRelationProofStatement<'a>, RlweRelationProof
             c: result,
             comm_a: private_vec_comm.compress(),
         };
-        self.lip_verifier.verify(&lip_statement, &proof.lip_proof, transcript)
+        self.lip.verify(&lip_statement, &proof.lip_proof, transcript)
     }
 }
 
@@ -1289,7 +1274,7 @@ mod tests {
     fn test_generate_range_product() -> googletest::Result<()> {
         let bound = 10;
         let v = [1, -2, 3, -4];
-        let prover = LinearInnerProductProver::new(b"42", 132);
+        let prover = LinearInnerProductProverVerifier::new(b"42", 132);
         let mut transcript = MerlinTranscript::new(b"42");
         let result =
             generate_range_product(&v, bound, &prover, 4, &mut transcript, b"test vector")?;
@@ -1355,11 +1340,11 @@ mod tests {
         let witness = RlweRelationProofWitness { r: &r, e: &e, v: &v };
         let transcript_initializer = b"Rlwe Test Transcript";
 
-        let prover = RlweRelationProver::new(b"42", statement.n);
+        let prover = RlweRelationProverVerifier::new(b"42", statement.n);
         let mut transcript = MerlinTranscript::new(transcript_initializer);
         let proof = prover.prove(&statement, &witness, &mut transcript)?;
 
-        let verifier = RlweRelationVerifier::new(b"42", statement.n);
+        let verifier = RlweRelationProverVerifier::new(b"42", statement.n);
         let mut transcript = MerlinTranscript::new(transcript_initializer);
         verifier.verify(&statement, &proof, &mut transcript)?;
         Ok(())
@@ -1401,11 +1386,11 @@ mod tests {
         let witness = RlweRelationProofWitness { r: &r, e: &e, v: &v };
         let transcript_initializer = b"Rlwe Test Transcript";
 
-        let prover = RlweRelationProver::new(b"42", statement.n);
+        let prover = RlweRelationProverVerifier::new(b"42", statement.n);
         let mut transcript = MerlinTranscript::new(transcript_initializer);
         let proof = prover.prove(&statement, &witness, &mut transcript)?;
 
-        let verifier = RlweRelationVerifier::new(b"42", statement.n);
+        let verifier = RlweRelationProverVerifier::new(b"42", statement.n);
         let mut transcript = MerlinTranscript::new(transcript_initializer);
         verifier.verify(&statement, &proof, &mut transcript)?;
         Ok(())
@@ -1447,13 +1432,13 @@ mod tests {
         let witness = RlweRelationProofWitness { r: &r, e: &e, v: &v };
         let transcript_initializer = b"Rlwe Test Transcript";
 
-        let prover = RlweRelationProver::new(b"42", statement.n);
+        let prover = RlweRelationProverVerifier::new(b"42", statement.n);
         let mut transcript = MerlinTranscript::new(transcript_initializer);
         let mut proof = prover.prove(&statement, &witness, &mut transcript)?;
 
         // We prove a different LIP with the same length to provide an invalid LIP proof.
         let lip_length = 3 * n + MAX_RHOS + 3 * 128;
-        let lip_prover = LinearInnerProductProver::new(b"42", lip_length);
+        let lip_prover = LinearInnerProductProverVerifier::new(b"42", lip_length);
         let lip_a = vec![Scalar::from(13u128); lip_length];
         let lip_statement = LinearInnerProductProofStatement {
             n: lip_length,
@@ -1468,7 +1453,7 @@ mod tests {
         let mut lip_transcript = MerlinTranscript::new(transcript_initializer);
         proof.lip_proof = lip_prover.prove(&lip_statement, &lip_witness, &mut lip_transcript)?;
 
-        let verifier = RlweRelationVerifier::new(b"42", statement.n);
+        let verifier = RlweRelationProverVerifier::new(b"42", statement.n);
         let mut transcript = MerlinTranscript::new(transcript_initializer);
         let res = verifier.verify(&statement, &proof, &mut transcript);
         println!("res: {:?}", res);
@@ -1516,8 +1501,8 @@ mod tests {
         let witness = RlweRelationProofWitness { r: &r, e: &e, v: &v };
         let transcript_initializer = b"Rlwe Test Transcript";
 
-        let prover = RlweRelationProver::new(b"42", statement.n);
-        let mut verifier = RlweRelationVerifier::new(b"42", statement.n);
+        let prover = RlweRelationProverVerifier::new(b"42", statement.n);
+        let mut verifier = RlweRelationProverVerifier::new(b"42", statement.n);
         {
             let mut transcript = MerlinTranscript::new(transcript_initializer);
             let mut proof = prover.prove(&statement, &witness, &mut transcript)?;
@@ -1596,8 +1581,8 @@ mod tests {
         let witness = RlweRelationProofWitness { r: &r, e: &e, v: &v };
         let transcript_initializer = b"Rlwe Test Transcript";
 
-        let prover = RlweRelationProver::new(b"42", statement.n);
-        let mut verifier = RlweRelationVerifier::new(b"42", statement.n);
+        let prover = RlweRelationProverVerifier::new(b"42", statement.n);
+        let mut verifier = RlweRelationProverVerifier::new(b"42", statement.n);
         {
             let mut transcript = MerlinTranscript::new(transcript_initializer);
             let mut proof = prover.prove(&statement, &witness, &mut transcript)?;
@@ -1679,8 +1664,8 @@ mod tests {
         let witness = RlweRelationProofWitness { r: &r, e: &e, v: &v };
         let transcript_initializer = b"Rlwe Test Transcript";
 
-        let prover = RlweRelationProver::new(b"42", statement.n);
-        let mut verifier = RlweRelationVerifier::new(b"42", statement.n);
+        let prover = RlweRelationProverVerifier::new(b"42", statement.n);
+        let mut verifier = RlweRelationProverVerifier::new(b"42", statement.n);
         {
             let mut transcript = MerlinTranscript::new(transcript_initializer);
             let mut proof = prover.prove(&statement, &witness, &mut transcript)?;
