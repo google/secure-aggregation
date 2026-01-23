@@ -28,9 +28,7 @@ use messages::{
     PartialDecryptionRequest,
 };
 use parameters_shell::{create_shell_ahe_config, create_shell_kahe_config};
-use prng_traits::SecurePrng;
 use server_traits::SecureAggregationServer;
-use single_thread_hkdf::SingleThreadHkdfPrng;
 use testing_utils::{generate_random_nonce, generate_random_unsigned_vector};
 use vahe_shell::ShellVahe;
 use verifier_traits::SecureAggregationVerifier;
@@ -135,10 +133,8 @@ fn setup_base(args: &Args) -> BaseInputs {
 
     // Create decryptor.
     let vahe = ShellVahe::new(ahe_config.clone(), CONTEXT_STRING).unwrap();
-    let seed = SingleThreadHkdfPrng::generate_seed().unwrap();
-    let prng = SingleThreadHkdfPrng::create(&seed).unwrap();
     let mut decryptor_state = DecryptorState::default();
-    let mut decryptor = WillowV1Decryptor { vahe, prng };
+    let decryptor = WillowV1Decryptor::new_with_randomly_generated_seed(vahe).unwrap();
 
     // Create server.
     let kahe = ShellKahe::new(kahe_config.clone(), CONTEXT_STRING).unwrap();

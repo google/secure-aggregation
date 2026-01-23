@@ -24,14 +24,14 @@ pub trait SecureAggregationDecryptor: HasVahe {
     /// Creates a public key share to be sent to the Server, updating the
     /// decryptor state.
     fn create_public_key_share(
-        &mut self,
+        &self,
         decryptor_state: &mut Self::DecryptorState,
     ) -> Result<DecryptorPublicKeyShare<<Self as HasVahe>::Vahe>, StatusError>;
 
     /// Handles a partial decryption request received from the Server. Returns a
     /// partial decryption to the Server.
     fn handle_partial_decryption_request(
-        &mut self,
+        &self,
         partial_decryption_request: PartialDecryptionRequest<<Self as HasVahe>::Vahe>,
         decryptor_state: &Self::DecryptorState,
     ) -> Result<PartialDecryptionResponse<<Self as HasVahe>::Vahe>, StatusError>;

@@ -16,23 +16,33 @@ use ahe_traits::{AheKeygen, PartialDec};
 use decryptor_traits::SecureAggregationDecryptor;
 use messages::{DecryptorPublicKeyShare, PartialDecryptionRequest, PartialDecryptionResponse};
 use messages_rust_proto::DecryptorStateProto;
+use prng_traits::SecurePrng;
 use proto_serialization_traits::{FromProto, ToProto};
 use protobuf::AsView;
 use shell_ciphertexts_rust_proto::ShellAheSecretKeyShare;
 use status::StatusError;
+use std::cell::RefCell;
 use vahe_traits::{EncryptVerify, HasVahe, VaheBase};
 
 /// Lightweight decryptor directly exposing KAHE/VAHE types. It verifies only the client proofs,
 /// does not provide verifiable partial decryptions.
 pub struct WillowV1Decryptor<Vahe: VaheBase> {
     pub vahe: Vahe,
-    pub prng: Vahe::Rng,
+    pub prng: RefCell<Vahe::Rng>,
 }
 
 impl<Vahe: VaheBase> HasVahe for WillowV1Decryptor<Vahe> {
     type Vahe = Vahe;
     fn vahe(&self) -> &Self::Vahe {
         &self.vahe
+    }
+}
+
+impl<Vahe: VaheBase> WillowV1Decryptor<Vahe> {
+    pub fn new_with_randomly_generated_seed(vahe: Vahe) -> Result<Self, status::StatusError> {
+        let seed = Vahe::Rng::generate_seed()?;
+        let prng = RefCell::new(Vahe::Rng::create(&seed)?);
+        Ok(Self { vahe, prng })
     }
 }
 
@@ -97,10 +107,10 @@ where
     /// Creates a public key share to be sent to the Server, updating the
     /// decryptor state.
     fn create_public_key_share(
-        &mut self,
+        &self,
         decryptor_state: &mut Self::DecryptorState,
     ) -> Result<DecryptorPublicKeyShare<Vahe>, status::StatusError> {
-        let (sk_share, pk_share, _) = self.vahe.key_gen(&mut self.prng)?;
+        let (sk_share, pk_share, _) = self.vahe.key_gen(&mut self.prng.borrow_mut())?;
         decryptor_state.sk_share = Some(sk_share);
         Ok(pk_share)
     }
@@ -108,7 +118,7 @@ where
     /// Handles a partial decryption request received from the Server. Returns a
     /// partial decryption to the Server.
     fn handle_partial_decryption_request(
-        &mut self,
+        &self,
         partial_decryption_request: PartialDecryptionRequest<Vahe>,
         decryptor_state: &Self::DecryptorState,
     ) -> Result<PartialDecryptionResponse<Vahe>, status::StatusError> {
@@ -121,7 +131,7 @@ where
         let pd = self.vahe.partial_decrypt(
             &partial_decryption_request.partial_dec_ciphertext,
             sk_share,
-            &mut self.prng,
+            &mut self.prng.borrow_mut(),
         )?;
         Ok(PartialDecryptionResponse { partial_decryption: pd })
     }
@@ -134,9 +144,7 @@ mod tests {
     use decryptor_traits::SecureAggregationDecryptor;
     use googletest::{gtest, verify_true};
     use parameters_shell::create_shell_ahe_config;
-    use prng_traits::SecurePrng;
     use proto_serialization_traits::{FromProto, ToProto};
-    use single_thread_hkdf::SingleThreadHkdfPrng;
     use vahe_shell::ShellVahe;
 
     const CONTEXT_STRING: &[u8] = b"testing_context_string";
@@ -144,9 +152,7 @@ mod tests {
     #[gtest]
     fn decryptor_state_serialization_roundtrip() -> googletest::Result<()> {
         let vahe = ShellVahe::new(create_shell_ahe_config(1).unwrap(), CONTEXT_STRING).unwrap();
-        let seed = SingleThreadHkdfPrng::generate_seed()?;
-        let prng = SingleThreadHkdfPrng::create(&seed)?;
-        let mut decryptor = WillowV1Decryptor { vahe, prng };
+        let decryptor = WillowV1Decryptor::new_with_randomly_generated_seed(vahe)?;
         let mut decryptor_state = DecryptorState::default();
 
         // Check empty state serialization.

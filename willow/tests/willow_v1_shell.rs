@@ -24,10 +24,8 @@ use messages::{
     PartialDecryptionRequest, PartialDecryptionResponse,
 };
 use parameters_shell::{create_shell_ahe_config, create_shell_kahe_config};
-use prng_traits::SecurePrng;
 use proto_serialization_traits::{FromProto, ToProto};
 use server_traits::SecureAggregationServer;
-use single_thread_hkdf::SingleThreadHkdfPrng;
 use status::StatusErrorCode;
 use status_matchers_rs::status_is;
 use std::collections::HashMap;
@@ -64,10 +62,8 @@ fn encrypt_decrypt_one() -> googletest::Result<()> {
     let vahe =
         ShellVahe::new(create_shell_ahe_config(max_number_of_decryptors).unwrap(), CONTEXT_STRING)
             .unwrap();
-    let seed = SingleThreadHkdfPrng::generate_seed().unwrap();
-    let prng = SingleThreadHkdfPrng::create(&seed).unwrap();
     let mut decryptor_state = DecryptorState::default();
-    let mut decryptor = WillowV1Decryptor { vahe, prng };
+    let decryptor = WillowV1Decryptor::new_with_randomly_generated_seed(vahe).unwrap();
 
     // Create server.
     let vahe =
@@ -152,10 +148,8 @@ fn encrypt_decrypt_one_serialized() -> googletest::Result<()> {
     let vahe =
         ShellVahe::new(create_shell_ahe_config(max_number_of_decryptors).unwrap(), CONTEXT_STRING)
             .unwrap();
-    let seed = SingleThreadHkdfPrng::generate_seed().unwrap();
-    let prng = SingleThreadHkdfPrng::create(&seed).unwrap();
     let mut decryptor_state = DecryptorState::default();
-    let mut decryptor = WillowV1Decryptor { vahe, prng };
+    let decryptor = WillowV1Decryptor::new_with_randomly_generated_seed(vahe).unwrap();
 
     // Create server.
     let kahe =
@@ -292,10 +286,8 @@ fn encrypt_decrypt_multiple_clients() -> googletest::Result<()> {
     let vahe =
         ShellVahe::new(create_shell_ahe_config(max_number_of_decryptors).unwrap(), CONTEXT_STRING)
             .unwrap();
-    let seed = SingleThreadHkdfPrng::generate_seed().unwrap();
-    let prng = SingleThreadHkdfPrng::create(&seed).unwrap();
     let mut decryptor_state = DecryptorState::default();
-    let mut decryptor = WillowV1Decryptor { vahe, prng };
+    let decryptor = WillowV1Decryptor::new_with_randomly_generated_seed(vahe).unwrap();
 
     // Create server.
     let vahe =
@@ -438,10 +430,8 @@ fn encrypt_decrypt_multiple_clients_including_invalid_proofs() -> googletest::Re
     let vahe =
         ShellVahe::new(create_shell_ahe_config(max_number_of_decryptors).unwrap(), CONTEXT_STRING)
             .unwrap();
-    let seed = SingleThreadHkdfPrng::generate_seed().unwrap();
-    let prng = SingleThreadHkdfPrng::create(&seed).unwrap();
     let mut decryptor_state = DecryptorState::default();
-    let mut decryptor = WillowV1Decryptor { vahe, prng };
+    let decryptor = WillowV1Decryptor::new_with_randomly_generated_seed(vahe).unwrap();
 
     // Create server.
     let vahe =
@@ -606,10 +596,8 @@ fn encrypt_decrypt_many_clients_decryptors() -> googletest::Result<()> {
             CONTEXT_STRING,
         )
         .unwrap();
-        let seed = SingleThreadHkdfPrng::generate_seed().unwrap();
-        let prng = SingleThreadHkdfPrng::create(&seed).unwrap();
         let mut decryptor_state = DecryptorState::default();
-        let mut decryptor = WillowV1Decryptor { vahe, prng };
+        let decryptor = WillowV1Decryptor::new_with_randomly_generated_seed(vahe).unwrap();
 
         // Decryptor generates public key share.
         let public_key_share = decryptor.create_public_key_share(&mut decryptor_state).unwrap();
@@ -732,10 +720,8 @@ fn encrypt_decrypt_no_dropout() -> googletest::Result<()> {
             CONTEXT_STRING,
         )
         .unwrap();
-        let seed = SingleThreadHkdfPrng::generate_seed().unwrap();
-        let prng = SingleThreadHkdfPrng::create(&seed).unwrap();
         let decryptor_state = DecryptorState::default();
-        let decryptor = WillowV1Decryptor { vahe, prng };
+        let decryptor = WillowV1Decryptor::new_with_randomly_generated_seed(vahe).unwrap();
         decryptor_states.push(decryptor_state);
         decryptors.push(decryptor);
     }

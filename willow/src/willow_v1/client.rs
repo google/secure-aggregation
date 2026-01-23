@@ -102,9 +102,7 @@ mod test {
     use googletest::{gtest, verify_eq, verify_that};
     use kahe_shell::ShellKahe;
     use parameters_shell::create_shell_configs;
-    use prng_traits::SecurePrng;
     use shell_testing_decryptor::ShellTestingDecryptor;
-    use single_thread_hkdf::SingleThreadHkdfPrng;
     use std::collections::HashMap;
     use testing_utils::generate_random_nonce;
     use vahe_shell::ShellVahe;

@@ -31,6 +31,7 @@ use protobuf::prelude::*;
 use single_thread_hkdf::SingleThreadHkdfPrng;
 use status::ffi::FfiStatus;
 use status::{StatusError, StatusErrorCode};
+use std::cell::RefCell;
 use vahe_shell::ShellVahe;
 use vahe_traits::Recover;
 use vahe_traits::{HasVahe, VaheBase};
@@ -41,7 +42,7 @@ use vahe_traits::{HasVahe, VaheBase};
 pub struct ShellTestingDecryptor {
     kahe: ShellKahe,
     vahe: ShellVahe,
-    prng: SingleThreadHkdfPrng,
+    prng: RefCell<SingleThreadHkdfPrng>,
     secret_key: Option<<ShellVahe as AheBase>::SecretKeyShare>,
 }
 
@@ -64,14 +65,14 @@ impl ShellTestingDecryptor {
         let vahe = ShellVahe::new(ahe_config, context_bytes)?;
         let seed = SingleThreadHkdfPrng::generate_seed()?;
         let prng = SingleThreadHkdfPrng::create(&seed)?;
-        Ok(ShellTestingDecryptor { kahe, vahe, prng, secret_key: None })
+        Ok(ShellTestingDecryptor { kahe, vahe, prng: RefCell::new(prng), secret_key: None })
     }
 
     /// Generates a new AHE public key, and stores the corresponding secret key.
     pub fn generate_public_key(
         &mut self,
     ) -> Result<<ShellVahe as AheBase>::PublicKey, StatusError> {
-        let (sk_share, pk_share, _) = self.vahe.key_gen(&mut self.prng)?;
+        let (sk_share, pk_share, _) = self.vahe.key_gen(&mut self.prng.borrow_mut())?;
         self.secret_key = Some(sk_share);
         let public_key = self.vahe.aggregate_public_key_shares(&[pk_share])?;
         Ok(public_key)
@@ -81,7 +82,7 @@ impl ShellTestingDecryptor {
     /// the AHE ciphertext and then decrypting the KAHE ciphertext. Does not verify the client proof
     /// contained in the message.
     pub fn decrypt(
-        &mut self,
+        &self,
         client_message: &ClientMessage<ShellKahe, ShellVahe>,
     ) -> Result<<ShellKahe as KaheBase>::Plaintext, StatusError> {
         let partial_dec_ciphertext =
@@ -94,8 +95,11 @@ impl ShellTestingDecryptor {
                 "No secret key available",
             )),
             Some(sk_share) => {
-                let partial_decryption =
-                    self.vahe.partial_decrypt(&partial_dec_ciphertext, sk_share, &mut self.prng)?;
+                let partial_decryption = self.vahe.partial_decrypt(
+                    &partial_dec_ciphertext,
+                    sk_share,
+                    &mut self.prng.borrow_mut(),
+                )?;
                 let decrypted_kahe_key =
                     self.vahe.recover(&partial_decryption, &rest_of_ciphertext, None)?;
                 let decrypted_kahe_key = self.kahe.try_secret_key_from(decrypted_kahe_key)?;
@@ -134,7 +138,7 @@ impl ShellTestingDecryptor {
     }
 
     fn decrypt_serialized(
-        &mut self,
+        &self,
         contribution: &[u8],
     ) -> Result<Vec<ffi::EncodedDataEntry>, StatusError> {
         let client_message_proto = ClientMessageProto::parse(contribution)
@@ -192,7 +196,7 @@ impl ShellTestingDecryptor {
                 let partial_decryption = self.vahe.partial_decrypt(
                     &request.partial_dec_ciphertext,
                     sk_share,
-                    &mut self.prng,
+                    &mut self.prng.borrow_mut(),
                 )?;
                 Ok(PartialDecryptionResponse { partial_decryption })
             }

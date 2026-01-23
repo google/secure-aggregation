@@ -362,10 +362,8 @@ mod tests {
     use googletest::{gtest, verify_true};
     use kahe_shell::ShellKahe;
     use parameters_shell::{create_shell_ahe_config, create_shell_kahe_config};
-    use prng_traits::SecurePrng;
     use proto_serialization_traits::{FromProto, ToProto};
     use server_traits::SecureAggregationServer;
-    use single_thread_hkdf::SingleThreadHkdfPrng;
     use std::collections::HashMap;
     use testing_utils::{generate_aggregation_config, generate_random_nonce};
     use vahe_shell::ShellVahe;
@@ -400,10 +398,8 @@ mod tests {
             CONTEXT_STRING,
         )
         .unwrap();
-        let seed = SingleThreadHkdfPrng::generate_seed()?;
-        let prng = SingleThreadHkdfPrng::create(&seed)?;
         let mut decryptor_state = DecryptorState::default();
-        let mut decryptor = WillowV1Decryptor { vahe, prng };
+        let decryptor = WillowV1Decryptor::new_with_randomly_generated_seed(vahe)?;
 
         // Create server.
         let kahe =
