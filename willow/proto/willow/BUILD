@@ -59,6 +59,11 @@ cc_proto_library(
     deps = [":key_proto"],
 )
 
+rust_proto_library(
+    name = "key_rust_proto",
+    deps = [":key_proto"],
+)
+
 proto_library(
     name = "input_spec_proto",
     srcs = ["input_spec.proto"],
