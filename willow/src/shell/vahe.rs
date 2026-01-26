@@ -105,8 +105,8 @@ pub struct ShellVahe {
 
 impl ShellVahe {
     fn transcript_seed(&self) -> &[u8] {
-        &self.public_seed.as_bytes()
-            [single_thread_hkdf::seed_length()..2 * single_thread_hkdf::seed_length()]
+        let seed_len = single_thread_hkdf::seed_length() as usize;
+        &self.public_seed.as_bytes()[seed_len..2 * seed_len]
     }
 
     fn transcript(
@@ -151,11 +151,12 @@ impl AheBase for ShellVahe {
     type Config = ShellAheConfig;
 
     fn new(config: Self::Config, context_string: &[u8]) -> Result<Self, status::StatusError> {
+        let seed_len = single_thread_hkdf::seed_length();
         let public_seed = single_thread_hkdf::compute_hkdf(
             context_string,
             b"",
             b"ShellVahe.public_seed",
-            2 * single_thread_hkdf::seed_length(), // Separate seeds for transcripts and proofs.
+            2 * seed_len, // Separate seeds for transcripts and proofs.
         )?;
         let mut q = 1;
         for modulus in &config.qs {
@@ -163,7 +164,7 @@ impl AheBase for ShellVahe {
         }
         let ahe = ShellAhe::new(config, context_string)?;
         let rlwe_zk = RlweRelationProverVerifier::new(
-            &public_seed.as_bytes()[..single_thread_hkdf::seed_length()],
+            &public_seed.as_bytes()[..seed_len as usize],
             ahe.num_coeffs(),
         );
         Ok(ShellVahe { ahe: ahe, q: q, public_seed: public_seed, rlwe_zk: rlwe_zk })

@@ -681,7 +681,7 @@ impl Recover for ShellAhe {
                 &self.public_ahe_parameters,
                 &mut unsigned_values[start..end],
             )?;
-            if n_written != end - start {
+            if n_written != (end - start) as u64 {
                 return Err(status::internal(format!(
                     "Expected {} recovered messages, but got {}",
                     end - start,

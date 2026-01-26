@@ -59,7 +59,7 @@ mod ffi {
             log_n: u64,
             t: u64,
             qs: *const u64,
-            num_qs: usize,
+            num_qs: u64,
             error_variance: u64,
             s_base_flood: f64,
             s_flood: f64,
@@ -93,7 +93,7 @@ mod ffi {
 
         pub unsafe fn AheEncrypt(
             input_values: *const u64,
-            num_input_values: usize,
+            num_input_values: u64,
             public_key_b: &RnsPolynomialWrapper,
             params: &AhePublicParameters,
             prng: *mut SingleThreadHkdfWrapper,
@@ -118,9 +118,9 @@ mod ffi {
             sum_partial_decryptions: &RnsPolynomialWrapper,
             ciphertext_component_b: &RnsPolynomialWrapper,
             params: &AhePublicParameters,
-            num_output_values: usize,
+            num_output_values: u64,
             output_values: *mut u64,
-            n_written: *mut usize,
+            n_written: *mut u64,
         ) -> FfiStatus;
 
         pub unsafe fn CreateZeroRnsPolynomialWrapper(
@@ -332,8 +332,8 @@ pub fn recover_messages(
     ciphertext_component_b: &RnsPolynomial,
     params: &AhePublicParameters,
     output_values: &mut [u64],
-) -> Result<usize, status::StatusError> {
-    let mut n_written = 0usize;
+) -> Result<u64, status::StatusError> {
+    let mut n_written = 0u64;
     let (out_ptr, out_len) = to_cpp_pointer_len_pair_mut(output_values);
     // SAFETY:  No lifetime constraints (`BufferResult` just holds two ints and
     // does not keep any reference to the inputs). `Decrypt` only modifies the

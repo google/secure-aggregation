@@ -79,7 +79,7 @@ pub mod ffi {
         pub unsafe fn WriteRnsPolynomialToBuffer128(
             rns_context: *const RnsContext,
             poly: *const RnsPolynomialWrapper,
-            buffer_len: usize,
+            buffer_len: u64,
             buffer: *mut u64,
         ) -> FfiStatus;
 
@@ -159,20 +159,20 @@ pub struct RnsContextRef<'a> {
 }
 
 ///  Converts slices into C++-safe pointer and length pairs.
-pub fn to_cpp_pointer_len_pair<T>(s: &[T]) -> (*const T, usize) {
+pub fn to_cpp_pointer_len_pair<T>(s: &[T]) -> (*const T, u64) {
     if s.is_empty() {
         (std::ptr::null(), 0)
     } else {
-        (s.as_ptr(), s.len())
+        (s.as_ptr(), s.len() as u64)
     }
 }
 
 /// Converts slices into C++-safe mutable pointer and length pairs.
-pub fn to_cpp_pointer_len_pair_mut<T>(s: &mut [T]) -> (*mut T, usize) {
+pub fn to_cpp_pointer_len_pair_mut<T>(s: &mut [T]) -> (*mut T, u64) {
     if s.is_empty() {
         (std::ptr::null_mut(), 0)
     } else {
-        (s.as_mut_ptr(), s.len())
+        (s.as_mut_ptr(), s.len() as u64)
     }
 }
 
@@ -186,7 +186,7 @@ pub fn write_small_rns_polynomial_to_buffer(
     poly: &RnsPolynomial,
     moduli: &Moduli,
     buffer: &mut [i64],
-) -> Result<usize, status::StatusError> {
+) -> Result<u64, status::StatusError> {
     let mut n_written: u64 = 0;
     // SAFETY: No lifetime constraints. Writes to `buffer` within a valid range.
     rust_status_from_cpp(unsafe {
@@ -198,7 +198,7 @@ pub fn write_small_rns_polynomial_to_buffer(
             &mut n_written,
         )
     })?;
-    Ok(n_written as usize)
+    Ok(n_written)
 }
 
 /// Takes prime moduli {q_i}, and a buffer of `buffer_len` signed integers,

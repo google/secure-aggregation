@@ -143,7 +143,7 @@ fn encrypt_add_recover() -> Result<()> {
     let mut output_values = vec![0; 2 * num_messages];
     let n_written =
         recover_messages(&sum_partial_decryptions, &ciphertext_b, &params, &mut output_values)?;
-    expect_that!(n_written, eq(num_messages));
+    expect_that!(n_written, eq(num_messages as u64));
 
     // Check homomorphism.
     for i in 0..num_messages {

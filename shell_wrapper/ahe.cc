@@ -83,7 +83,7 @@ class PublicKeyRawFactory {
 namespace secure_aggregation {
 
 FfiStatus CreateAhePublicParameters(uint64_t log_n, uint64_t t,
-                                    const uint64_t* qs, size_t num_qs,
+                                    const uint64_t* qs, uint64_t num_qs,
                                     uint64_t error_variance,
                                     double s_base_flood, double s_flood,
                                     rust::Slice<const uint8_t> seed,
@@ -193,7 +193,7 @@ FfiStatus GeneratePublicKeyShareWrapper(
                          public_key_share_error->ptr.get(), wraparound_ptr));
 }
 
-FfiStatus AheEncrypt(const uint64_t* input_values, size_t num_input_values,
+FfiStatus AheEncrypt(const uint64_t* input_values, uint64_t num_input_values,
                      const RnsPolynomialWrapper& public_key_b,
                      const AhePublicParameters& params,
                      SingleThreadHkdfWrapper* prng,
@@ -270,8 +270,8 @@ FfiStatus PartialDecrypt(const RnsPolynomialWrapper& ciphertext_component_a,
 FfiStatus RecoverMessages(const RnsPolynomialWrapper& sum_partial_decryptions,
                           const RnsPolynomialWrapper& ciphertext_component_b,
                           const AhePublicParameters& params,
-                          size_t output_values_length, uint64_t* output_values,
-                          size_t* n_written) {
+                          uint64_t output_values_length,
+                          uint64_t* output_values, uint64_t* n_written) {
   if (output_values == nullptr || sum_partial_decryptions.ptr == nullptr ||
       ciphertext_component_b.ptr == nullptr || n_written == nullptr) {
     return MakeFfiStatus(absl::InvalidArgumentError(
@@ -288,7 +288,8 @@ FfiStatus RecoverMessages(const RnsPolynomialWrapper& sum_partial_decryptions,
   }
 
   // Copy messages from vector to output buffer.
-  *n_written = std::min(output_values_length, messages->size());
+  *n_written =
+      std::min(static_cast<size_t>(output_values_length), messages->size());
   std::copy_n(messages->begin(), *n_written, output_values);
   return MakeFfiStatus();
 }

@@ -81,7 +81,7 @@ RnsPolynomialVecWrapper RustVecToRnsPolynomialVecWrapper(
 //    format usable by a ZK proof library.
 FfiStatus WriteSmallRnsPolynomialToBuffer(const RnsPolynomialWrapper* poly,
                                           ModuliWrapper moduli,
-                                          size_t buffer_len, int64_t* buffer,
+                                          uint64_t buffer_len, int64_t* buffer,
                                           uint64_t* n_written);
 
 //  Takes prime moduli {q_i}, and a buffer of `buffer_len` signed integers,
