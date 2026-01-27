@@ -31,9 +31,9 @@ use status::StatusError;
 use std::fmt::Debug;
 use vahe_traits::{HasVahe, VaheBase};
 
-pub type DecryptorPublicKeyShare<Vahe: VaheBase> = <Vahe as AheBase>::PublicKeyShare;
+pub type DecryptorPublicKeyShare<Vahe> = <Vahe as AheBase>::PublicKeyShare;
 
-pub type DecryptorPublicKey<Vahe: VaheBase> = <Vahe as AheBase>::PublicKey;
+pub type DecryptorPublicKey<Vahe> = <Vahe as AheBase>::PublicKey;
 
 /// Message sent by a generic KAHE/AHE Willow client to the server.
 #[derive(Debug)]

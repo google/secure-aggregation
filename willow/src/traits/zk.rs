@@ -83,6 +83,7 @@ pub struct LinearInnerProductProofWitness<T> {
 }
 
 // Associated types for inner product proofs.
+#[allow(non_snake_case)]
 pub struct QuadraticInnerProductParameters {
     pub n: usize,
     pub G: Vec<RistrettoPoint>,
@@ -93,6 +94,7 @@ pub struct QuadraticInnerProductParameters {
 
 // The statement is a commitment C = G*a + H*b + F*<a,b> + F_*delta,
 // The proof is a proof of knowledge of a, b and delta.
+#[allow(non_snake_case)]
 pub struct QuadraticInnerProductProofStatement {
     pub C: RistrettoPoint,
 }

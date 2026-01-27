@@ -23,6 +23,7 @@ use zk_traits::{
 };
 
 // Inner product proof for <a,b> = c, with precommitted a, b and c with O(|a|) proof size.
+#[allow(non_snake_case)]
 pub struct QuadraticInnerProductProof {
     pub R: CompressedRistretto,
     pub S: CompressedRistretto,
@@ -62,6 +63,7 @@ fn generate_params(length: usize, parameter_seed: &[u8]) -> QuadraticInnerProduc
     }
 }
 
+#[allow(non_snake_case)]
 fn append_params_to_transcript(
     transcript: &mut impl Transcript,
     params: &QuadraticInnerProductParameters,
@@ -97,12 +99,13 @@ pub struct QuadraticInnerProductProverVerifier {
 }
 
 impl QuadraticInnerProductProverVerifier {
-    fn new(parameter_seed: &[u8], length: usize) -> Self {
+    pub fn new(parameter_seed: &[u8], length: usize) -> Self {
         let params = generate_params(length, parameter_seed);
         Self { params }
     }
 
-    fn commit(
+    #[allow(non_snake_case)]
+    pub fn commit(
         &self,
         a: &[Scalar],
         b: &[Scalar],
@@ -140,6 +143,7 @@ impl
 {
     type Proof = QuadraticInnerProductProof;
 
+    #[allow(non_snake_case)]
     fn prove(
         &self,
         statement: &QuadraticInnerProductProofStatement,
@@ -205,6 +209,7 @@ impl
 impl ZeroKnowledgeVerifier<QuadraticInnerProductProofStatement, QuadraticInnerProductProof>
     for QuadraticInnerProductProverVerifier
 {
+    #[allow(non_snake_case)]
     fn verify(
         &self,
         statement: &QuadraticInnerProductProofStatement,
@@ -277,6 +282,7 @@ mod tests {
     use status_matchers_rs::status_is;
 
     #[gtest]
+    #[allow(non_snake_case)]
     fn test_valid_quadratic_zk_inner_product_proof() -> googletest::Result<()> {
         // The large entries on the end are to ensure wrap around modulo the order is tested.
         let mut a: Vec<Scalar> = (1..5).map(|x| Scalar::from(x as u64)).collect();
@@ -306,6 +312,7 @@ mod tests {
     }
 
     #[gtest]
+    #[allow(non_snake_case)]
     fn test_invalid_quadratic_zk_inner_product_proof() -> googletest::Result<()> {
         // The large entries on the end are to ensure wrap around modulo the order is tested.
         let mut a: Vec<Scalar> = (1..5).map(|x| Scalar::from(x as u64)).collect();

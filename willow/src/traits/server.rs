@@ -12,13 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use kahe_traits::{HasKahe, KaheBase};
+use kahe_traits::HasKahe;
 use messages::{
     CiphertextContribution, ClientMessage, DecryptionRequestContribution, DecryptorPublicKey,
     DecryptorPublicKeyShare, PartialDecryptionResponse,
 };
 use status::StatusError;
-use vahe_traits::{HasVahe, VaheBase};
+use vahe_traits::HasVahe;
 
 // Helper aliases for the generic types.
 type Kahe<T> = <T as HasKahe>::Kahe;

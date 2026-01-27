@@ -24,6 +24,7 @@ use zk_traits::{
 
 // Inner product proof for <a,b> = c, with public b,c with O(|a|) proof size.
 #[derive(Clone)]
+#[allow(non_snake_case)]
 pub struct LinearInnerProductProof {
     pub a_: Vec<Scalar>,
     pub delta_: Scalar,
@@ -31,6 +32,7 @@ pub struct LinearInnerProductProof {
     pub R: CompressedRistretto,
 }
 
+#[allow(non_snake_case)]
 pub struct LinearInnerProductParameters {
     n: usize,
     F: RistrettoPoint,
@@ -98,6 +100,7 @@ impl LinearInnerProductProverVerifier {
         Self { params }
     }
 
+    #[allow(non_snake_case)]
     pub fn commit(
         &self,
         a: &[Scalar],
@@ -115,6 +118,7 @@ impl LinearInnerProductProverVerifier {
         Ok(C.compress())
     }
 
+    #[allow(non_snake_case)]
     pub fn commit_partial(
         &self,
         a: &[Scalar],
@@ -149,6 +153,7 @@ impl
 {
     type Proof = LinearInnerProductProof;
 
+    #[allow(non_snake_case)]
     fn prove(
         &self,
         statement: &LinearInnerProductProofStatement<Scalar>,
@@ -217,6 +222,7 @@ impl
 impl ZeroKnowledgeVerifier<LinearInnerProductProofStatement<Scalar>, LinearInnerProductProof>
     for LinearInnerProductProverVerifier
 {
+    #[allow(non_snake_case)]
     fn verify(
         &self,
         statement: &LinearInnerProductProofStatement<Scalar>,
@@ -325,15 +331,14 @@ mod tests {
     fn test_invalid_linear_zk_inner_product_proof() -> googletest::Result<()> {
         let a: Vec<Scalar> = (1..5).map(|x| Scalar::from(x as u64)).collect();
         let mut rng = rand::thread_rng();
-        let r: Vec<_> = (0..a.len()).map(|_| Scalar::random(&mut rng)).collect();
         let mut transcript = MerlinTranscript::new(b"linear_ip_zkp_test");
 
         let prover = LinearInnerProductProverVerifier::new(b"42", a.len());
         let delta_a = Scalar::random(&mut rng);
         let comm_a = prover.commit(&a, delta_a)?;
-        let delta_r = Scalar::random(&mut rng);
-        let comm_r = prover.commit(&r, delta_r)?;
         let b: Vec<Scalar> = (5..9).map(|x| Scalar::from(x as u64)).collect();
+
+        // Proof is invalid, since c = <a, b> + 1.
         let c: Scalar = Scalar::from(5 + 12 + 21 + 32 + 1 as u64);
 
         let verifier = LinearInnerProductProverVerifier::new(b"42", a.len());

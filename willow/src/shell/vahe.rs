@@ -21,7 +21,7 @@ use proto_serialization_traits::{FromProto, ToProto};
 use protobuf::{proto, AsView};
 use rlwe_relation::{RlweRelationProof, RlweRelationProverVerifier};
 use rlwe_relation_serialization::{rlwe_relation_proof_from_proto, rlwe_relation_proof_to_proto};
-use single_thread_hkdf::{compute_hkdf, Seed};
+use single_thread_hkdf::Seed;
 use status::Status;
 use status::StatusError;
 use vahe_traits::{

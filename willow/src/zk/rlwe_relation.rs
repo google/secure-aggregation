@@ -261,6 +261,7 @@ fn create_public_vec(
 
 // Updates the public vector and result of the inner product relation with the products required by
 // the range proofs. Thus combining them into a single inner product statement.
+#[allow(non_snake_case)]
 fn update_public_vec_for_range_proof(
     public_vec: &mut Vec<Scalar>,
     result: &mut Scalar,
@@ -330,6 +331,7 @@ pub fn generate_challenge_matrix(
 // the resulting vector z is returned.
 //
 // To understand the rejection conditions see the comment for generate_range_product.
+#[allow(non_snake_case)]
 pub fn try_matrices_and_compute_z(
     v: &[i128],
     R1: &[u128],
@@ -364,6 +366,7 @@ pub fn try_matrices_and_compute_z(
 
 // Linearly combines the 128 vector challenges of a challenge matrix into a single vector challenge
 // uses powers of a scalar challenge psi
+#[allow(non_snake_case)]
 pub fn flatten_challenge_matrix(
     transcript: &mut impl Transcript,
     R1: Vec<u128>,
@@ -418,6 +421,7 @@ fn check_loose_bound_will_not_overflow(bound: u128, n: usize) -> Result<(), stat
 }
 
 // Struct to hold the results of the generate_range_product function.
+#[allow(non_snake_case)]
 struct RangeProductMetadata {
     R: Vec<Scalar>,
     comm_y: RistrettoPoint,
@@ -442,6 +446,7 @@ struct RangeProductMetadata {
 // If ||v|| > bound*gamma then the probability of ||z|| < bound*gamma/lambda is negligible.
 // Thus the prover need only reveal z to the verifier along with a proof that z = vR+y.
 // This function returns z and the required inner product statement to prove that z = vR+y.
+#[allow(non_snake_case)]
 fn generate_range_product(
     v: &[i128],
     bound: u128,
@@ -467,7 +472,7 @@ fn generate_range_product(
     let mut comm_y: RistrettoPoint;
     let mut R1: Vec<u128>;
     let mut R2: Vec<u128>;
-    let mut z = vec![0 as i128; 128];
+    let z: Vec<i128>;
     let mut attempts = 0;
     loop {
         attempts += 1;
@@ -521,6 +526,7 @@ fn generate_range_product(
 
 // Verifies the z bound and returns the linear combination of the 128 rows of the range proof
 // projection matrix R and a vector psi of the coefficients used in that linear combination.
+#[allow(non_snake_case)]
 fn generate_range_product_for_verification_and_verify_z_bound(
     n: usize,
     bound: u128,
@@ -603,6 +609,7 @@ impl<'a> ZeroKnowledgeProver<RlweRelationProofStatement<'a>, RlweRelationProofWi
     type Proof = RlweRelationProof;
 
     // See comment above RlweRelationProof for more details.
+    #[allow(non_snake_case)]
     fn prove(
         &self,
         statement: &RlweRelationProofStatement,
@@ -869,6 +876,7 @@ impl<'a> ZeroKnowledgeProver<RlweRelationProofStatement<'a>, RlweRelationProofWi
 impl<'a> ZeroKnowledgeVerifier<RlweRelationProofStatement<'a>, RlweRelationProof>
     for RlweRelationProverVerifier
 {
+    #[allow(non_snake_case)]
     fn verify(
         &self,
         statement: &RlweRelationProofStatement<'a>,
@@ -1229,6 +1237,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(non_snake_case)]
     fn test_try_matrices_and_compute_z_valid() -> googletest::Result<()> {
         let v = [1, -2, 3, -4];
         let R1 = [1, 2, 3, 4];
@@ -1245,6 +1254,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(non_snake_case)]
     fn test_try_matrices_and_compute_z_mismatched_lengths() -> googletest::Result<()> {
         let v = [1, -2, 3, -4];
         let R1 = [1, 2, 3];
@@ -1258,6 +1268,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(non_snake_case)]
     fn test_try_matrices_and_compute_z_sample_rejected() -> googletest::Result<()> {
         let v = [1000, -2000, 3000, -4000];
         let R1 = [1, 2, 3, 4];
@@ -1419,7 +1430,7 @@ mod tests {
         let e = read_small_rns_polynomial_from_buffer(&e_buffer, n as u64, &moduli)?;
         let v = read_small_rns_polynomial_from_buffer(&v_buffer, n as u64, &moduli)?;
 
-        let mut statement = RlweRelationProofStatement {
+        let statement = RlweRelationProofStatement {
             n: n,
             context: context,
             a: &a,
@@ -1488,7 +1499,7 @@ mod tests {
         let e = read_small_rns_polynomial_from_buffer(&e_buffer, n as u64, &moduli)?;
         let v = read_small_rns_polynomial_from_buffer(&v_buffer, n as u64, &moduli)?;
 
-        let mut statement = RlweRelationProofStatement {
+        let statement = RlweRelationProofStatement {
             n: n,
             context: context,
             a: &a,
@@ -1502,7 +1513,7 @@ mod tests {
         let transcript_initializer = b"Rlwe Test Transcript";
 
         let prover = RlweRelationProverVerifier::new(b"42", statement.n);
-        let mut verifier = RlweRelationProverVerifier::new(b"42", statement.n);
+        let verifier = RlweRelationProverVerifier::new(b"42", statement.n);
         {
             let mut transcript = MerlinTranscript::new(transcript_initializer);
             let mut proof = prover.prove(&statement, &witness, &mut transcript)?;
@@ -1568,7 +1579,7 @@ mod tests {
         let e = read_small_rns_polynomial_from_buffer(&e_buffer, n as u64, &moduli)?;
         let v = read_small_rns_polynomial_from_buffer(&v_buffer, n as u64, &moduli)?;
 
-        let mut statement = RlweRelationProofStatement {
+        let statement = RlweRelationProofStatement {
             n: n,
             context: context,
             a: &a,
@@ -1582,7 +1593,7 @@ mod tests {
         let transcript_initializer = b"Rlwe Test Transcript";
 
         let prover = RlweRelationProverVerifier::new(b"42", statement.n);
-        let mut verifier = RlweRelationProverVerifier::new(b"42", statement.n);
+        let verifier = RlweRelationProverVerifier::new(b"42", statement.n);
         {
             let mut transcript = MerlinTranscript::new(transcript_initializer);
             let mut proof = prover.prove(&statement, &witness, &mut transcript)?;
@@ -1651,7 +1662,7 @@ mod tests {
         let e = read_small_rns_polynomial_from_buffer(&e_buffer, n as u64, &moduli)?;
         let v = read_small_rns_polynomial_from_buffer(&v_buffer, n as u64, &moduli)?;
 
-        let mut statement = RlweRelationProofStatement {
+        let statement = RlweRelationProofStatement {
             n: n,
             context: context,
             a: &a,
@@ -1665,14 +1676,12 @@ mod tests {
         let transcript_initializer = b"Rlwe Test Transcript";
 
         let prover = RlweRelationProverVerifier::new(b"42", statement.n);
-        let mut verifier = RlweRelationProverVerifier::new(b"42", statement.n);
+        let verifier = RlweRelationProverVerifier::new(b"42", statement.n);
         {
             let mut transcript = MerlinTranscript::new(transcript_initializer);
             let mut proof = prover.prove(&statement, &witness, &mut transcript)?;
 
             proof.comm_rev = RistrettoPoint::hash_from_bytes::<Sha3_512>(b"6").compress();
-
-            let mut transcript = MerlinTranscript::new(transcript_initializer);
         }
         {
             let mut transcript = MerlinTranscript::new(transcript_initializer);
@@ -1680,7 +1689,7 @@ mod tests {
 
             proof.comm_wrho = RistrettoPoint::hash_from_bytes::<Sha3_512>(b"28").compress();
 
-            let mut transcript = MerlinTranscript::new(transcript_initializer);
+            transcript = MerlinTranscript::new(transcript_initializer);
             assert!(verifier
                 .verify(&statement, &proof, &mut transcript)
                 .err()
@@ -1694,7 +1703,7 @@ mod tests {
 
             proof.comm_y_r = RistrettoPoint::hash_from_bytes::<Sha3_512>(b"496").compress();
 
-            let mut transcript = MerlinTranscript::new(transcript_initializer);
+            transcript = MerlinTranscript::new(transcript_initializer);
             assert!(verifier
                 .verify(&statement, &proof, &mut transcript)
                 .err()
@@ -1708,7 +1717,7 @@ mod tests {
 
             proof.comm_y_e = RistrettoPoint::hash_from_bytes::<Sha3_512>(b"8128").compress();
 
-            let mut transcript = MerlinTranscript::new(transcript_initializer);
+            transcript = MerlinTranscript::new(transcript_initializer);
             assert!(verifier
                 .verify(&statement, &proof, &mut transcript)
                 .err()
@@ -1722,7 +1731,7 @@ mod tests {
 
             proof.comm_y_vw = RistrettoPoint::hash_from_bytes::<Sha3_512>(b"33550336").compress();
 
-            let mut transcript = MerlinTranscript::new(transcript_initializer);
+            transcript = MerlinTranscript::new(transcript_initializer);
             assert!(verifier
                 .verify(&statement, &proof, &mut transcript)
                 .err()

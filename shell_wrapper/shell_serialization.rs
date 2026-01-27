@@ -81,7 +81,7 @@ pub fn rns_polynomial_from_proto(
 
     // SAFETY: No lifetime constraints (`create_empty_rns_polynomial` creates and returns an empty
     // C++ object).
-    let mut poly = unsafe { create_empty_rns_polynomial() };
+    let mut poly = create_empty_rns_polynomial();
 
     // SAFETY: No lifetime constraints (no references are kept by the C++ function).
     // `DeserializeRnsPolynomialFromBytes` allocates a C++ RnsPolynomial object and assigns it to `poly`.

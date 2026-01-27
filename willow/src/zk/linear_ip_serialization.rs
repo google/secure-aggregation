@@ -18,6 +18,7 @@ use linear_innerproduct::LinearInnerProductProof;
 use proofs_rust_proto::LinearInnerProductProofProto;
 use protobuf::{proto, AsView};
 
+#[allow(non_snake_case)]
 pub fn linear_inner_product_proof_to_proto(
     proof: &LinearInnerProductProof,
 ) -> LinearInnerProductProofProto {
@@ -29,6 +30,7 @@ pub fn linear_inner_product_proof_to_proto(
     })
 }
 
+#[allow(non_snake_case)]
 pub fn linear_inner_product_proof_from_proto(
     proto: impl AsView<Proxied = LinearInnerProductProofProto>,
 ) -> Result<LinearInnerProductProof, status::StatusError> {
@@ -76,6 +78,7 @@ mod tests {
     };
 
     #[gtest]
+    #[allow(non_snake_case)]
     fn test_proof_proto_roundtrip() -> googletest::Result<()> {
         let a: Vec<Scalar> = (1..5).map(|x| Scalar::from(x as u64)).collect();
         let mut rng = rand::thread_rng();

@@ -41,7 +41,7 @@ impl SecurePrng for SingleThreadHkdfPrng {
 mod test {
 
     use super::SingleThreadHkdfPrng;
-    use googletest::{gtest, verify_eq, verify_false, verify_that};
+    use googletest::{gtest, verify_eq, verify_false};
     use prng_traits::SecurePrng;
 
     #[gtest]
