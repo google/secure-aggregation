@@ -29,7 +29,7 @@ rust_library(
     ],
     deps = [
         "@protobuf//rust:protobuf",
-        "//shell_wrapper:status",
+        "//ffi_utils:status",
     ],
 )
 
@@ -39,7 +39,7 @@ rust_library(
         "prng.rs",
     ],
     deps = [
-        "//shell_wrapper:status",
+        "//ffi_utils:status",
     ],
 )
 
@@ -50,7 +50,7 @@ rust_library(
     ],
     deps = [
         ":prng_traits",
-        "//shell_wrapper:status",
+        "//ffi_utils:status",
     ],
 )
 
@@ -61,7 +61,7 @@ rust_library(
     ],
     deps = [
         ":prng_traits",
-        "//shell_wrapper:status",
+        "//ffi_utils:status",
     ],
 )
 
@@ -72,7 +72,7 @@ rust_library(
     ],
     deps = [
         ":ahe_traits",
-        "//shell_wrapper:status",
+        "//ffi_utils:status",
     ],
 )
 
@@ -88,7 +88,7 @@ rust_library(
         ":proto_serialization_traits",
         ":vahe_traits",
         "@protobuf//rust:protobuf",
-        "//shell_wrapper:status",
+        "//ffi_utils:status",
         "//willow/proto/shell:shell_ciphertexts_rust_proto",
         "//willow/proto/willow:messages_rust_proto",
         "//willow/proto/zk:proofs_rust_proto",
@@ -104,7 +104,7 @@ rust_library(
         ":kahe_traits",
         ":messages",
         ":vahe_traits",
-        "//shell_wrapper:status",
+        "//ffi_utils:status",
     ],
 )
 
@@ -117,7 +117,7 @@ rust_library(
         ":kahe_traits",
         ":messages",
         ":vahe_traits",
-        "//shell_wrapper:status",
+        "//ffi_utils:status",
     ],
 )
 
@@ -129,7 +129,7 @@ rust_library(
     deps = [
         ":messages",
         ":vahe_traits",
-        "//shell_wrapper:status",
+        "//ffi_utils:status",
     ],
 )
 
@@ -141,7 +141,7 @@ rust_library(
     deps = [
         ":messages",
         ":vahe_traits",
-        "//shell_wrapper:status",
+        "//ffi_utils:status",
     ],
 )
 
@@ -154,7 +154,7 @@ rust_library(
         ":ahe_traits",
         "@crate_index//:curve25519-dalek",
         "@crate_index//:merlin",
+        "//ffi_utils:status",
         "//shell_wrapper:shell_types",
-        "//shell_wrapper:status",
     ],
 )

@@ -25,30 +25,25 @@
 #include <utility>
 #include <vector>
 
-#include "absl/numeric/int128.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
-#include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
 #include "absl/types/span.h"
+#include "ffi_utils/cxx_utils.h"
+#include "ffi_utils/status.h"
 #include "include/cxx.h"
-#include "shell_encryption/int256.h"
 #include "shell_encryption/multi_party/public_key.h"
 #include "shell_encryption/multi_party/public_key_share.h"
 #include "shell_encryption/multi_party/public_parameter.h"
 #include "shell_encryption/multi_party/recovery.h"
 #include "shell_encryption/multi_party/secret_key_share.h"
 #include "shell_encryption/rns/coefficient_encoder.h"
-#include "shell_encryption/rns/crt_interpolation.h"
 #include "shell_encryption/rns/rns_error_params.h"
 #include "shell_encryption/rns/rns_modulus.h"
 #include "shell_encryption/rns/rns_polynomial.h"
 #include "shell_encryption/sampler/discrete_gaussian.h"
 #include "shell_wrapper/ahe.rs.h"
 #include "shell_wrapper/shell_types.h"
-#include "shell_wrapper/single_thread_hkdf.h"
-
-using secure_aggregation::MakeFfiStatus;
 
 // Friend classes to call the private constructor of `PublicKey` and
 // `SecretKeyShare` directly with a polynomial obtained from a
@@ -84,6 +79,8 @@ class PublicKeyRawFactory {
 
 }  // namespace multi_party
 }  // namespace rlwe
+
+namespace secure_aggregation {
 
 FfiStatus CreateAhePublicParameters(uint64_t log_n, uint64_t t,
                                     const uint64_t* qs, size_t num_qs,
@@ -347,3 +344,5 @@ FfiStatus SFlood(const AhePublicParameters& params, double* out) {
   *out = params.s_flood;
   return MakeFfiStatus();
 }
+
+}  // namespace secure_aggregation

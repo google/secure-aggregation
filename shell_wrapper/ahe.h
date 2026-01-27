@@ -22,6 +22,8 @@
 #include <memory>
 
 #include "absl/strings/string_view.h"
+#include "ffi_utils/status.h"
+#include "include/cxx.h"
 #include "shell_encryption/multi_party/public_parameter.h"
 #include "shell_encryption/rns/coefficient_encoder.h"
 #include "shell_encryption/rns/rns_error_params.h"
@@ -31,6 +33,8 @@
 #include "shell_wrapper/shell_types.h"
 #include "shell_wrapper/shell_types.rs.h"
 #include "shell_wrapper/single_thread_hkdf.h"
+
+namespace secure_aggregation {
 
 // Creates AHE public parameters. `log_n`, `t`, `qs` and `num_qs` are the
 // parameters of the RNS context. `error_variance` is the variance of
@@ -135,5 +139,7 @@ FfiStatus PublicKeyComponentA(const AhePublicParameters& params,
 // Returns the s_flood parameter from the given parameters. Returns
 // INVALID_ARGUMENT if `out` is null.
 FfiStatus SFlood(const AhePublicParameters& params, double* out);
+
+}  // namespace secure_aggregation
 
 #endif  // SECURE_AGGREGATION_SHELL_WRAPPER_AHE_H_

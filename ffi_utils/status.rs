@@ -22,7 +22,7 @@
 
 use std::borrow::Cow;
 
-#[cxx::bridge]
+#[cxx::bridge(namespace = "secure_aggregation")]
 pub mod ffi {
     // A simple Status alternative which is cxx-compatible (because it directly uses unique_ptr).
     pub struct FfiStatus {
@@ -31,7 +31,7 @@ pub mod ffi {
     }
 
     unsafe extern "C++" {
-        include!("shell_wrapper/status.h");
+        include!("ffi_utils/status.h");
         pub fn MakeFfiStatus(code: i32, message: &[u8]) -> FfiStatus;
     }
 }

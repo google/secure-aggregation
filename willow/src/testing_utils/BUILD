@@ -31,7 +31,7 @@ rust_library(
         "fake_prng.rs",
     ],
     deps = [
-        "//shell_wrapper:status",
+        "//ffi_utils:status",
         "//willow/src/traits:prng_traits",
     ],
 )
@@ -50,8 +50,8 @@ rust_library(
     testonly = 1,
     srcs = ["shell_testing_parameters.rs"],
     deps = [
+        "//ffi_utils:status",
         "//shell_wrapper:kahe",
-        "//shell_wrapper:status",
         "//willow/src/api:aggregation_config",
         "//willow/src/shell:ahe_shell",
         "//willow/src/shell:kahe_shell",
@@ -71,7 +71,7 @@ rust_library(
     deps = [
         ":shell_testing_parameters",
         "@crate_index//:rand",
-        "//shell_wrapper:status",
+        "//ffi_utils:status",
         "//willow/src/api:aggregation_config",
         "//willow/src/shell:kahe_shell",
         "//willow/src/shell:vahe_shell",
@@ -108,8 +108,8 @@ rust_library(
     deps = [
         "@protobuf//rust:protobuf",
         "@cxx.rs//:cxx",
+        "//ffi_utils:status",
         "//shell_wrapper:shell_types_cc",
-        "//shell_wrapper:status",
         "//willow/proto/willow:aggregation_config_rust_proto",
         "//willow/proto/willow:messages_rust_proto",
         "//willow/src/api:aggregation_config",
@@ -151,7 +151,7 @@ cc_test(
         ":shell_testing_decryptor_cc",
         "@googletest//:gtest_main",
         "@abseil-cpp//absl/status",
-        "//shell_wrapper:status_matchers",
+        "//ffi_utils:status_matchers",
         "//willow/proto/willow:aggregation_config_cc_proto",
     ],
 )

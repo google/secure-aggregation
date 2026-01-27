@@ -22,8 +22,8 @@
 #include <utility>
 
 #include "absl/status/statusor.h"
+#include "ffi_utils/status_macros.h"
 #include "include/cxx.h"
-#include "shell_wrapper/status_macros.h"
 #include "willow/proto/willow/aggregation_config.pb.h"
 #include "willow/src/shell/parameters_utils.rs.h"
 

@@ -17,7 +17,7 @@ use std::marker::PhantomData;
 use std::mem::MaybeUninit;
 use std::ops::Deref;
 
-#[cxx::bridge]
+#[cxx::bridge(namespace = "secure_aggregation")]
 pub mod ffi {
     /// Owned RnsPolynomial behind a unique_ptr.
     pub struct RnsPolynomialWrapper {
@@ -38,14 +38,12 @@ pub mod ffi {
 
     unsafe extern "C++" {
         type FfiStatus = status::ffi::FfiStatus;
+
         include!("shell_wrapper/shell_types.h");
         include!("shell_wrapper/shell_aliases.h");
-        #[namespace = "secure_aggregation"]
-        type RnsPolynomial;
-        #[namespace = "secure_aggregation"]
-        type RnsContext;
 
-        #[namespace = "secure_aggregation"]
+        type RnsPolynomial;
+        type RnsContext;
         type PrimeModulus;
 
         pub fn CreateEmptyRnsPolynomialWrapper() -> RnsPolynomialWrapper;
@@ -96,10 +94,6 @@ pub mod ffi {
         pub fn RustVecToRnsPolynomialVecWrapper(
             v: Vec<RnsPolynomialWrapper>,
         ) -> RnsPolynomialVecWrapper;
-
-        pub fn CloneString(x: &CxxString) -> UniquePtr<CxxString>;
-        pub fn EmptyString() -> &'static CxxString;
-
     }
 }
 

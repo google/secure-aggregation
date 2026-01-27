@@ -1,5 +1,3 @@
-load("@cxx.rs//tools/bazel:rust_cxx_bridge.bzl", "rust_cxx_bridge")
-
 # Copyright 2025 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,6 +12,7 @@ load("@cxx.rs//tools/bazel:rust_cxx_bridge.bzl", "rust_cxx_bridge")
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+load("@cxx.rs//tools/bazel:rust_cxx_bridge.bzl", "rust_cxx_bridge")
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load("@rules_cc//cc:cc_test.bzl", "cc_test")
 load("@rules_rust//rust:defs.bzl", "rust_library", "rust_test")
@@ -31,7 +30,7 @@ rust_library(
     ],
     deps = [
         "@protobuf//rust:protobuf",
-        "//shell_wrapper:status",
+        "//ffi_utils:status",
         "//willow/proto/willow:aggregation_config_rust_proto",
         "//willow/src/shell:single_thread_hkdf",
         "//willow/src/traits:proto_serialization_traits",
@@ -77,7 +76,7 @@ cc_test(
         "@googletest//:gtest_main",
         "@abseil-cpp//absl/status",
         "@abseil-cpp//absl/status:statusor",
-        "//shell_wrapper:status_matchers",
+        "//ffi_utils:status_matchers",
         "//willow/proto/willow:aggregation_config_cc_proto",
         "//willow/proto/willow:messages_cc_proto",
         "//willow/proto/willow:server_accumulator_cc_proto",
@@ -102,7 +101,7 @@ rust_library(
         "@protobuf//rust:protobuf",
         "@cxx.rs//:cxx",
         "@crate_index//:rangemap",
-        "//shell_wrapper:status",
+        "//ffi_utils:status",
         "//willow/proto/willow:aggregation_config_rust_proto",
         "//willow/proto/willow:server_accumulator_rust_proto",
         "//willow/proto/willow:messages_rust_proto",
@@ -128,7 +127,7 @@ rust_library(
         ":aggregation_config",
         "@protobuf//rust:protobuf",
         "@cxx.rs//:cxx",
-        "//shell_wrapper:status",
+        "//ffi_utils:status",
         "//willow/proto/shell:shell_ciphertexts_rust_proto",
         "//willow/proto/willow:aggregation_config_rust_proto",
         "//willow/proto/willow:messages_rust_proto",
@@ -184,7 +183,7 @@ cc_test(
         "@googletest//:gtest_main",
         "@abseil-cpp//absl/status",
         "@cxx.rs//:core",
-        "//shell_wrapper:status_matchers",
+        "//ffi_utils:status_matchers",
         "//willow/proto/willow:aggregation_config_cc_proto",
         "//willow/proto/willow:input_spec_cc_proto",
         "//willow/src/input_encoding:codec",

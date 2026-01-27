@@ -35,7 +35,8 @@ pub mod ffi {
     // Re-define FfiStatus since CXX requires shared structs to be defined in the same module
     // (https://github.com/dtolnay/cxx/issues/297#issuecomment-727042059)
     unsafe extern "C++" {
-        include!("shell_wrapper/status.rs.h");
+        include!("ffi_utils/status.rs.h");
+        #[namespace = "secure_aggregation"]
         type FfiStatus = status::ffi::FfiStatus;
     }
 

@@ -23,18 +23,17 @@
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
+#include "ffi_utils/cxx_utils.h"
+#include "ffi_utils/status.h"
 #include "include/cxx.h"
 #include "shell_encryption/rns/rns_serialization.pb.h"
-#include "shell_wrapper/shell_types.h"
 #include "shell_wrapper/shell_types.rs.h"
-#include "shell_wrapper/status.h"
-#include "shell_wrapper/status.rs.h"
 
-using secure_aggregation::MakeFfiStatus;
+namespace secure_aggregation {
 
-FfiStatus SerializeRnsPolynomialToBytes(
-    const secure_aggregation::RnsPolynomial* poly, ModuliWrapper moduli,
-    std::unique_ptr<std::string>& out) {
+FfiStatus SerializeRnsPolynomialToBytes(const RnsPolynomial* poly,
+                                        ModuliWrapper moduli,
+                                        std::unique_ptr<std::string>& out) {
   if (poly == nullptr || moduli.moduli == nullptr) {
     return MakeFfiStatus(absl::InvalidArgumentError(
         "All pointer arguments and their wrapped pointers must be non-null."));
@@ -67,12 +66,13 @@ FfiStatus DeserializeRnsPolynomialFromBytes(
     return MakeFfiStatus(absl::InvalidArgumentError(
         "Failed to parse serialized RNS polynomial"));
   }
-  auto poly = secure_aggregation::RnsPolynomial::Deserialize(
-      serialized_poly_proto, {moduli.moduli, moduli.len});
+  auto poly = RnsPolynomial::Deserialize(serialized_poly_proto,
+                                         {moduli.moduli, moduli.len});
   if (!poly.ok()) {
     return MakeFfiStatus(poly.status());
   }
-  out->ptr = std::make_unique<secure_aggregation::RnsPolynomial>(
-      std::move(poly.value()));
+  out->ptr = std::make_unique<RnsPolynomial>(std::move(poly.value()));
   return MakeFfiStatus();
 }
+
+}  // namespace secure_aggregation

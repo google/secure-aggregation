@@ -123,9 +123,9 @@
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "ffi_utils/status_macros.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
-#include "shell_wrapper/status_macros.h"
 
 namespace secure_aggregation {
 namespace secagg_internal {

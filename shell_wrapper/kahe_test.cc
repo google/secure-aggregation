@@ -24,6 +24,9 @@
 
 #include "absl/status/status.h"
 #include "absl/types/span.h"
+#include "ffi_utils/cxx_utils.h"
+#include "ffi_utils/status.h"
+#include "ffi_utils/status_matchers.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "include/cxx.h"
@@ -37,9 +40,6 @@
 #include "shell_wrapper/shell_types.rs.h"
 #include "shell_wrapper/single_thread_hkdf.h"
 #include "shell_wrapper/single_thread_hkdf.rs.h"
-#include "shell_wrapper/status.h"
-#include "shell_wrapper/status.rs.h"
-#include "shell_wrapper/status_matchers.h"
 #include "shell_wrapper/testing_utils.h"
 
 namespace secure_aggregation {
@@ -67,7 +67,8 @@ rust::Slice<const Integer> ToRustSlice(absl::Span<const Integer> s) {
   return rust::Slice<const Integer>(s.data(), s.size());
 }
 
-using ::ToRustSlice;  // Import into namespace for correct resolution.
+using secure_aggregation::ToRustSlice;  // Import into namespace for correct
+                                        // resolution.
 
 TEST(KaheTest, SamplingSmokeTest) {
   constexpr int num_public_polynomials = 1;

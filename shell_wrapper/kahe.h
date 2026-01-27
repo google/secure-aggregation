@@ -24,6 +24,8 @@
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
 #include "absl/types/span.h"
+#include "ffi_utils/status.h"
+#include "include/cxx.h"
 #include "shell_encryption/rns/coefficient_encoder.h"
 #include "shell_encryption/rns/rns_modulus.h"
 #include "shell_encryption/sampler/discrete_gaussian.h"
@@ -109,10 +111,6 @@ absl::StatusOr<std::vector<BigInteger>> DecodeAndDecryptVector(
     absl::Span<const RnsPolynomial> ciphertexts,
     const RnsPolynomial& secret_key, const KahePublicParameters& params);
 
-}  // namespace secure_aggregation
-
-extern "C" {
-
 // Creates public parameters, including RNS context.
 // log_t is the log2 of the KAHE plaintext modulus.
 FfiStatus CreateKahePublicParametersWrapper(uint64_t log_n, uint64_t log_t,
@@ -185,6 +183,6 @@ FfiStatus Decrypt(const RnsPolynomialVecWrapper& ciphertexts,
                   const KahePublicParametersWrapper& params,
                   BigIntVectorWrapper* output_values);
 
-}  // extern "C"
+}  // namespace secure_aggregation
 
 #endif  // SECURE_AGGREGATION_SHELL_WRAPPER_KAHE_VECTOR_H_

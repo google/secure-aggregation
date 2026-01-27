@@ -25,8 +25,8 @@ rust_test(
     ],
     deps = [
         "@crate_index//:googletest",
-        "//shell_wrapper:status",
-        "//shell_wrapper:status_matchers_rs",
+        "//ffi_utils:status",
+        "//ffi_utils:status_matchers_rs",
         "//willow/src/shell:ahe_shell",
         "//willow/src/shell:kahe_shell",
         "//willow/src/shell:parameters_shell",

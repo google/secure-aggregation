@@ -24,11 +24,13 @@
 #include <utility>
 
 #include "absl/strings/string_view.h"
+#include "ffi_utils/status.h"
 #include "include/cxx.h"
 #include "shell_encryption/prng/single_thread_hkdf_prng.h"
 #include "shell_wrapper/shell_types.h"
 #include "shell_wrapper/single_thread_hkdf.rs.h"
-#include "shell_wrapper/status.rs.h"
+
+namespace secure_aggregation {
 
 FfiStatus GenerateSingleThreadHkdfSeed(std::unique_ptr<std::string>& out);
 FfiStatus CreateSingleThreadHkdf(rust::Slice<const uint8_t> seed,
@@ -42,8 +44,8 @@ FfiStatus ComputeHkdfWrapper(rust::Slice<const uint8_t> input,
                              rust::Slice<const uint8_t> info, size_t out_len,
                              std::unique_ptr<std::string>& out);
 
-extern "C" {
 size_t SingleThreadHkdfSeedLength();
-}
+
+}  // namespace secure_aggregation
 
 #endif  // SECURE_AGGREGATION_WILLOW_SRC_PRNG_SINGLE_THREAD_HKDF_WRAPPER_H_

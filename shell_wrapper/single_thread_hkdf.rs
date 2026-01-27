@@ -16,14 +16,14 @@
 
 use status::rust_status_from_cpp;
 
-#[cxx::bridge]
+#[cxx::bridge(namespace = "secure_aggregation")]
 mod ffi {
     struct SingleThreadHkdfWrapper {
         ptr: UniquePtr<SingleThreadHkdfPrng>,
     }
 
     unsafe extern "C++" {
-        type FfiStatus = shell_types::ffi::FfiStatus;
+        type FfiStatus = status::ffi::FfiStatus;
 
         include!("shell_encryption/prng/single_thread_hkdf_prng.h");
         #[namespace = "rlwe"]
@@ -43,21 +43,26 @@ mod ffi {
             out_len: usize,
             out: &mut UniquePtr<CxxString>,
         ) -> FfiStatus;
+
+        include!("ffi_utils/cxx_utils.h");
+        pub fn CloneString(x: &CxxString) -> UniquePtr<CxxString>;
+
+        pub fn EmptyString() -> &'static CxxString;
+
     }
 }
 
-use shell_types::ffi::CloneString;
-use shell_types::ffi::EmptyString;
-
 /// Contains a pointer to a PRNG. Re-exported from cxx.
 pub use ffi::SingleThreadHkdfWrapper;
+
+/// Contains a pointer to a C++ string.
 pub struct SeedWrapper(cxx::UniquePtr<cxx::CxxString>);
 impl Clone for SeedWrapper {
     fn clone(&self) -> Self {
         if self.0.is_null() {
             Self(cxx::UniquePtr::null())
         } else {
-            Self(CloneString(&self.0))
+            Self(ffi::CloneString(&self.0))
         }
     }
 }
@@ -66,7 +71,7 @@ impl std::ops::Deref for SeedWrapper {
     type Target = cxx::CxxString;
     fn deref(&self) -> &cxx::CxxString {
         if self.0.is_null() {
-            EmptyString()
+            ffi::EmptyString()
         } else {
             &self.0
         }
@@ -116,4 +121,33 @@ pub fn compute_hkdf(
     let status = ffi::ComputeHkdfWrapper(input.into(), salt.into(), info.into(), out_len, &mut out);
     rust_status_from_cpp(status)?;
     Ok(SeedWrapper(out))
+}
+
+#[cfg(test)]
+mod test {
+    use googletest::prelude::*;
+
+    #[gtest]
+    fn test_empty_seed_deref() -> googletest::Result<()> {
+        let seed = super::SeedWrapper(cxx::UniquePtr::null());
+        assert_eq!(seed.as_bytes(), "".as_bytes());
+        Ok(())
+    }
+
+    #[gtest]
+    fn test_empty_seed_clone() -> googletest::Result<()> {
+        let seed = super::SeedWrapper(cxx::UniquePtr::null());
+        let cloned_seed = seed.clone();
+        assert_eq!(cloned_seed.as_bytes(), "".as_bytes());
+        Ok(())
+    }
+
+    #[gtest]
+    fn test_non_empty_seed_clone() -> googletest::Result<()> {
+        let seed = super::generate_seed()?;
+        let cloned_seed = seed.clone();
+        assert_eq!(seed.as_bytes(), cloned_seed.as_bytes());
+        assert_ne!(seed.as_bytes().len(), 0);
+        Ok(())
+    }
 }

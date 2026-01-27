@@ -28,6 +28,8 @@
 #include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
 #include "absl/types/span.h"
+#include "ffi_utils/status.h"
+#include "ffi_utils/status_macros.h"
 #include "include/cxx.h"
 #include "shell_encryption/rns/coefficient_encoder.h"
 #include "shell_encryption/rns/crt_interpolation.h"
@@ -40,11 +42,6 @@
 #include "shell_wrapper/shell_types.h"
 #include "shell_wrapper/shell_types.rs.h"
 #include "shell_wrapper/single_thread_hkdf.rs.h"
-#include "shell_wrapper/status.h"
-#include "shell_wrapper/status.rs.h"
-#include "shell_wrapper/status_macros.h"
-
-using secure_aggregation::MakeFfiStatus;
 
 namespace secure_aggregation {
 
@@ -265,8 +262,6 @@ absl::StatusOr<std::vector<BigInteger>> DecodeAndDecryptVector(
   return all_packed_messages;
 }
 
-}  // namespace secure_aggregation
-
 FfiStatus CreateKahePublicParametersWrapper(uint64_t log_n, uint64_t log_t,
                                             rust::Slice<const uint64_t> qs,
                                             uint64_t num_public_polynomials,
@@ -436,3 +431,5 @@ FfiStatus Decrypt(const RnsPolynomialVecWrapper& ciphertexts,
           std::move(decrypted_values.value()));
   return MakeFfiStatus();
 }
+
+}  // namespace secure_aggregation

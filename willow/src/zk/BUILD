@@ -29,7 +29,7 @@ rust_library(
         "@crate_index//:rand",
         "@crate_index//:sha3",
         "@crate_index//:thiserror",
-        "//shell_wrapper:status",
+        "//ffi_utils:status",
         "//willow/src/traits:prng_traits",
         "//willow/src/traits:zk_traits",
     ],
@@ -40,7 +40,7 @@ rust_test(
     crate = ":linear_innerproduct",
     deps = [
         "@crate_index//:googletest",
-        "//shell_wrapper:status_matchers_rs",
+        "//ffi_utils:status_matchers_rs",
     ],
 )
 
@@ -51,7 +51,7 @@ rust_library(
         ":linear_innerproduct",
         "@protobuf//rust:protobuf",
         "@crate_index//:curve25519-dalek",
-        "//shell_wrapper:status",
+        "//ffi_utils:status",
         "//willow/proto/zk:proofs_rust_proto",
     ],
 )
@@ -80,7 +80,7 @@ rust_library(
         "@crate_index//:rand",
         "@crate_index//:sha3",
         "@crate_index//:thiserror",
-        "//shell_wrapper:status",
+        "//ffi_utils:status",
         "//willow/src/traits:prng_traits",
         "//willow/src/traits:zk_traits",
     ],
@@ -91,7 +91,7 @@ rust_test(
     crate = ":quadratic_innerproduct",
     deps = [
         "@crate_index//:googletest",
-        "//shell_wrapper:status_matchers_rs",
+        "//ffi_utils:status_matchers_rs",
     ],
 )
 
@@ -104,8 +104,8 @@ rust_library(
         "@crate_index//:curve25519-dalek",
         "@crate_index//:merlin",
         "@crate_index//:rand",
+        "//ffi_utils:status",
         "//shell_wrapper:shell_types",
-        "//shell_wrapper:status",
         "//willow/src/traits:zk_traits",
     ],
 )
@@ -116,11 +116,11 @@ rust_test(
     deps = [
         "@crate_index//:googletest",
         "@crate_index//:sha3",
+        "//ffi_utils:status_matchers_rs",
         "//shell_wrapper:ahe",
         "//shell_wrapper:ahe_cxx",  # fixdeps: keep
         "//shell_wrapper:single_thread_hkdf",
         "//shell_wrapper:single_thread_hkdf_cxx",
-        "//shell_wrapper:status_matchers_rs",
         "//willow/src/shell:ahe_shell",
         "//willow/src/testing_utils:shell_testing_parameters",
     ],
@@ -135,7 +135,7 @@ rust_library(
         ":rlwe_relation",
         "@protobuf//rust:protobuf",
         "@crate_index//:curve25519-dalek",
-        "//shell_wrapper:status",
+        "//ffi_utils:status",
         "//willow/proto/zk:proofs_rust_proto",
     ],
 )
@@ -150,12 +150,12 @@ rust_test(
         "@crate_index//:curve25519-dalek",
         "@crate_index//:merlin",
         "@crate_index//:sha3",
+        "//ffi_utils:status_matchers_rs",
         "//shell_wrapper:ahe",
         "//shell_wrapper:ahe_cxx",  # fixdeps: keep
         "//shell_wrapper:shell_types",
         "//shell_wrapper:single_thread_hkdf",
         "//shell_wrapper:single_thread_hkdf_cxx",
-        "//shell_wrapper:status_matchers_rs",
         "//willow/proto/zk:proofs_rust_proto",
         "//willow/src/shell:ahe_shell",
         "//willow/src/testing_utils:shell_testing_parameters",

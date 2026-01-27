@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "shell_wrapper/status.h"
+#include "ffi_utils/status.h"
 
 #include <cstdint>
 #include <memory>
@@ -21,6 +21,7 @@
 
 #include "absl/status/status.h"
 #include "absl/strings/string_view.h"
+#include "ffi_utils/status.rs.h"
 #include "include/cxx.h"
 
 namespace secure_aggregation {
@@ -45,9 +46,9 @@ absl::Status UnwrapFfiStatus(const FfiStatus& status) {
   return absl::Status(static_cast<absl::StatusCode>(status.code), message);
 }
 
-}  // namespace secure_aggregation
-
-FfiStatus MakeFfiStatus(int code, rust::Slice<const uint8_t> message) {
+FfiStatus MakeFfiStatus(int32_t code, rust::Slice<const uint8_t> message) {
   return secure_aggregation::MakeFfiStatus(
       code, std::string(message.begin(), message.end()));
 }
+
+}  // namespace secure_aggregation

@@ -24,6 +24,8 @@
 
 #include "absl/status/status.h"
 #include "absl/strings/string_view.h"
+#include "ffi_utils/cxx_utils.h"
+#include "ffi_utils/status.h"
 #include "include/cxx.h"
 #include "shell_encryption/prng/single_thread_hkdf_prng.h"
 #include "shell_wrapper/shell_types.h"
@@ -31,7 +33,7 @@
 #include "tink/subtle/common_enums.h"
 #include "tink/subtle/hkdf.h"
 
-using secure_aggregation::MakeFfiStatus;
+namespace secure_aggregation {
 
 FfiStatus GenerateSingleThreadHkdfSeed(std::unique_ptr<std::string>& out) {
   auto statusor = rlwe::SingleThreadHkdfPrng::GenerateSeed();
@@ -80,3 +82,5 @@ FfiStatus ComputeHkdfWrapper(rust::Slice<const uint8_t> input,
   out = std::make_unique<std::string>(*std::move(statusor));
   return MakeFfiStatus();
 }
+
+}  // namespace secure_aggregation

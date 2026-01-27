@@ -23,7 +23,7 @@ use status::rust_status_from_cpp;
 use std::marker::PhantomData;
 use std::mem::MaybeUninit;
 
-#[cxx::bridge]
+#[cxx::bridge(namespace = "secure_aggregation")]
 mod ffi {
     // Struct containing AHE public parameters, accessible from Rust and C++.
     struct AhePublicParameters {
@@ -36,33 +36,25 @@ mod ffi {
     }
 
     unsafe extern "C++" {
+
         include!("shell_wrapper/shell_types.h");
+        include!("shell_wrapper/single_thread_hkdf.h");
+        include!("shell_wrapper/ahe_aliases.h");
+        include!("shell_wrapper/shell_aliases.h");
+        include!("shell_wrapper/ahe.h");
+
         type FfiStatus = status::ffi::FfiStatus;
         type ModuliWrapper = shell_types::ffi::ModuliWrapper;
         type RnsPolynomialWrapper = shell_types::ffi::RnsPolynomialWrapper;
-
-        include!("shell_wrapper/single_thread_hkdf.h");
         type SingleThreadHkdfWrapper = single_thread_hkdf::SingleThreadHkdfWrapper;
-
-        include!("shell_wrapper/ahe_aliases.h");
-        #[namespace = "secure_aggregation"]
         type ConstModularIntPublicParameter;
-        #[namespace = "secure_aggregation"]
         type ConstModularIntCoefficientEncoder;
-        #[namespace = "secure_aggregation"]
         type ConstModularIntRnsErrorParams;
-        #[namespace = "secure_aggregation"]
         type IntegerDiscreteGaussianSampler;
-        #[namespace = "secure_aggregation"]
         type ConstRnsContext;
-
-        include!("shell_wrapper/shell_aliases.h");
-        #[namespace = "secure_aggregation"]
         type RnsContext = shell_types::ffi::RnsContext;
-        #[namespace = "secure_aggregation"]
         type ModularInt;
 
-        include!("shell_wrapper/ahe.h");
         pub unsafe fn CreateAhePublicParameters(
             log_n: u64,
             t: u64,
@@ -74,17 +66,22 @@ mod ffi {
             seed: &[u8],
             out: *mut AhePublicParameters,
         ) -> FfiStatus;
+
         pub unsafe fn CreateModuliWrapperFromAheParams(
             params: &AhePublicParameters,
         ) -> ModuliWrapper;
+
         pub unsafe fn GetPlaintextModulusFromAheParams(params: &AhePublicParameters) -> u64;
+
         pub unsafe fn GetRnsContextFromAheParams(params: &AhePublicParameters)
             -> *const RnsContext;
+
         pub unsafe fn GenerateSecretKeyShare(
             params: &AhePublicParameters,
             prng: *mut SingleThreadHkdfWrapper,
             out: *mut RnsPolynomialWrapper,
         ) -> FfiStatus;
+
         pub unsafe fn GeneratePublicKeyShareWrapper(
             secret_key_share: &RnsPolynomialWrapper,
             params: &AhePublicParameters,
@@ -93,6 +90,7 @@ mod ffi {
             public_key_share_error: *mut RnsPolynomialWrapper,
             wraparound: *mut RnsPolynomialWrapper,
         ) -> FfiStatus;
+
         pub unsafe fn AheEncrypt(
             input_values: *const u64,
             num_input_values: usize,
@@ -105,6 +103,7 @@ mod ffi {
             ciphertext_error_e: *mut RnsPolynomialWrapper,
             wraparound: *mut RnsPolynomialWrapper,
         ) -> FfiStatus;
+
         pub unsafe fn PartialDecrypt(
             ciphertext_component_a: &RnsPolynomialWrapper,
             secret_key_share: &RnsPolynomialWrapper,
@@ -114,6 +113,7 @@ mod ffi {
             error_flood: *mut RnsPolynomialWrapper,
             wraparound: *mut RnsPolynomialWrapper,
         ) -> FfiStatus;
+
         pub unsafe fn RecoverMessages(
             sum_partial_decryptions: &RnsPolynomialWrapper,
             ciphertext_component_b: &RnsPolynomialWrapper,
@@ -122,14 +122,17 @@ mod ffi {
             output_values: *mut u64,
             n_written: *mut usize,
         ) -> FfiStatus;
+
         pub unsafe fn CreateZeroRnsPolynomialWrapper(
             params: &AhePublicParameters,
             out: *mut RnsPolynomialWrapper,
         ) -> FfiStatus;
+
         pub unsafe fn PublicKeyComponentA(
             params: &AhePublicParameters,
             out: *mut RnsPolynomialWrapper,
         ) -> FfiStatus;
+
         pub unsafe fn SFlood(params: &AhePublicParameters, out: *mut f64) -> FfiStatus;
     }
 }

@@ -19,7 +19,7 @@ use rns_serialization_rust_proto::SerializedRnsPolynomial;
 use shell_types::{create_empty_rns_polynomial, Moduli, RnsPolynomial};
 use status::{StatusError, StatusErrorCode};
 
-#[cxx::bridge]
+#[cxx::bridge(namespace = "secure_aggregation")]
 mod ffi {
     unsafe extern "C++" {
         include!("shell_wrapper/shell_serialization.h");
@@ -28,7 +28,6 @@ mod ffi {
         type FfiStatus = shell_types::ffi::FfiStatus;
         type ModuliWrapper = shell_types::ffi::ModuliWrapper;
         type RnsPolynomialWrapper = shell_types::ffi::RnsPolynomialWrapper;
-        #[namespace = "secure_aggregation"]
         type RnsPolynomial = shell_types::ffi::RnsPolynomial;
 
         pub unsafe fn SerializeRnsPolynomialToBytes(

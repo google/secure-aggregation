@@ -23,6 +23,8 @@
 #include <vector>
 
 #include "absl/strings/string_view.h"
+#include "ffi_utils/status.h"
+#include "ffi_utils/status_matchers.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "shell_encryption/rns/testing/testing_utils.h"
@@ -32,8 +34,6 @@
 #include "shell_wrapper/shell_types.rs.h"
 #include "shell_wrapper/single_thread_hkdf.h"
 #include "shell_wrapper/single_thread_hkdf.rs.h"
-#include "shell_wrapper/status.h"
-#include "shell_wrapper/status_matchers.h"
 
 namespace secure_aggregation {
 namespace {

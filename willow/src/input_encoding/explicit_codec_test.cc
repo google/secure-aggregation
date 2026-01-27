@@ -18,9 +18,9 @@
 
 #include "absl/container/flat_hash_map.h"
 #include "absl/status/status.h"
+#include "ffi_utils/status_matchers.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
-#include "shell_wrapper/status_matchers.h"
 #include "willow/proto/willow/input_spec.pb.h"
 #include "willow/src/input_encoding/codec.h"
 #include "willow/src/input_encoding/codec_factory.h"

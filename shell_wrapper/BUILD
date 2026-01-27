@@ -23,53 +23,6 @@ package(
     default_visibility = ["//:internal"],
 )
 
-rust_library(
-    name = "status",
-    srcs = ["status.rs"],
-    deps = [
-        ":status_cc",
-        ":status_cxx",  # fixdeps: keep
-        "@cxx.rs//:cxx",
-    ],
-)
-
-rust_cxx_bridge(
-    name = "status_cxx",
-    src = "status.rs",
-    deps = [":status_cc"],
-)
-
-rust_test(
-    name = "status_test",
-    crate = ":status",
-    deps = [
-        "@crate_index//:googletest",
-    ],
-)
-
-cc_library(
-    name = "status_cc",
-    srcs = ["status.cc"],
-    hdrs = ["status.h"],
-    deps = [
-        ":status_cxx/include",
-        "@abseil-cpp//absl/status",
-        "@abseil-cpp//absl/strings:string_view",
-        "@cxx.rs//:cxx",  # fixdeps: keep
-        "@cxx.rs//:core",
-    ],
-)
-
-rust_library(
-    name = "status_matchers_rs",
-    testonly = 1,
-    srcs = ["status_matchers.rs"],
-    deps = [
-        ":status",
-        "@crate_index//:googletest",
-    ],
-)
-
 # Shared functionality
 cc_library(
     name = "shell_types_cc",
@@ -81,8 +34,6 @@ cc_library(
     deps = [
         ":shell_types",
         ":shell_types_cxx/include",
-        ":status_cc",
-        ":status_cxx",
         "@abseil-cpp//absl/log",
         "@abseil-cpp//absl/numeric:int128",
         "@abseil-cpp//absl/status",
@@ -100,6 +51,9 @@ cc_library(
         "@shell-encryption//shell_encryption/rns:rns_modulus",
         "@shell-encryption//shell_encryption/rns:rns_polynomial",
         "@cxx.rs//:core",
+        "//ffi_utils:cxx_utils",
+        "//ffi_utils:status_cc",
+        "//ffi_utils:status_cxx",
     ],
 )
 
@@ -109,12 +63,10 @@ cc_test(
     deps = [
         ":kahe_cc",
         ":kahe_cxx/include",
+        ":shell_types",
         ":shell_types_cc",
         ":shell_types_cxx",
         ":single_thread_hkdf_cc",
-        ":status_cc",
-        ":status_cxx",
-        ":status_matchers",
         "@googletest//:gtest_main",
         "@abseil-cpp//absl/algorithm:container",
         "@abseil-cpp//absl/numeric:int128",
@@ -127,6 +79,9 @@ cc_test(
         "@shell-encryption//shell_encryption/sampler:discrete_gaussian",
         "@shell-encryption//shell_encryption/testing:testing_prng",
         "@cxx.rs//:core",
+        "//ffi_utils:status_cc",
+        "//ffi_utils:status_cxx",
+        "//ffi_utils:status_matchers",
     ],
 )
 
@@ -134,15 +89,19 @@ rust_library(
     name = "shell_types",
     srcs = ["shell_types.rs"],
     deps = [
-        ":status",
         "@cxx.rs//:cxx",
+        "//ffi_utils:status",
     ],
 )
 
 rust_cxx_bridge(
     name = "shell_types_cxx",
     src = "shell_types.rs",
-    deps = [":shell_types_cc"],
+    deps = [
+        ":shell_types_cc",
+        "//ffi_utils:cxx_utils",
+        "//ffi_utils:status_cxx",
+    ],
 )
 
 # Serialization support
@@ -157,14 +116,14 @@ cc_library(
         ":shell_serialization_cxx/include",
         ":shell_types_cc",
         ":shell_types_cxx",
-        ":status_cc",
-        ":status_cxx",
         "@abseil-cpp//absl/log",
         "@abseil-cpp//absl/status",
         "@abseil-cpp//absl/status:statusor",
         "@abseil-cpp//absl/strings:string_view",
         "@shell-encryption//shell_encryption/rns:rns_serialization_cc_proto",
         "@cxx.rs//:core",
+        "//ffi_utils:cxx_utils",
+        "//ffi_utils:status_cc",
     ],
 )
 
@@ -175,13 +134,13 @@ cc_test(
         ":shell_serialization_cc",
         ":shell_types_cc",
         ":shell_types_cxx",
-        ":status_cc",
-        ":status_matchers",
         "@googletest//:gtest_main",
         "@abseil-cpp//absl/status",
         "@shell-encryption//shell_encryption/rns:rns_serialization_cc_proto",
         "@shell-encryption//shell_encryption/testing:testing_prng",
         "@cxx.rs//:core",
+        "//ffi_utils:status_cc",
+        "//ffi_utils:status_matchers",
     ],
 )
 
@@ -190,10 +149,10 @@ rust_library(
     srcs = ["shell_serialization.rs"],
     deps = [
         ":shell_types",
-        ":status",
         "@protobuf//rust:protobuf",
         "@shell-encryption//shell_encryption/rns:rns_serialization_rust_proto",
         "@cxx.rs//:cxx",
+        "//ffi_utils:status",
     ],
 )
 
@@ -203,6 +162,7 @@ rust_cxx_bridge(
     deps = [
         ":shell_serialization_cc",
         ":shell_types_cc",
+        "//ffi_utils:status_cxx",
     ],
 )
 
@@ -224,6 +184,7 @@ rust_cxx_bridge(
     deps = [
         ":kahe_cc",
         ":shell_types_cc",
+        "//ffi_utils:status_cxx",
     ],
 )
 
@@ -232,14 +193,12 @@ cc_library(
     srcs = ["kahe.cc"],
     hdrs = ["kahe.h"],
     deps = [
+        ":kahe",
         ":kahe_cxx/include",
         ":shell_types_cc",
         ":shell_types_cxx/include",
         ":single_thread_hkdf_cc",
         ":single_thread_hkdf_cxx",
-        ":status_cc",
-        ":status_cxx",
-        ":status_macros",
         "@abseil-cpp//absl/status",
         "@abseil-cpp//absl/status:statusor",
         "@abseil-cpp//absl/strings:str_format",
@@ -252,6 +211,9 @@ cc_library(
         "@shell-encryption//shell_encryption/rns:rns_modulus",
         "@shell-encryption//shell_encryption/sampler:discrete_gaussian",
         "@cxx.rs//:core",
+        "//ffi_utils:status_cc",
+        "//ffi_utils:status_cxx",
+        "//ffi_utils:status_macros",
     ],
 )
 
@@ -265,9 +227,6 @@ cc_test(
         ":shell_types_cxx/include",
         ":single_thread_hkdf_cc",
         ":single_thread_hkdf_cxx/include",
-        ":status_cc",
-        ":status_cxx",
-        ":status_matchers",
         ":testing_utils",
         "@googletest//:gtest_main",
         "@abseil-cpp//absl/status",
@@ -277,6 +236,9 @@ cc_test(
         "@shell-encryption//shell_encryption/rns/testing:testing_utils",
         "@shell-encryption//shell_encryption/sampler:discrete_gaussian",
         "@cxx.rs//:core",
+        "//ffi_utils:cxx_utils",
+        "//ffi_utils:status_cc",
+        "//ffi_utils:status_matchers",
     ],
 )
 
@@ -284,13 +246,10 @@ rust_library(
     name = "kahe",
     srcs = ["kahe.rs"],
     deps = [
-        ":kahe_cc",
-        ":kahe_cxx",  # fixdeps: keep
         ":shell_types",
-        ":shell_types_cxx",  # fixdeps: keep
         ":single_thread_hkdf",
-        ":status",
         "@cxx.rs//:cxx",
+        "//ffi_utils:status",
     ],
 )
 
@@ -299,12 +258,14 @@ rust_test(
     srcs = ["kahe_test.rs"],
     deps = [
         ":kahe",
+        ":kahe_cc",
+        ":kahe_cxx",  # fixdeps: keep
         ":single_thread_hkdf",
         ":single_thread_hkdf_cxx",  # fixdeps: keep
-        ":status",
-        ":status_matchers_rs",
         "@crate_index//:googletest",
         "@crate_index//:rand",
+        "//ffi_utils:status",
+        "//ffi_utils:status_matchers_rs",
     ],
 )
 
@@ -317,11 +278,11 @@ cc_library(
         "ahe_aliases.h",
     ],
     deps = [
+        ":ahe",
         ":ahe_cxx/include",
         ":shell_types_cc",
         ":shell_types_cxx/include",
         ":single_thread_hkdf_cc",
-        ":status_macros",
         "@abseil-cpp//absl/numeric:int128",
         "@abseil-cpp//absl/status",
         "@abseil-cpp//absl/status:statusor",
@@ -340,6 +301,8 @@ cc_library(
         "@shell-encryption//shell_encryption/rns:rns_polynomial",
         "@shell-encryption//shell_encryption/sampler:discrete_gaussian",
         "@cxx.rs//:core",
+        "//ffi_utils:cxx_utils",
+        "//ffi_utils:status_cc",
     ],
 )
 
@@ -350,6 +313,7 @@ rust_cxx_bridge(
         ":ahe_cc",
         ":shell_types_cc",
         ":single_thread_hkdf_cc",
+        "//ffi_utils:status_cxx",
     ],
 )
 
@@ -363,11 +327,11 @@ cc_test(
         ":shell_types_cxx",
         ":single_thread_hkdf_cc",
         ":single_thread_hkdf_cxx",  # fixdeps: keep
-        ":status_cc",
-        ":status_matchers",
         "@googletest//:gtest_main",
         "@abseil-cpp//absl/strings:string_view",
         "@shell-encryption//shell_encryption/rns/testing:testing_utils",
+        "//ffi_utils:status_cc",
+        "//ffi_utils:status_matchers",
     ],
 )
 
@@ -375,13 +339,10 @@ rust_library(
     name = "ahe",
     srcs = ["ahe.rs"],
     deps = [
-        ":ahe_cc",
-        ":ahe_cxx",  # fixdeps: keep
         ":shell_types",
-        ":shell_types_cxx",  # fixdeps: keep
         ":single_thread_hkdf",
-        ":status",
         "@cxx.rs//:cxx",
+        "//ffi_utils:status",
     ],
 )
 
@@ -395,10 +356,10 @@ rust_test(
         ":shell_types_cxx",  # fixdeps: keep
         ":single_thread_hkdf",
         ":single_thread_hkdf_cxx",  # fixdeps: keep
-        ":status",
-        ":status_matchers_rs",
         "@crate_index//:googletest",
         "@crate_index//:rand",
+        "//ffi_utils:status",
+        "//ffi_utils:status_matchers_rs",
     ],
 )
 
@@ -410,12 +371,12 @@ cc_library(
     deps = [
         ":shell_types_cc",
         ":single_thread_hkdf_cxx/include",
-        ":status_cxx",
-        ":status_macros",
         "@abseil-cpp//absl/status",
         "@abseil-cpp//absl/strings:string_view",
         "@shell-encryption//shell_encryption/prng:single_thread_hkdf_prng",
         "@cxx.rs//:core",
+        "//ffi_utils:cxx_utils",
+        "//ffi_utils:status_cc",
         "@tink_cc//tink/subtle",
     ],
 )
@@ -428,6 +389,8 @@ rust_cxx_bridge(
         ":shell_types_cxx",
         ":single_thread_hkdf_cc",
         "@shell-encryption//shell_encryption/prng:single_thread_hkdf_prng",
+        "//ffi_utils:cxx_utils",
+        "//ffi_utils:status_cxx",
     ],
 )
 
@@ -436,25 +399,16 @@ rust_library(
     srcs = ["single_thread_hkdf.rs"],
     deps = [
         ":shell_types",
-        ":status",
         "@cxx.rs//:cxx",
+        "//ffi_utils:status",
     ],
 )
 
-cc_library(
-    name = "status_macros",
-    hdrs = ["status_macros.h"],
-)
-
-cc_library(
-    name = "status_matchers",
-    testonly = 1,
-    srcs = ["status_matchers.cc"],
-    hdrs = ["status_matchers.h"],
+rust_test(
+    name = "single_thread_hkdf_test",
+    crate = ":single_thread_hkdf",
     deps = [
-        ":status_macros",
-        "@googletest//:gtest",
-        "@abseil-cpp//absl/status",
-        "@abseil-cpp//absl/status:statusor",
+        ":single_thread_hkdf_cxx",
+        "@crate_index//:googletest",
     ],
 )

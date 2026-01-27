@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "shell_wrapper/status_matchers.h"
+#include "ffi_utils/status_matchers.h"
 
 #include <ostream>
 #include <string>

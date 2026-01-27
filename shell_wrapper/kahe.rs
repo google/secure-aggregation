@@ -40,7 +40,7 @@ pub struct PackedVectorConfig {
     pub length: u64,
 }
 
-#[cxx::bridge]
+#[cxx::bridge(namespace = "secure_aggregation")]
 mod ffi {
     /// Owned KahePublicParameters behind a unique_ptr.
     pub struct KahePublicParametersWrapper {
@@ -55,15 +55,10 @@ mod ffi {
         include!("shell_wrapper/kahe.h");
         include!("shell_wrapper/shell_types.h");
 
-        #[namespace = "secure_aggregation"]
         type KahePublicParameters;
-
-        #[namespace = "secure_aggregation"]
         type BigInteger;
-
-        type FfiStatus = shell_types::ffi::FfiStatus;
+        type FfiStatus = status::ffi::FfiStatus;
         type ModuliWrapper = shell_types::ffi::ModuliWrapper;
-        #[namespace = "secure_aggregation"]
         type RnsContext = shell_types::ffi::RnsContext;
         type RnsPolynomialWrapper = shell_types::ffi::RnsPolynomialWrapper;
         type RnsPolynomialVecWrapper = shell_types::ffi::RnsPolynomialVecWrapper;

@@ -27,13 +27,12 @@
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
 #include "absl/types/span.h"
+#include "ffi_utils/status.h"
 #include "include/cxx.h"
 #include "shell_encryption/int256.h"
 #include "shell_encryption/rns/crt_interpolation.h"
 #include "shell_wrapper/shell_aliases.h"
 #include "shell_wrapper/shell_types.rs.h"
-#include "shell_wrapper/status.h"
-#include "shell_wrapper/status.rs.h"
 
 namespace secure_aggregation {
 
@@ -49,10 +48,6 @@ RnsContextConfig ParseRnsContextConfig(uint64_t log_n, uint64_t t,
   }
   return config;
 }
-
-}  // namespace secure_aggregation
-
-using secure_aggregation::MakeFfiStatus;
 
 FfiStatus WriteSmallRnsPolynomialToBuffer(const RnsPolynomialWrapper* poly,
                                           ModuliWrapper moduli,
@@ -304,3 +299,5 @@ RnsPolynomialVecWrapper RustVecToRnsPolynomialVecWrapper(
       .ptr = std::move(result_vec),
   };
 }
+
+}  // namespace secure_aggregation

@@ -21,12 +21,12 @@
 #include <memory>
 #include <string>
 
+#include "ffi_utils/status.h"
 #include "include/cxx.h"
 #include "shell_wrapper/shell_serialization.rs.h"
 #include "shell_wrapper/shell_types.rs.h"
-#include "shell_wrapper/status.rs.h"
 
-extern "C" {
+namespace secure_aggregation {
 
 FfiStatus SerializeRnsPolynomialToBytes(
     const secure_aggregation::RnsPolynomial* poly, ModuliWrapper moduli,
@@ -36,6 +36,6 @@ FfiStatus DeserializeRnsPolynomialFromBytes(
     rust::Slice<const uint8_t> serialized_poly, ModuliWrapper moduli,
     RnsPolynomialWrapper* out);
 
-}  // extern "C"
+}  // namespace secure_aggregation
 
 #endif  // SECURE_AGGREGATION_SHELL_WRAPPER_SHELL_SERIALIZATION_H_

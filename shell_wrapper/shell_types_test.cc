@@ -26,6 +26,8 @@
 #include "absl/status/status.h"
 #include "absl/strings/string_view.h"
 #include "absl/types/span.h"
+#include "ffi_utils/status.h"
+#include "ffi_utils/status_matchers.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "include/cxx.h"
@@ -38,9 +40,6 @@
 #include "shell_wrapper/shell_aliases.h"
 #include "shell_wrapper/shell_types.rs.h"
 #include "shell_wrapper/single_thread_hkdf.h"
-#include "shell_wrapper/status.h"
-#include "shell_wrapper/status.rs.h"
-#include "shell_wrapper/status_matchers.h"
 
 namespace secure_aggregation {
 namespace {

@@ -49,7 +49,7 @@ cc_test(
         "@googletest//:gtest_main",
         "@abseil-cpp//absl/container:flat_hash_map",
         "@abseil-cpp//absl/status",
-        "//shell_wrapper:status_matchers",
+        "//ffi_utils:status_matchers",
         "//willow/proto/willow:input_spec_cc_proto",
     ],
 )

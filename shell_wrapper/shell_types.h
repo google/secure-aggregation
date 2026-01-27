@@ -24,10 +24,11 @@
 #include <vector>
 
 #include "absl/strings/string_view.h"
+#include "ffi_utils/cxx_utils.h"
+#include "ffi_utils/status.rs.h"
 #include "include/cxx.h"
 #include "shell_wrapper/shell_aliases.h"
 #include "shell_wrapper/shell_types.rs.h"
-#include "shell_wrapper/status.rs.h"
 
 namespace secure_aggregation {
 
@@ -43,10 +44,6 @@ struct RnsContextConfig {
 
 RnsContextConfig ParseRnsContextConfig(uint64_t log_n, uint64_t t,
                                        const uint64_t* qs, uint64_t num_qs);
-
-}  // namespace secure_aggregation
-
-extern "C" {
 
 // Creates an RnsPolynomialWrapper with an empty polynomial.
 inline RnsPolynomialWrapper CreateEmptyRnsPolynomialWrapper() {
@@ -121,28 +118,6 @@ FfiStatus WriteRnsPolynomialToBuffer128(
     const secure_aggregation::RnsContext* rns_context,
     const RnsPolynomialWrapper* poly, uint64_t buffer_len, uint64_t* buffer);
 
-// Clones a std::string behind a unique_ptr, for compatibility with CXX.
-inline std::unique_ptr<std::string> CloneString(const std::string& x) {
-  return std::make_unique<std::string>(x);
-}
-
-// Returns a reference to an empty std::string.
-inline const std::string& EmptyString() {
-  static std::string* x = new std::string();
-  return *x;
-}
-
-// Converts a StringView to an absl::string_view.
-inline absl::string_view ToAbslStringView(rust::Slice<const uint8_t> sv) {
-  return absl::string_view(reinterpret_cast<const char*>(sv.data()), sv.size());
-}
-
-// Converts an absl::string_view to a Rust u8 slice.
-inline rust::Slice<const uint8_t> ToRustSlice(absl::string_view sv) {
-  return rust::Slice<const uint8_t>(reinterpret_cast<const uint8_t*>(sv.data()),
-                                    sv.size());
-}
-
-}  // extern "C"
+}  // namespace secure_aggregation
 
 #endif  // SECURE_AGGREGATION_SHELL_WRAPPER_KAHE_PARAMETERS_H_

@@ -26,7 +26,7 @@ rust_library(
         "client.rs",
     ],
     deps = [
-        "//shell_wrapper:status",
+        "//ffi_utils:status",
         "//willow/src/traits:ahe_traits",
         "//willow/src/traits:client_traits",
         "//willow/src/traits:kahe_traits",
@@ -71,7 +71,7 @@ rust_library(
     ],
     deps = [
         "@protobuf//rust:protobuf",
-        "//shell_wrapper:status",
+        "//ffi_utils:status",
         "//willow/proto/shell:shell_ciphertexts_rust_proto",
         "//willow/proto/willow:messages_rust_proto",
         "//willow/src/traits:ahe_traits",
@@ -111,7 +111,7 @@ rust_library(
     ],
     deps = [
         "@protobuf//rust:protobuf",
-        "//shell_wrapper:status",
+        "//ffi_utils:status",
         "//willow/proto/shell:shell_ciphertexts_rust_proto",
         "//willow/proto/willow:messages_rust_proto",
         "//willow/src/traits:ahe_traits",
@@ -130,7 +130,7 @@ rust_library(
     ],
     deps = [
         "@protobuf//rust:protobuf",
-        "//shell_wrapper:status",
+        "//ffi_utils:status",
         "//willow/proto/shell:shell_ciphertexts_rust_proto",
         "//willow/proto/willow:messages_rust_proto",
         "//willow/src/traits:ahe_traits",
@@ -150,7 +150,7 @@ rust_test(
         ":willow_v1_decryptor",
         ":willow_v1_server",
         "@crate_index//:googletest",
-        "//shell_wrapper:status_matchers_rs",
+        "//ffi_utils:status_matchers_rs",
         "//willow/src/shell:kahe_shell",
         "//willow/src/shell:parameters_shell",
         "//willow/src/shell:vahe_shell",
