@@ -43,7 +43,7 @@ namespace secure_aggregation {
 // `seed` is the seed used to generate the public parameter (polynomial) u.
 // Writes the result to `out` and returns a wrapped absl::Status.
 FfiStatus CreateAhePublicParameters(uint64_t log_n, uint64_t t,
-                                    const uint64_t* qs, size_t num_qs,
+                                    const uint64_t* qs, uint64_t num_qs,
                                     uint64_t error_variance,
                                     double s_base_flood, double s_flood,
                                     rust::Slice<const uint8_t> seed,
@@ -93,7 +93,7 @@ FfiStatus GeneratePublicKeyShareWrapper(
 // ciphertext in `ciphertext_component_b` (a.k.a. ct0) and
 // `ciphertext_component_a` (a.k.a. ct1). Also stores the secret and error for
 // ZK proofs. Returns a wrapped absl::Status.
-FfiStatus AheEncrypt(const uint64_t* input_values, size_t num_input_values,
+FfiStatus AheEncrypt(const uint64_t* input_values, uint64_t num_input_values,
                      const RnsPolynomialWrapper& public_key_b,
                      const AhePublicParameters& params,
                      SingleThreadHkdfWrapper* prng,
@@ -120,8 +120,8 @@ FfiStatus PartialDecrypt(const RnsPolynomialWrapper& ciphertext_component_a,
 FfiStatus RecoverMessages(const RnsPolynomialWrapper& sum_partial_decryptions,
                           const RnsPolynomialWrapper& ciphertext_component_b,
                           const AhePublicParameters& params,
-                          size_t output_values_length, uint64_t* output_values,
-                          size_t* n_written);
+                          uint64_t output_values_length,
+                          uint64_t* output_values, uint64_t* n_written);
 
 // Creates a zero polynomial with the same RNS parameters as `params`. Writes
 // the result to `out` and returns a wrapped absl::Status.

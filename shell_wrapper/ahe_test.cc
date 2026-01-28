@@ -101,7 +101,7 @@ TEST(AheTest, EncryptDecryptOne) {
 
   // Recover from partial decryptions and component b
   uint64_t decrypted_buffer[2 * num_messages];
-  size_t n_written;
+  uint64_t n_written;
   SECAGG_ASSERT_OK(UnwrapFfiStatus(RecoverMessages(
       partial_decryption, ciphertext_b, public_params,
       std::size(decrypted_buffer), decrypted_buffer, &n_written)));
@@ -228,7 +228,7 @@ TEST(AheTest, ExternCRecoveryTest) {
 
   // Recover from partial decryptions and component b
   uint64_t decrypted_buffer[2 * num_messages];
-  size_t n_written;
+  uint64_t n_written;
   SECAGG_ASSERT_OK(UnwrapFfiStatus(RecoverMessages(
       sum_partial_decryptions, ciphertext_b, public_params,
       std::size(decrypted_buffer), decrypted_buffer, &n_written)));

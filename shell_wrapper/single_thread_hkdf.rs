@@ -34,13 +34,13 @@ mod ffi {
         pub fn CreateSingleThreadHkdf(seed: &[u8], out: &mut SingleThreadHkdfWrapper) -> FfiStatus;
         pub fn Rand8(prng: &mut SingleThreadHkdfWrapper, out: &mut u8) -> FfiStatus;
 
-        pub fn SingleThreadHkdfSeedLength() -> usize;
+        pub fn SingleThreadHkdfSeedLength() -> u64;
 
         pub fn ComputeHkdfWrapper(
             input: &[u8],
             salt: &[u8],
             info: &[u8],
-            out_len: usize,
+            out_len: u64,
             out: &mut UniquePtr<CxxString>,
         ) -> FfiStatus;
 
@@ -115,7 +115,7 @@ pub fn compute_hkdf(
     input: &[u8],
     salt: &[u8],
     info: &[u8],
-    out_len: usize,
+    out_len: u64,
 ) -> Result<SeedWrapper, status::StatusError> {
     let mut out = cxx::UniquePtr::null();
     let status = ffi::ComputeHkdfWrapper(input.into(), salt.into(), info.into(), out_len, &mut out);

@@ -66,12 +66,12 @@ FfiStatus Rand8(SingleThreadHkdfWrapper& prng, uint8_t& out) {
   return MakeFfiStatus();
 }
 
-size_t SingleThreadHkdfSeedLength() {
+uint64_t SingleThreadHkdfSeedLength() {
   return rlwe::SingleThreadHkdfPrng::SeedLength();
 }
 FfiStatus ComputeHkdfWrapper(rust::Slice<const uint8_t> input,
                              rust::Slice<const uint8_t> salt,
-                             rust::Slice<const uint8_t> info, size_t out_len,
+                             rust::Slice<const uint8_t> info, uint64_t out_len,
                              std::unique_ptr<std::string>& out) {
   auto statusor = crypto::tink::subtle::Hkdf::ComputeHkdf(
       crypto::tink::subtle::SHA256, ToAbslStringView(input),

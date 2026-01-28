@@ -329,7 +329,7 @@ impl TrySecretKeyInto<Vec<i64>> for ShellKahe {
         let moduli = kahe::get_moduli(&self.public_kahe_parameters);
         let n_written =
             write_small_rns_polynomial_to_buffer(&sk.0, &moduli, &mut signed_values[..])?;
-        if n_written != self.num_coeffs {
+        if n_written != self.num_coeffs as u64 {
             return Err(status::internal(format!(
                 "Expected {} coefficients, but got {}.",
                 self.num_coeffs, n_written
