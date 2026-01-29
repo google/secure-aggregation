@@ -623,7 +623,6 @@ impl<'a> ZeroKnowledgeProver<RlweRelationProofStatement<'a>, RlweRelationProofWi
         let bound_e = statement.bound_e;
         let bound_r = statement.bound_r;
 
-
         let context = &statement.context;
         // Unpack the polynomials.
         let mut a = unpack_rns_polynomial(context, &statement.a, n)?;

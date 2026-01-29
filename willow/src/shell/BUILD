@@ -117,6 +117,7 @@ rust_library(
     deps = [
         ":kahe_shell",
         ":parameters_shell",
+        ":shell_parameters_utils_cxx",
         "@protobuf//rust:protobuf",
         "@cxx.rs//:cxx",
         "//ffi_utils:status",
@@ -132,7 +133,7 @@ rust_cxx_bridge(
     name = "shell_parameters_utils_cxx",
     src = "parameters_utils.rs",
     deps = [
-        ":shell_parameters_utils",
+        ":shell_parameters_utils_cc",
         "//ffi_utils:status_cxx",
     ],
 )
@@ -142,11 +143,12 @@ cc_library(
     srcs = ["parameters_utils.cc"],
     hdrs = ["parameters_utils.h"],
     deps = [
-        ":shell_parameters_utils_cxx",
+        ":shell_parameters_utils",
+        ":shell_parameters_utils_cxx/include",
         "@abseil-cpp//absl/status",
         "@abseil-cpp//absl/status:statusor",
+        "@cxx.rs//:cxx",  # fixdeps: keep
         "@cxx.rs//:core",
-        "//ffi_utils:status_cc",
         "//ffi_utils:status_macros",
         "//willow/proto/willow:aggregation_config_cc_proto",
     ],
