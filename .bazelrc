@@ -1,5 +1,5 @@
 # compile with clang on all platforms
 build --action_env=CC=clang
 build --action_env=CXX=clang++
-build --host_action_env=CC=clang
-build --host_action_env=CXX=clang++
+build --repo_env=CC=clang
+build --repo_env=CXX=clang++
