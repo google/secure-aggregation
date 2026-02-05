@@ -158,7 +158,7 @@ impl ServerAccumulator {
         let serialized_aggregation_config_proto = AggregationConfigProto::parse(
             serialized_aggregation_config.as_bytes(),
         )
-        .map_err(|e| status::internal(format!("Failed to parse AggregationConfigProto: {}", e)))?;
+        .map_err(|e| status::internal(&format!("Failed to parse AggregationConfigProto: {}", e)))?;
         let aggregation_config =
             AggregationConfig::from_proto(serialized_aggregation_config_proto, ())?;
         Self::new(aggregation_config)
@@ -170,7 +170,7 @@ impl ServerAccumulator {
         let serialized_server_accumulator_proto = ServerAccumulatorState::parse(
             serialized_server_accumulator.as_bytes(),
         )
-        .map_err(|e| status::internal(format!("Failed to parse ServerAccumulatorState: {}", e)))?;
+        .map_err(|e| status::internal(&format!("Failed to parse ServerAccumulatorState: {}", e)))?;
         Self::from_proto(serialized_server_accumulator_proto, ())
     }
 
@@ -254,7 +254,7 @@ impl ServerAccumulator {
         client_messages.sort_by(|a, b| a.nonce.cmp(&b.nonce));
         // Check that `nonce_range` does not overlap with any range already processed.
         if self.ranges_processed.overlaps(&nonce_range) {
-            return Err(status::invalid_argument(format!(
+            return Err(status::invalid_argument(&format!(
                 "Invalid nonce range: [{:?}, {:?}) overlaps with already processed range",
                 nonce_range.start, nonce_range.end,
             )));
@@ -266,7 +266,7 @@ impl ServerAccumulator {
         for message in client_messages {
             if message.nonce < nonce_range.start || message.nonce >= nonce_range.end {
                 // Return immediately in case a message is out of range.
-                return Err(status::invalid_argument(format!(
+                return Err(status::invalid_argument(&format!(
                     "Invalid nonce: {:?} outside of range [{:?}, {:?})",
                     message.nonce, nonce_range.start, nonce_range.end,
                 )));
@@ -309,7 +309,7 @@ impl ServerAccumulator {
         client_messages: cxx::UniquePtr<cxx::CxxString>,
     ) -> Result<(), StatusError> {
         let client_range_proto = ClientMessageRange::parse(client_messages.as_bytes())
-            .map_err(|e| status::internal(format!("Failed to parse ClientMessageRange: {}", e)))?;
+            .map_err(|e| status::internal(&format!("Failed to parse ClientMessageRange: {}", e)))?;
         std::mem::drop(client_messages); // Release memory early. `client_messages` can be huge.
         if !client_range_proto.client_messages().is_empty() {
             let client_messages: Result<Vec<_>, _> = client_range_proto
@@ -353,13 +353,13 @@ impl ServerAccumulator {
             if nonce_range.start != nonce_range_start {
                 // This should not happen on properly constructed accumulators, since the order of
                 // iteration over BTreeMap is by ascending key, same as RangeSet.
-                return Err(status::internal(format!(
+                return Err(status::internal(&format!(
                     "Nonce range mismatch: range starts at {:?}, but verifier state indexed by {:?}",
                     nonce_range.start, nonce_range_start,
                 )));
             }
             if self.ranges_processed.overlaps(&nonce_range) {
-                return Err(status::invalid_argument(format!(
+                return Err(status::invalid_argument(&format!(
                     "Invalid nonce range: [{:?}, {:?}) overlaps with already processed range",
                     nonce_range.start, nonce_range.end,
                 )));
@@ -390,7 +390,7 @@ impl ServerAccumulator {
 
     fn to_serialized_state(&self) -> Result<Vec<u8>, StatusError> {
         self.to_proto(())?.serialize().map_err(|e| {
-            status::internal(format!("Failed to serialize ServerAccumulatorState: {}", e))
+            status::internal(&format!("Failed to serialize ServerAccumulatorState: {}", e))
         })
     }
 
@@ -412,7 +412,7 @@ fn nonce_range_from_proto(
 ) -> Result<Range<Vec<u8>>, StatusError> {
     let proto = proto.as_view();
     if proto.start() >= proto.end() {
-        return Err(status::invalid_argument(format!(
+        return Err(status::invalid_argument(&format!(
             "Invalid nonce range: {:?} >= {:?}",
             proto.start(),
             proto.end(),
@@ -467,7 +467,7 @@ impl FromProto for ServerAccumulator {
             result.verifier_states.insert(nonce_range_proto.start().to_vec(), verifier_state);
             // Check that range insertion indeed added another range that didn't overlap.
             if result.ranges_processed.len() != result.verifier_states.len() {
-                return Err(status::invalid_argument(format!(
+                return Err(status::invalid_argument(&format!(
                     "Invalid range: [{:?}, {:?}) either overlaps or is adjacent to another range",
                     nonce_range_proto.start(),
                     nonce_range_proto.end()
@@ -542,7 +542,7 @@ fn finalize_accumulator(accumulator: ServerAccumulator) -> Result<(Vec<u8>, Vec<
     let serialized_decryption_request = partial_decryption_request
         .to_proto(&accumulator.server)?
         .serialize()
-        .map_err(|e| status::internal(format!("Failed to serialize: {}", e)))?;
+        .map_err(|e| status::internal(&format!("Failed to serialize: {}", e)))?;
 
     // Extract the server state (i.e. sum of KAHE ciphertexts and sum of AHE ct_0 ciphertexts).
     let server_state_proto = accumulator.server_state.to_proto(&accumulator.server)?;
@@ -553,7 +553,7 @@ fn finalize_accumulator(accumulator: ServerAccumulator) -> Result<(Vec<u8>, Vec<
     });
     let serialized_final_result_decryptor_state = final_result_decryptor_state
         .serialize()
-        .map_err(|e| status::internal(format!("Failed to serialize: {}", e)))?;
+        .map_err(|e| status::internal(&format!("Failed to serialize: {}", e)))?;
 
     Ok((serialized_decryption_request, serialized_final_result_decryptor_state))
 }
@@ -580,7 +580,7 @@ impl FinalResultDecryptor {
         // Parse aggregation config and server state protos.
         let final_result_decryptor_state_proto =
             FinalResultDecryptorState::parse(serialized_proto.as_bytes()).map_err(|e| {
-                status::internal(format!("Failed to parse FinalResultDecryptorState: {}", e))
+                status::internal(&format!("Failed to parse FinalResultDecryptorState: {}", e))
             })?;
         let server_state_proto = final_result_decryptor_state_proto.server_state();
         let aggregation_config_proto = final_result_decryptor_state_proto.aggregation_config();
@@ -605,7 +605,7 @@ impl FinalResultDecryptor {
             serialized_partial_decryption_response.as_bytes(),
         )
         .map_err(|e| {
-            status::internal(format!("Failed to parse PartialDecryptionResponse: {}", e))
+            status::internal(&format!("Failed to parse PartialDecryptionResponse: {}", e))
         })?;
         let pd = PartialDecryptionResponse::from_proto(pd_proto, &self.server)?;
 

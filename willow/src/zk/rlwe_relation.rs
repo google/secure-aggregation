@@ -163,7 +163,7 @@ fn check_statement_can_be_handled(
     // Check that the n of the statement matches that used at construction.
     if n != statement.n {
         return Err(status::failed_precondition(
-            "n in statement does not match n specified at construction.".to_string(),
+            "n in statement does not match n specified at construction.",
         ));
     }
     let q = statement.q;
@@ -177,14 +177,13 @@ fn check_statement_can_be_handled(
     let log_gap = ceil_log_2(2500 * (usize::isqrt(n) as u128 + 1));
     if log_bound_w + log_gap + log_q > 251 {
         return Err(status::failed_precondition(
-            "q^2*n^(3/2)*2500 exceeds (or almost exceeds) 2^251 so the proof would overflow."
-                .to_string(),
+            "q^2*n^(3/2)*2500 exceeds (or almost exceeds) 2^251 so the proof would overflow.",
         ));
     }
     let samples_required = calculate_samples_required(n, q, 128) as usize;
     if samples_required > MAX_RHOS {
         return Err(status::failed_precondition(
-            "Too many samples required to prove the relation. n is too close to q, if we can't use a larger q or smaller n. We could change the constant MAX_RHOS to be larger.".to_string(),
+            "Too many samples required to prove the relation. n is too close to q, if we can't use a larger q or smaller n. We could change the constant MAX_RHOS to be larger.",
         ));
     }
     Ok(())
@@ -341,9 +340,7 @@ pub fn try_matrices_and_compute_z(
 ) -> Result<Vec<i128>, status::StatusError> {
     let n = v.len();
     if n != R1.len() || n != R2.len() {
-        return Err(status::failed_precondition(
-            "R1, R2, and v must have the same length".to_string(),
-        ));
+        return Err(status::failed_precondition("R1, R2, and v must have the same length"));
     }
     let mut z = vec![0 as i128; 128];
     for j in 0..128 {
@@ -375,7 +372,7 @@ pub fn flatten_challenge_matrix(
 ) -> Result<(Vec<Scalar>, Vec<Scalar>), status::StatusError> {
     let n = R1.len();
     if n != R2.len() {
-        return Err(status::failed_precondition("R1 and R2 have different lengths".to_string()));
+        return Err(status::failed_precondition("R1 and R2 have different lengths"));
     }
 
     let mut Rplus = vec![0u128; n];
@@ -414,7 +411,7 @@ fn check_loose_bound_will_not_overflow(bound: u128, n: usize) -> Result<(), stat
     // to account for machine precision errors.
     if log_loose_bound > 126.99 {
         return Err(status::failed_precondition(
-            "The bound requested is too large, the product would overflow".to_string(),
+            "The bound requested is too large, the product would overflow",
         ));
     }
     Ok(())
@@ -498,12 +495,12 @@ fn generate_range_product(
             for x in v {
                 if x.abs() > bound as i128 {
                     return Err(status::failed_precondition(
-                        "Provided vector doesn't satisfy the given bound.".to_string(),
+                        "Provided vector doesn't satisfy the given bound.",
                     ));
                 }
             }
             return Err(status::internal(
-                "Rejection sampling failed too many times. This should never happen by chance and is likely a bug.".to_string(),
+                "Rejection sampling failed too many times. This should never happen by chance and is likely a bug.",
             ));
         }
         // Restore the backup transcript to try again.
@@ -551,7 +548,7 @@ fn generate_range_product_for_verification_and_verify_z_bound(
             || u128::from_le_bytes(z_bytes[0..16].try_into().unwrap()) > loose_bound
         {
             return Err(status::permission_denied(
-                "Provided z doesn't satisfy the required uniform bound.".to_string(),
+                "Provided z doesn't satisfy the required uniform bound.",
             ));
         }
     }
@@ -717,7 +714,7 @@ impl<'a> ZeroKnowledgeProver<RlweRelationProofStatement<'a>, RlweRelationProofWi
             // = crho + q*wrho over the integers.
             if (arrho_lower + erho_lower + vprho_lower) % q != crho_vec[j] {
                 return Err(status::failed_precondition(
-                    "The provided witness does not satisfy the relation.".to_string(),
+                    "The provided witness does not satisfy the relation.",
                 ));
             }
             wrho_vec[j] = arrho_upper

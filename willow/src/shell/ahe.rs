@@ -47,7 +47,7 @@ const S_BASE_FLOOD: f64 = 12.8;
 
 fn check_vec_len<T>(left: &Vec<T>, right: &Vec<T>) -> Result<(), status::StatusError> {
     if left.len() != right.len() {
-        return Err(status::invalid_argument(format!(
+        return Err(status::invalid_argument(&format!(
             "left and right must have the same length, got {} and {}",
             left.len(),
             right.len()
@@ -659,7 +659,7 @@ impl Recover for ShellAhe {
         if let Some(l) = plaintext_len {
             let min_buffer_len = (pd.0.len() - 1) * self.num_coeffs;
             if l < min_buffer_len {
-                return Err(status::invalid_argument(format!(
+                return Err(status::invalid_argument(&format!(
                     "received plaintext_len = {}, but the ciphertexts contain at least {} values",
                     l, min_buffer_len
                 )));
@@ -682,7 +682,7 @@ impl Recover for ShellAhe {
                 &mut unsigned_values[start..end],
             )?;
             if n_written != (end - start) as u64 {
-                return Err(status::internal(format!(
+                return Err(status::internal(&format!(
                     "Expected {} recovered messages, but got {}",
                     end - start,
                     n_written,

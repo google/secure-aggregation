@@ -209,7 +209,10 @@ pub fn encrypt(
     for (id, packed_vector_config) in packed_vector_configs.iter() {
         let id: &str = id;
         if !input_vectors.contains_key(id) {
-            return Err(status::invalid_argument(format!("Input vector with id {} not found", id)));
+            return Err(status::invalid_argument(&format!(
+                "Input vector with id {} not found",
+                id
+            )));
         }
         rust_status_from_cpp(unsafe {
             ffi::PackMessagesRaw(

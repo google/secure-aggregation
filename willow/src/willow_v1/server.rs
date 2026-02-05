@@ -189,7 +189,7 @@ where
         server_state: &mut Self::ServerState,
     ) -> Result<(), status::StatusError> {
         if server_state.decryptor_public_key_shares.contains_key(decryptor_id) {
-            return Err(status::failed_precondition(format!(
+            return Err(status::failed_precondition(&format!(
                 "Public key share for decryptor with ID '{decryptor_id}' has already been handled."
             )));
         }

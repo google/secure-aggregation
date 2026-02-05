@@ -39,7 +39,7 @@ pub fn generate_packing_config(
         return Err(status::invalid_argument("`plaintext_bits` must be positive."));
     }
     if plaintext_bits >= BIG_INT_BITS {
-        return Err(status::invalid_argument(format!(
+        return Err(status::invalid_argument(&format!(
             "`plaintext_bits` must be less than {}.",
             BIG_INT_BITS
         )));
@@ -50,13 +50,13 @@ pub fn generate_packing_config(
     let mut packing_configs = BTreeMap::<String, PackedVectorConfig>::new();
     for (id, (length, bound)) in agg_config.vector_lengths_and_bounds.iter() {
         if *length <= 0 {
-            return Err(status::invalid_argument(format!(
+            return Err(status::invalid_argument(&format!(
                 "For id = {}, input length must be positive.",
                 id
             )));
         }
         if *bound <= 0 {
-            return Err(status::invalid_argument(format!(
+            return Err(status::invalid_argument(&format!(
                 "For id = {}, input bound must be positive.",
                 id
             )));
@@ -66,18 +66,18 @@ pub fn generate_packing_config(
         let agg_bound: i64 = agg_config.max_number_of_clients * bound;
         let base_bits: usize = (agg_bound as f64 + 1.0).log2().ceil() as usize;
         if base_bits > MAX_PACKING_BASE_BITS {
-            return Err(status::invalid_argument(format!(
+            return Err(status::invalid_argument(&format!(
                 "For id = {}, input bound * max_number_of_clients is too large.",
                 id,
             )));
         }
         if base_bits == 0 {
-            return Err(status::invalid_argument(format!("For id = {}, base bits is 0.", id,)));
+            return Err(status::invalid_argument(&format!("For id = {}, base bits is 0.", id,)));
         }
         let base = 1i64 << base_bits;
         let dimension = plaintext_bits / base_bits;
         if dimension == 0 {
-            return Err(status::invalid_argument(format!(
+            return Err(status::invalid_argument(&format!(
                 "For id = {}, plaintext_bits is too small; got {}, expected at least {}.",
                 id, plaintext_bits, base_bits
             )));

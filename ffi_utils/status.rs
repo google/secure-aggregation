@@ -21,6 +21,7 @@
 //! corresponding to the widely used RETURN_IF_ERROR macro.
 
 use std::borrow::Cow;
+use std::fmt::Debug;
 
 #[cxx::bridge(namespace = "secure_aggregation")]
 pub mod ffi {
@@ -60,6 +61,17 @@ impl Clone for ffi::FfiStatus {
     }
 }
 
+impl Debug for ffi::FfiStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+        write!(
+            f,
+            "FfiStatus({}: {})",
+            ffi::ffi_status_code(self),
+            String::from_utf8_lossy(ffi::ffi_status_message(self))
+        )
+    }
+}
+
 /// All cases of C++ StatusErrorCode except `StatusErrorCode::kOk`.
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 #[non_exhaustive]
@@ -83,39 +95,48 @@ pub enum StatusErrorCode {
     Unauthenticated = 16,
 }
 
-/// Holds components of absl::Status in the error case.
+/// Holds a wrapped non-OK absl::Status.
 /// We optionally keep a source location, but note that it cannot be passed to
 /// C++ yet.
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, Clone)]
 pub struct StatusError {
-    code: StatusErrorCode,
-    message: MaybeString,
+    ffi_status: ffi::FfiStatus,
     loc: Option<&'static core::panic::Location<'static>>,
 }
 
 impl StatusError {
     pub fn new(
         code: StatusErrorCode,
-        message: impl Into<Vec<u8>>,
+        message: &[u8],
         loc: &'static core::panic::Location<'static>,
     ) -> Self {
-        StatusError { code, message: MaybeString(message.into()), loc: Some(loc) }
+        StatusError { ffi_status: ffi::make_ffi_status(code as i32, message), loc: Some(loc) }
+    }
+
+    pub fn from_ffi_status(
+        ffi_status: ffi::FfiStatus,
+        loc: Option<&'static core::panic::Location<'static>>,
+    ) -> Self {
+        if ffi::ffi_status_code(&ffi_status) == 0 {
+            panic!("Cannot create StatusError from OK status");
+        }
+        StatusError { ffi_status, loc }
     }
 
     /// Create a new StatusError with no source code location.
-    pub fn new_untracked(code: StatusErrorCode, message: impl Into<Vec<u8>>) -> Self {
-        StatusError { code, message: MaybeString(message.into()), loc: None }
+    pub fn new_untracked(code: StatusErrorCode, message: &[u8]) -> Self {
+        StatusError { ffi_status: ffi::make_ffi_status(code as i32, message), loc: None }
     }
 
     /// Create a new StatusError pointing to the current source location.
     #[track_caller]
-    pub fn new_with_current_location(code: StatusErrorCode, message: impl Into<Vec<u8>>) -> Self {
+    pub fn new_with_current_location(code: StatusErrorCode, message: &[u8]) -> Self {
         StatusError::new_untracked(code, message).with_current_location()
     }
 
     /// Returns the canonical error code of this status.
     pub fn code(&self) -> StatusErrorCode {
-        self.code
+        ffi::ffi_status_code(&self.ffi_status).try_into().unwrap_or(StatusErrorCode::Unknown)
     }
 
     /// Returns the error message associated with this error code.
@@ -123,12 +144,12 @@ impl StatusError {
     /// unusual for the error message to be the empty string. As a result,
     /// prefer `Display` for debug logging.
     pub fn message(&self) -> Cow<str> {
-        String::from_utf8_lossy(&self.message.0)
+        String::from_utf8_lossy(self.message_bytes())
     }
 
     /// Returns the raw bytes of the error message.
     pub fn message_bytes(&self) -> &[u8] {
-        &self.message.0
+        ffi::ffi_status_message(&self.ffi_status)
     }
 
     /// Returns location of the error message.
@@ -139,7 +160,7 @@ impl StatusError {
     /// Returns a new `StatusError` with the same code and message but pointing
     /// to the provided source location.
     pub fn with_location(self, location: &'static core::panic::Location<'static>) -> Self {
-        StatusError { code: self.code, message: self.message, loc: Some(location) }
+        StatusError { ffi_status: self.ffi_status, loc: Some(location) }
     }
 
     /// Returns a new `StatusError` with the same code and message but pointing
@@ -153,9 +174,9 @@ impl StatusError {
 impl std::fmt::Display for StatusError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
         if let Some(loc) = self.loc {
-            write!(f, "{}:{}:{}: {}", self.code.as_str(), loc.file(), loc.line(), self.message())
+            write!(f, "{}:{}:{}: {}", self.code().as_str(), loc.file(), loc.line(), self.message())
         } else {
-            write!(f, "{}: {}", self.code.as_str(), self.message())
+            write!(f, "{}: {}", self.code().as_str(), self.message())
         }
     }
 }
@@ -261,7 +282,7 @@ impl std::error::Error for StatusErrorCodeTryFromError {}
 
 impl From<StatusError> for ffi::FfiStatus {
     fn from(error: StatusError) -> Self {
-        ffi::make_ffi_status(error.code as i32, error.message.0.as_slice())
+        error.ffi_status
     }
 }
 
@@ -275,117 +296,122 @@ impl From<Status> for ffi::FfiStatus {
 }
 
 pub fn rust_status_from_cpp(status: ffi::FfiStatus) -> Status {
-    let code = ffi::ffi_status_code(&status);
-    if code == 0 {
-        Ok(())
-    } else {
-        let message = ffi::ffi_status_message(&status);
-        Err(StatusError::new(
-            code.try_into().unwrap_or(StatusErrorCode::Unknown),
-            message,
-            core::panic::Location::caller(),
-        ))
+    match ffi::ffi_status_code(&status) {
+        0 => Ok(()),
+        _code => Err(StatusError::from_ffi_status(status, Some(core::panic::Location::caller()))),
     }
 }
 
 #[track_caller]
-pub fn cancelled<S: Into<String>>(msg: S) -> StatusError {
-    StatusError::new(StatusErrorCode::Cancelled, msg.into(), core::panic::Location::caller())
+pub fn cancelled(msg: &str) -> StatusError {
+    StatusError::new(StatusErrorCode::Cancelled, msg.as_bytes(), core::panic::Location::caller())
 }
 
 #[track_caller]
-pub fn unknown<S: Into<String>>(msg: S) -> StatusError {
-    StatusError::new(StatusErrorCode::Unknown, msg.into(), core::panic::Location::caller())
+pub fn unknown(msg: &str) -> StatusError {
+    StatusError::new(StatusErrorCode::Unknown, msg.as_bytes(), core::panic::Location::caller())
 }
 
 #[track_caller]
-pub fn invalid_argument<S: Into<String>>(msg: S) -> StatusError {
-    StatusError::new(StatusErrorCode::InvalidArgument, msg.into(), core::panic::Location::caller())
+pub fn invalid_argument(msg: &str) -> StatusError {
+    StatusError::new(
+        StatusErrorCode::InvalidArgument,
+        msg.as_bytes(),
+        core::panic::Location::caller(),
+    )
 }
 
 #[track_caller]
-pub fn deadline_exceeded<S: Into<String>>(msg: S) -> StatusError {
-    StatusError::new(StatusErrorCode::DeadlineExceeded, msg.into(), core::panic::Location::caller())
+pub fn deadline_exceeded(msg: &str) -> StatusError {
+    StatusError::new(
+        StatusErrorCode::DeadlineExceeded,
+        msg.as_bytes(),
+        core::panic::Location::caller(),
+    )
 }
 
 #[track_caller]
-pub fn not_found<S: Into<String>>(msg: S) -> StatusError {
-    StatusError::new(StatusErrorCode::NotFound, msg.into(), core::panic::Location::caller())
+pub fn not_found(msg: &str) -> StatusError {
+    StatusError::new(StatusErrorCode::NotFound, msg.as_bytes(), core::panic::Location::caller())
 }
 
 #[track_caller]
-pub fn already_exists<S: Into<String>>(msg: S) -> StatusError {
-    StatusError::new(StatusErrorCode::AlreadyExists, msg.into(), core::panic::Location::caller())
+pub fn already_exists(msg: &str) -> StatusError {
+    StatusError::new(
+        StatusErrorCode::AlreadyExists,
+        msg.as_bytes(),
+        core::panic::Location::caller(),
+    )
 }
 
 #[track_caller]
-pub fn permission_denied<S: Into<String>>(msg: S) -> StatusError {
-    StatusError::new(StatusErrorCode::PermissionDenied, msg.into(), core::panic::Location::caller())
+pub fn permission_denied(msg: &str) -> StatusError {
+    StatusError::new(
+        StatusErrorCode::PermissionDenied,
+        msg.as_bytes(),
+        core::panic::Location::caller(),
+    )
 }
 
 #[track_caller]
-pub fn resource_exhausted<S: Into<String>>(msg: S) -> StatusError {
+pub fn resource_exhausted(msg: &str) -> StatusError {
     StatusError::new(
         StatusErrorCode::ResourceExhausted,
-        msg.into(),
+        msg.as_bytes(),
         core::panic::Location::caller(),
     )
 }
 
 #[track_caller]
-pub fn failed_precondition<S: Into<String>>(msg: S) -> StatusError {
+pub fn failed_precondition(msg: &str) -> StatusError {
     StatusError::new(
         StatusErrorCode::FailedPrecondition,
-        msg.into(),
+        msg.as_bytes(),
         core::panic::Location::caller(),
     )
 }
 
 #[track_caller]
-pub fn aborted<S: Into<String>>(msg: S) -> StatusError {
-    StatusError::new(StatusErrorCode::Aborted, msg.into(), core::panic::Location::caller())
+pub fn aborted(msg: &str) -> StatusError {
+    StatusError::new(StatusErrorCode::Aborted, msg.as_bytes(), core::panic::Location::caller())
 }
 
 #[track_caller]
-pub fn out_of_range<S: Into<String>>(msg: S) -> StatusError {
-    StatusError::new(StatusErrorCode::OutOfRange, msg.into(), core::panic::Location::caller())
+pub fn out_of_range(msg: &str) -> StatusError {
+    StatusError::new(StatusErrorCode::OutOfRange, msg.as_bytes(), core::panic::Location::caller())
 }
 
 #[track_caller]
-pub fn unimplemented<S: Into<String>>(msg: S) -> StatusError {
-    StatusError::new(StatusErrorCode::Unimplemented, msg.into(), core::panic::Location::caller())
+pub fn unimplemented(msg: &str) -> StatusError {
+    StatusError::new(
+        StatusErrorCode::Unimplemented,
+        msg.as_bytes(),
+        core::panic::Location::caller(),
+    )
 }
 
 #[track_caller]
-pub fn internal<S: Into<String>>(msg: S) -> StatusError {
-    StatusError::new(StatusErrorCode::Internal, msg.into(), core::panic::Location::caller())
+pub fn internal(msg: &str) -> StatusError {
+    StatusError::new(StatusErrorCode::Internal, msg.as_bytes(), core::panic::Location::caller())
 }
 
 #[track_caller]
-pub fn unavailable<S: Into<String>>(msg: S) -> StatusError {
-    StatusError::new(StatusErrorCode::Unavailable, msg.into(), core::panic::Location::caller())
+pub fn unavailable(msg: &str) -> StatusError {
+    StatusError::new(StatusErrorCode::Unavailable, msg.as_bytes(), core::panic::Location::caller())
 }
 
 #[track_caller]
-pub fn data_loss<S: Into<String>>(msg: S) -> StatusError {
-    StatusError::new(StatusErrorCode::DataLoss, msg.into(), core::panic::Location::caller())
+pub fn data_loss(msg: &str) -> StatusError {
+    StatusError::new(StatusErrorCode::DataLoss, msg.as_bytes(), core::panic::Location::caller())
 }
 
 #[track_caller]
-pub fn unauthenticated<S: Into<String>>(msg: S) -> StatusError {
-    StatusError::new(StatusErrorCode::Unauthenticated, msg.into(), core::panic::Location::caller())
-}
-
-/// Holds a sequence of bytes that may be UTF-8. This primarily exists to give
-/// it a String-like Debug implementation.
-#[derive(PartialEq, Eq, Clone)]
-struct MaybeString(pub Vec<u8>);
-
-impl std::fmt::Debug for MaybeString {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
-        let string = String::from_utf8_lossy(&self.0);
-        write!(f, "{:?}", string)
-    }
+pub fn unauthenticated(msg: &str) -> StatusError {
+    StatusError::new(
+        StatusErrorCode::Unauthenticated,
+        msg.as_bytes(),
+        core::panic::Location::caller(),
+    )
 }
 
 #[cfg(test)]
@@ -398,7 +424,7 @@ mod tests {
     #[allow(dead_code)]
     fn compile_test() -> Status {
         if 0 == 1 {
-            return Err(cancelled(format!("bad stuff: {}", 0)));
+            return Err(cancelled(&format!("bad stuff: {}", 0)));
         }
         Ok(())
     }
@@ -414,9 +440,11 @@ mod tests {
 
     #[gtest]
     fn test() -> Result<()> {
-        match fail_whale() {
-            Err(StatusError { code: StatusErrorCode::Cancelled, .. }) => Ok(()),
-            status => fail!("unexpected status: {:?}", status),
+        let status = fail_whale();
+        if status.is_err() && status.as_ref().err().unwrap().code() == StatusErrorCode::Cancelled {
+            Ok(())
+        } else {
+            fail!("unexpected status: {:?}", status)
         }
     }
 
@@ -452,7 +480,7 @@ mod tests {
 
     #[gtest]
     fn test_ffi_status_from_status_error() {
-        let error = StatusError::new_untracked(StatusErrorCode::Cancelled, "test");
+        let error = StatusError::new_untracked(StatusErrorCode::Cancelled, b"test");
         let ffi_status: ffi::FfiStatus = error.into();
         expect_eq!(ffi_status_code(&ffi_status), 1);
         expect_eq!(ffi_status_message(&ffi_status), b"test");
@@ -477,7 +505,7 @@ mod tests {
 
     #[gtest]
     fn test_ffi_status_from_non_ok_status() {
-        let rust_status = Err(StatusError::new_untracked(StatusErrorCode::Cancelled, "test"));
+        let rust_status = Err(StatusError::new_untracked(StatusErrorCode::Cancelled, b"test"));
         let ffi_status: ffi::FfiStatus = rust_status.into();
         expect_eq!(ffi_status_code(&ffi_status), StatusErrorCode::Cancelled as i32);
         expect_eq!(ffi_status_message(&ffi_status), b"test");

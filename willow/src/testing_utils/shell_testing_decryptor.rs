@@ -29,7 +29,7 @@ use prng_traits::SecurePrng;
 use proto_serialization_traits::{FromProto, ToProto};
 use protobuf::prelude::*;
 use single_thread_hkdf::SingleThreadHkdfPrng;
-use status::{StatusError, StatusErrorCode};
+use status::StatusError;
 use std::cell::RefCell;
 use vahe_shell::ShellVahe;
 use vahe_traits::Recover;
@@ -89,10 +89,7 @@ impl ShellTestingDecryptor {
         let rest_of_ciphertext =
             self.vahe.get_recover_ciphertext(&client_message.ahe_ciphertext)?;
         match &self.secret_key {
-            None => Err(StatusError::new_with_current_location(
-                StatusErrorCode::InvalidArgument,
-                "No secret key available",
-            )),
+            None => Err(status::invalid_argument("No secret key available")),
             Some(sk_share) => {
                 let partial_decryption = self.vahe.partial_decrypt(
                     &partial_dec_ciphertext,
@@ -112,9 +109,9 @@ impl ShellTestingDecryptor {
     fn generate_public_key_serialized(&mut self) -> Result<Vec<u8>, StatusError> {
         let pk = self.generate_public_key()?;
         pk.to_proto(&self.vahe)
-            .map_err(|e| status::internal(format!("ToProto error: {}", e)))?
+            .map_err(|e| status::internal(&format!("ToProto error: {}", e)))?
             .serialize()
-            .map_err(|e| status::internal(format!("Serialize error: {}", e)))
+            .map_err(|e| status::internal(&format!("Serialize error: {}", e)))
     }
 
     /// SAFETY: `out` must be valid for writes.
@@ -127,7 +124,7 @@ impl ShellTestingDecryptor {
         contribution: &[u8],
     ) -> Result<Vec<ffi::EncodedDataEntry>, StatusError> {
         let client_message_proto = ClientMessageProto::parse(contribution)
-            .map_err(|e| status::internal(format!("Failed to parse ClientMessageProto: {}", e)))?;
+            .map_err(|e| status::internal(&format!("Failed to parse ClientMessageProto: {}", e)))?;
 
         let kahe_ciphertext =
             KaheCiphertext::from_proto(client_message_proto.kahe_ciphertext(), &self.kahe)?;
@@ -162,10 +159,7 @@ impl ShellTestingDecryptor {
         request: &PartialDecryptionRequest<ShellVahe>,
     ) -> Result<PartialDecryptionResponse<ShellVahe>, StatusError> {
         match &self.secret_key {
-            None => Err(StatusError::new_with_current_location(
-                StatusErrorCode::InvalidArgument,
-                "No secret key available",
-            )),
+            None => Err(status::invalid_argument("No secret key available")),
             Some(sk_share) => {
                 let partial_decryption = self.vahe.partial_decrypt(
                     &request.partial_dec_ciphertext,
@@ -182,15 +176,15 @@ impl ShellTestingDecryptor {
         request: &[u8],
     ) -> Result<Vec<u8>, StatusError> {
         let request_proto = PartialDecryptionRequestProto::parse(request).map_err(|e| {
-            status::internal(format!("Failed to parse PartialDecryptionRequestProto: {}", e))
+            status::internal(&format!("Failed to parse PartialDecryptionRequestProto: {}", e))
         })?;
         let request = PartialDecryptionRequest::from_proto(request_proto, self)?;
         let response = self.generate_partial_decryption_response(&request)?;
         response
             .to_proto(self)
-            .map_err(|e| status::internal(format!("ToProto error: {}", e)))?
+            .map_err(|e| status::internal(&format!("ToProto error: {}", e)))?
             .serialize()
-            .map_err(|e| status::internal(format!("Serialize error: {}", e)))
+            .map_err(|e| status::internal(&format!("Serialize error: {}", e)))
     }
 
     /// SAFETY: `out` must be valid for writes.
@@ -261,7 +255,7 @@ fn create_shell_testing_decryptor_impl(
     config: &[u8],
 ) -> Result<Box<ShellTestingDecryptor>, StatusError> {
     let aggregation_config_proto = AggregationConfigProto::parse(config)
-        .map_err(|e| status::internal(format!("Failed to parse AggregationConfigProto: {}", e)))?;
+        .map_err(|e| status::internal(&format!("Failed to parse AggregationConfigProto: {}", e)))?;
     let aggregation_config = AggregationConfig::from_proto(aggregation_config_proto, ())?;
     let context_bytes = &aggregation_config.key_id;
     let decryptor = ShellTestingDecryptor::new(&aggregation_config, context_bytes)?;

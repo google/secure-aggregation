@@ -54,7 +54,7 @@ fn create_human_readable_shell_config_impl(
 ) -> Result<Vec<u8>, status::StatusError> {
     let config_proto =
         AggregationConfigProto::parse(aggregation_config_proto.as_bytes()).map_err(|e| {
-            status::invalid_argument(format!("Failed to parse AggregationConfigProto: {}", e))
+            status::invalid_argument(&format!("Failed to parse AggregationConfigProto: {}", e))
         })?;
     let config = AggregationConfig::from_proto(config_proto, ())?;
     let (kahe_config, ahe_config) = create_shell_configs(&config)?;

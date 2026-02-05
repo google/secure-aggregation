@@ -25,7 +25,6 @@ use parameters_shell::create_shell_configs;
 use proto_serialization_traits::{FromProto, ToProto};
 use protobuf::prelude::*;
 use shell_ciphertexts_rust_proto::ShellAhePublicKey;
-use status::ffi::FfiStatus;
 use status::StatusError;
 use std::collections::HashMap;
 use std::rc::Rc;
@@ -81,7 +80,7 @@ impl WillowShellClient {
     ) -> Result<Self, StatusError> {
         let aggregation_config_proto =
             AggregationConfigProto::parse(config.as_bytes()).map_err(|e| {
-                status::internal(format!("Failed to parse AggregationConfigProto: {}", e))
+                status::internal(&format!("Failed to parse AggregationConfigProto: {}", e))
             })?;
         let aggregation_config = AggregationConfig::from_proto(aggregation_config_proto, ())?;
         let (kahe_config, ahe_config) = create_shell_configs(&aggregation_config)?;
@@ -101,17 +100,17 @@ impl WillowShellClient {
         let mut plaintext_slice: HashMap<&str, &[u64]> = HashMap::new();
         for entry in data {
             let key = std::str::from_utf8(entry.key)
-                .map_err(|e| status::internal(format!("Failed to parse key as UTF-8: {}", e)))?;
+                .map_err(|e| status::internal(&format!("Failed to parse key as UTF-8: {}", e)))?;
             plaintext_slice.insert(key, entry.values);
         }
         let public_key_proto = ShellAhePublicKey::parse(public_key.as_bytes())
-            .map_err(|e| status::internal(format!("Failed to parse ShellAhePublicKey: {}", e)))?;
+            .map_err(|e| status::internal(&format!("Failed to parse ShellAhePublicKey: {}", e)))?;
         let public_key_rust = PublicKey::from_proto(public_key_proto, self.0.vahe.as_ref())?;
         let message = self.0.create_client_message(&plaintext_slice, &public_key_rust, nonce)?;
         Ok(message
             .to_proto(&self.0)?
             .serialize()
-            .map_err(|e| status::internal(format!("Failed to serialize ClientMessage: {}", e)))?)
+            .map_err(|e| status::internal(&format!("Failed to serialize ClientMessage: {}", e)))?)
     }
 }
 

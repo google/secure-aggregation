@@ -17,7 +17,6 @@
 use protobuf::prelude::*;
 use rns_serialization_rust_proto::SerializedRnsPolynomial;
 use shell_types::{create_empty_rns_polynomial, Moduli, RnsPolynomial};
-use status::{StatusError, StatusErrorCode};
 
 #[cxx::bridge(namespace = "secure_aggregation")]
 mod ffi {
@@ -59,12 +58,8 @@ pub fn rns_polynomial_to_proto(
     rust_status_from_cpp(unsafe {
         ffi::SerializeRnsPolynomialToBytes(poly, moduli.moduli, &mut out)
     })?;
-    SerializedRnsPolynomial::parse(out.as_bytes()).map_err(|parse_error| {
-        StatusError::new_with_current_location(
-            StatusErrorCode::Internal,
-            format!("{parse_error:?}"),
-        )
-    })
+    SerializedRnsPolynomial::parse(out.as_bytes())
+        .map_err(|parse_error| status::internal(&format!("{parse_error:?}")))
 }
 
 // Deserialize a SerializedRnsPolynomial proto to a RnsPolynomial.
@@ -72,12 +67,10 @@ pub fn rns_polynomial_from_proto(
     serialized: impl protobuf::AsView<Proxied = SerializedRnsPolynomial>,
     moduli: &Moduli,
 ) -> Result<RnsPolynomial, status::StatusError> {
-    let serialized_bytes = serialized.as_view().serialize().map_err(|serialize_error| {
-        StatusError::new_with_current_location(
-            StatusErrorCode::Internal,
-            format!("{serialize_error:?}"),
-        )
-    })?;
+    let serialized_bytes = serialized
+        .as_view()
+        .serialize()
+        .map_err(|serialize_error| status::internal(&format!("{serialize_error:?}")))?;
 
     // SAFETY: No lifetime constraints (`create_empty_rns_polynomial` creates and returns an empty
     // C++ object).

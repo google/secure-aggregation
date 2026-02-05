@@ -108,7 +108,7 @@ impl LinearInnerProductProverVerifier {
     ) -> Result<CompressedRistretto, status::StatusError> {
         if a.len() != self.params.G.len() {
             return Err(status::permission_denied(
-                "Length of a doesnt match length specified at prover construction.".to_string(),
+                "Length of a doesnt match length specified at prover construction.",
             ));
         }
         let C = RistrettoPoint::vartime_multiscalar_mul(
@@ -128,13 +128,12 @@ impl LinearInnerProductProverVerifier {
     ) -> Result<RistrettoPoint, status::StatusError> {
         if end > self.params.G.len() {
             return Err(status::permission_denied(
-                "End of range is beyond the size speicified at prover construction.".to_string(),
+                "End of range is beyond the size speicified at prover construction.",
             ));
         }
         if (end - start) != a.len() {
             return Err(status::permission_denied(
-                "Length of a doesnt match the length of the specified range of generators."
-                    .to_string(),
+                "Length of a doesnt match the length of the specified range of generators.",
             ));
         }
         let C = RistrettoPoint::vartime_multiscalar_mul(
@@ -162,19 +161,18 @@ impl
     ) -> Result<Self::Proof, status::StatusError> {
         if self.params.n != statement.n {
             return Err(status::permission_denied(
-                "Number of generators doesnt match length in statement".to_string(),
+                "Number of generators doesnt match length in statement",
             ));
         }
 
         if witness.a.len() != statement.n {
             return Err(status::permission_denied(
-                "Length of witness doesnt match length in statement".to_string(),
+                "Length of witness doesnt match length in statement",
             ));
         }
         if statement.b.len() != statement.n {
             return Err(status::permission_denied(
-                "Length of vector b in statement doesnt match value for length in statement"
-                    .to_string(),
+                "Length of vector b in statement doesnt match value for length in statement",
             ));
         }
 

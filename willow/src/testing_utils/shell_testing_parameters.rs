@@ -67,7 +67,7 @@ pub fn make_kahe_config_for(
                 num_public_polynomials: divide_and_roundup(total_num_coeffs, 1 << 12),
             })
         }
-        _ => Err(status::invalid_argument(format!(
+        _ => Err(status::invalid_argument(&format!(
             "No KAHE configuration for plaintext_modulus_bits = {}",
             plaintext_modulus_bits
         ))),

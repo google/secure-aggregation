@@ -125,7 +125,7 @@ where
     ) -> Result<PartialDecryptionResponse<Vahe>, status::StatusError> {
         let Some(ref sk_share) = decryptor_state.sk_share else {
             return Err(status::failed_precondition(
-                "decryptor_state does not contain a secret key share".to_string(),
+                "decryptor_state does not contain a secret key share",
             ));
         };
         // Compute the partial decryption.

@@ -88,7 +88,7 @@ pub fn create_shell_ahe_config(
     max_number_of_decryptors: i64,
 ) -> Result<ShellAheConfig, status::StatusError> {
     if max_number_of_decryptors > AHE_FIXED_MAX_NUM_DECRYPTORS {
-        return Err(status::invalid_argument(format!(
+        return Err(status::invalid_argument(&format!(
             "`max_number_of_decryptors` cannot be larger than {}",
             AHE_FIXED_MAX_NUM_DECRYPTORS
         )));
@@ -113,7 +113,7 @@ pub fn create_shell_kahe_config(
         .sum();
     let max_input_bound =
         aggregation_config.vector_lengths_and_bounds.values().map(|(_, bound)| bound).max().ok_or(
-            status::invalid_argument(format!("empty vector configs in aggregation config")),
+            status::invalid_argument(&format!("empty vector configs in aggregation config")),
         )?;
 
     if total_input_length <= 1000
@@ -179,7 +179,7 @@ pub fn create_shell_kahe_config(
         });
     }
 
-    Err(status::invalid_argument(format!(
+    Err(status::invalid_argument(&format!(
         "input setting is not supported: aggregation_config = {:?}",
         aggregation_config
     )))

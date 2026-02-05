@@ -58,7 +58,7 @@ impl ShellKahe {
     /// Validates KAHE parameters in ShellKaheConfig.
     fn validate_kahe_config(config: &ShellKaheConfig) -> Result<(), status::StatusError> {
         if config.log_t > BIG_INT_BITS {
-            return Err(status::invalid_argument(format!(
+            return Err(status::invalid_argument(&format!(
                 "log_t must be <= {} for plaintexts to fit in the C++ big integer type, got {}",
                 BIG_INT_BITS, config.log_t
             )));
@@ -68,23 +68,23 @@ impl ShellKahe {
             let dimension = packed_vector_config.dimension;
             let num_packed_coeffs = packed_vector_config.num_packed_coeffs;
             if base <= 1 {
-                return Err(status::invalid_argument(format!("base must be > 1, got {}", base)));
+                return Err(status::invalid_argument(&format!("base must be > 1, got {}", base)));
             }
             if dimension <= 0 {
-                return Err(status::invalid_argument(format!(
+                return Err(status::invalid_argument(&format!(
                     "For packing id {}, dimension must be > 0, got {}",
                     id, dimension
                 )));
             }
             if num_packed_coeffs <= 0 {
-                return Err(status::invalid_argument(format!(
+                return Err(status::invalid_argument(&format!(
                     "For packing id {}, num_packed_coeffs must be > 0, got {}",
                     id, num_packed_coeffs
                 )));
             }
             let log_base = (base as f64).log2().ceil() as u64;
             if log_base * dimension > config.log_t as u64 {
-                return Err(status::invalid_argument(format!(
+                return Err(status::invalid_argument(&format!(
                     "For packing id {}, base^dimension must not be larger than the KAHE plaintext modulus 2^log_t+1: base = {}, dimension = {}, log_t = {}",
                     id,
                     base,
@@ -218,7 +218,7 @@ impl KaheBase for ShellKahe {
         right: &mut Self::Plaintext,
     ) -> Result<(), status::StatusError> {
         if left.len() != right.len() {
-            return Err(status::invalid_argument(format!(
+            return Err(status::invalid_argument(&format!(
                 "left and right must have the same length, got {} and {}",
                 left.len(),
                 right.len()
@@ -227,7 +227,7 @@ impl KaheBase for ShellKahe {
         for (id, values) in left.iter() {
             if let Some(right_values) = right.get_mut(id) {
                 if right_values.len() != values.len() {
-                    return Err(status::invalid_argument(format!(
+                    return Err(status::invalid_argument(&format!(
                         "right values for key {} must have the same length as left, got {} and {}",
                         id,
                         right_values.len(),
@@ -238,7 +238,7 @@ impl KaheBase for ShellKahe {
                     right_values[i] += v;
                 }
             } else {
-                return Err(status::invalid_argument(format!("right must contain key {}", id)));
+                return Err(status::invalid_argument(&format!("right must contain key {}", id)));
             }
         }
         Ok(())
@@ -275,7 +275,7 @@ impl KaheEncrypt for ShellKahe {
                 let max_length =
                     packed_vector_config.dimension * packed_vector_config.num_packed_coeffs;
                 if values.len() > max_length as usize {
-                    return Err(status::invalid_argument(format!(
+                    return Err(status::invalid_argument(&format!(
                         "plaintext for id {} can have at most {} elements, got {}",
                         id,
                         max_length,
@@ -284,7 +284,7 @@ impl KaheEncrypt for ShellKahe {
                 }
                 for v in values.iter() {
                     if *v >= packed_vector_config.base {
-                        return Err(status::invalid_argument(format!(
+                        return Err(status::invalid_argument(&format!(
                             "plaintext for id {} cannot contain values larger than the input bound {}, got {}",
                             id,
                             packed_vector_config.base,
@@ -293,7 +293,7 @@ impl KaheEncrypt for ShellKahe {
                     }
                 }
             } else {
-                return Err(status::invalid_argument(format!("unknown plaintext id {}", id)));
+                return Err(status::invalid_argument(&format!("unknown plaintext id {}", id)));
             }
         }
 
@@ -330,7 +330,7 @@ impl TrySecretKeyInto<Vec<i64>> for ShellKahe {
         let n_written =
             write_small_rns_polynomial_to_buffer(&sk.0, &moduli, &mut signed_values[..])?;
         if n_written != self.num_coeffs as u64 {
-            return Err(status::internal(format!(
+            return Err(status::internal(&format!(
                 "Expected {} coefficients, but got {}.",
                 self.num_coeffs, n_written
             )));
@@ -346,7 +346,7 @@ impl TrySecretKeyFrom<Vec<i64>> for ShellKahe {
         sk_buffer: Vec<i64>,
     ) -> Result<Self::SecretKey, status::StatusError> {
         if sk_buffer.len() < self.num_coeffs {
-            return Err(status::invalid_argument(format!(
+            return Err(status::invalid_argument(&format!(
                 "secret key buffer is too short: {} < {}",
                 sk_buffer.len(),
                 self.num_coeffs

@@ -114,12 +114,12 @@ impl QuadraticInnerProductProverVerifier {
     ) -> Result<RistrettoPoint, status::StatusError> {
         if a.len() != self.params.n {
             return Err(status::permission_denied(
-                "Length of a doesnt match length specified at prover construction.".to_string(),
+                "Length of a doesnt match length specified at prover construction.",
             ));
         }
         if b.len() != self.params.n {
             return Err(status::permission_denied(
-                "Length of b doesnt match length specified at prover construction.".to_string(),
+                "Length of b doesnt match length specified at prover construction.",
             ));
         }
         let C = RistrettoPoint::vartime_multiscalar_mul(
@@ -152,12 +152,12 @@ impl
     ) -> Result<Self::Proof, status::StatusError> {
         if witness.a.len() != self.params.n {
             return Err(status::permission_denied(
-                "Length of witness a doesn't match length in parameters".to_string(),
+                "Length of witness a doesn't match length in parameters",
             ));
         }
         if witness.b.len() != self.params.n {
             return Err(status::permission_denied(
-                "Length of witness b doesnt match length in parameters".to_string(),
+                "Length of witness b doesnt match length in parameters",
             ));
         }
 
