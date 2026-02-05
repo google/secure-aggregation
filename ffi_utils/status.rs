@@ -24,15 +24,28 @@ use std::borrow::Cow;
 
 #[cxx::bridge(namespace = "secure_aggregation")]
 pub mod ffi {
-    // A simple Status alternative which is cxx-compatible (because it directly uses unique_ptr).
+    unsafe extern "C++" {
+        include!("absl/status/status.h");
+        #[namespace = "absl"]
+        type Status;
+    }
+
+    // A simple Status wrapper which is cxx-compatible (because it directly uses unique_ptr).
     pub struct FfiStatus {
-        pub code: i32,
-        pub message: UniquePtr<CxxString>,
+        // Wrapped absl::Status. A nullptr is interpreted as an OK status.
+        ptr: UniquePtr<Status>,
     }
 
     unsafe extern "C++" {
         include!("ffi_utils/status.h");
+        #[rust_name = "make_ok_ffi_status"]
+        pub fn MakeFfiStatus() -> FfiStatus;
+        #[rust_name = "make_ffi_status"]
         pub fn MakeFfiStatus(code: i32, message: &[u8]) -> FfiStatus;
+        #[rust_name = "ffi_status_code"]
+        pub fn FfiStatusCode(status: &FfiStatus) -> i32;
+        #[rust_name = "ffi_status_message"]
+        pub fn FfiStatusMessage<'a>(status: &'a FfiStatus) -> &'a [u8];
     }
 }
 
@@ -240,26 +253,27 @@ impl std::error::Error for StatusErrorCodeTryFromError {}
 
 impl From<StatusError> for ffi::FfiStatus {
     fn from(error: StatusError) -> Self {
-        ffi::MakeFfiStatus(error.code as i32, error.message.0.as_slice())
+        ffi::make_ffi_status(error.code as i32, error.message.0.as_slice())
     }
 }
 
 impl From<Status> for ffi::FfiStatus {
     fn from(status: Status) -> Self {
         match status {
-            Ok(()) => ffi::FfiStatus { code: 0, message: cxx::UniquePtr::null() },
+            Ok(()) => ffi::make_ok_ffi_status(),
             Err(error) => error.into(),
         }
     }
 }
 
 pub fn rust_status_from_cpp(status: ffi::FfiStatus) -> Status {
-    if status.code == 0 {
+    let code = ffi::ffi_status_code(&status);
+    if code == 0 {
         Ok(())
     } else {
-        let message = if status.message.is_null() { b"" } else { status.message.as_bytes() };
+        let message = ffi::ffi_status_message(&status);
         Err(StatusError::new(
-            status.code.try_into().unwrap_or(StatusErrorCode::Unknown),
+            code.try_into().unwrap_or(StatusErrorCode::Unknown),
             message,
             core::panic::Location::caller(),
         ))
@@ -369,6 +383,8 @@ impl std::fmt::Debug for MaybeString {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ffi::ffi_status_code;
+    use ffi::ffi_status_message;
     use googletest::prelude::*;
 
     #[allow(dead_code)]
@@ -415,13 +431,13 @@ mod tests {
     fn test_ffi_status_from_status_error() {
         let error = StatusError::new_untracked(StatusErrorCode::Cancelled, "test");
         let ffi_status: ffi::FfiStatus = error.into();
-        expect_eq!(ffi_status.code, 1);
-        expect_eq!(ffi_status.message.as_bytes(), b"test");
+        expect_eq!(ffi_status_code(&ffi_status), 1);
+        expect_eq!(ffi_status_message(&ffi_status), b"test");
     }
 
     #[gtest]
     fn test_rust_status_from_cpp() {
-        let ffi_status = ffi::MakeFfiStatus(1, b"test");
+        let ffi_status = ffi::make_ffi_status(1, b"test");
         let rust_status = rust_status_from_cpp(ffi_status);
         assert!(rust_status.is_err());
         expect_eq!(&rust_status.as_ref().err().unwrap().code(), &StatusErrorCode::Cancelled);
@@ -432,15 +448,15 @@ mod tests {
     fn test_ffi_status_from_ok_status() {
         let rust_status = Ok(());
         let ffi_status: ffi::FfiStatus = rust_status.into();
-        expect_eq!(ffi_status.code, 0);
-        expect_eq!(ffi_status.message.is_null(), true);
+        expect_eq!(ffi_status_code(&ffi_status), 0);
+        expect_eq!(ffi_status_message(&ffi_status).is_empty(), true);
     }
 
     #[gtest]
     fn test_ffi_status_from_non_ok_status() {
         let rust_status = Err(StatusError::new_untracked(StatusErrorCode::Cancelled, "test"));
         let ffi_status: ffi::FfiStatus = rust_status.into();
-        expect_eq!(ffi_status.code, StatusErrorCode::Cancelled as i32);
-        expect_eq!(ffi_status.message.as_bytes(), b"test");
+        expect_eq!(ffi_status_code(&ffi_status), StatusErrorCode::Cancelled as i32);
+        expect_eq!(ffi_status_message(&ffi_status), b"test");
     }
 }

@@ -264,7 +264,7 @@ FfiStatus WriteRnsPolynomialToBuffer128(
     buffer[2 * i + 1] = absl::Uint128High64(coeff_128);
   }
 
-  return {};
+  return MakeFfiStatus();
 }
 
 RnsPolynomialWrapper CloneRnsPolynomialWrapper(const RnsPolynomialWrapper* in) {

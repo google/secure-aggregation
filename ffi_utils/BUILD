@@ -44,7 +44,10 @@ rust_library(
 rust_cxx_bridge(
     name = "status_cxx",
     src = "status.rs",
-    deps = [":status_cc"],
+    deps = [
+        ":status_cc",
+        "@abseil-cpp//absl/status",
+    ],
 )
 
 rust_test(
@@ -60,6 +63,7 @@ cc_library(
     srcs = ["status.cc"],
     hdrs = ["status.h"],
     deps = [
+        ":cxx_utils",
         ":status_cxx/include",
         "@abseil-cpp//absl/status",
         "@abseil-cpp//absl/strings:string_view",

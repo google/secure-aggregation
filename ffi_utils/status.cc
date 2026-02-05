@@ -16,39 +16,52 @@
 
 #include <cstdint>
 #include <memory>
-#include <string>
 #include <utility>
 
 #include "absl/status/status.h"
 #include "absl/strings/string_view.h"
+#include "ffi_utils/cxx_utils.h"
 #include "ffi_utils/status.rs.h"
 #include "include/cxx.h"
 
 namespace secure_aggregation {
 
-FfiStatus MakeFfiStatus() { return FfiStatus{.code = 0, .message = nullptr}; }
-FfiStatus MakeFfiStatus(absl::Status status) {
-  return FfiStatus{static_cast<int>(status.code()),
-                   std::make_unique<std::string>(status.message())};
-}
-FfiStatus MakeFfiStatus(int code, std::string message) {
-  return FfiStatus{code, std::make_unique<std::string>(std::move(message))};
-}
+FfiStatus MakeFfiStatus() { return FfiStatus{nullptr}; }
 
-absl::Status UnwrapFfiStatus(FfiStatus status) {
-  if (status.code == 0) {
-    return absl::OkStatus();
+FfiStatus MakeFfiStatus(absl::Status status) {
+  if (status.ok()) {
+    return MakeFfiStatus();
   }
-  absl::string_view message = "";
-  if (status.message != nullptr) {
-    message = *status.message;
-  }
-  return absl::Status(static_cast<absl::StatusCode>(status.code), message);
+  return FfiStatus{std::make_unique<absl::Status>(std::move(status))};
 }
 
 FfiStatus MakeFfiStatus(int32_t code, rust::Slice<const uint8_t> message) {
-  return secure_aggregation::MakeFfiStatus(
-      code, std::string(message.begin(), message.end()));
+  return MakeFfiStatus(absl::Status(static_cast<absl::StatusCode>(code),
+                                    ToAbslStringView(message)));
+}
+
+absl::Status UnwrapFfiStatus(FfiStatus status) {
+  if (status.ptr == nullptr) {
+    return absl::OkStatus();
+  }
+  absl::Status out = std::move(*status.ptr);
+  return out;
+}
+
+int32_t FfiStatusCode(const FfiStatus& status) {
+  if (status.ptr == nullptr) {
+    return 0;
+  }
+  return static_cast<int32_t>(status.ptr->code());
+}
+
+rust::Slice<const uint8_t> FfiStatusMessage(const FfiStatus& status) {
+  if (status.ptr == nullptr) {
+    return rust::Slice<const uint8_t>();
+  }
+  return rust::Slice<const uint8_t>(
+      reinterpret_cast<const uint8_t*>(status.ptr->message().data()),
+      status.ptr->message().size());
 }
 
 }  // namespace secure_aggregation
