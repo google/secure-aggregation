@@ -53,7 +53,6 @@ mod ffi {
         type IntegerDiscreteGaussianSampler;
         type ConstRnsContext;
         type RnsContext = shell_types::ffi::RnsContext;
-        type ModularInt;
 
         pub unsafe fn CreateAhePublicParameters(
             log_n: u64,
