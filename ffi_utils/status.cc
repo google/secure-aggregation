@@ -40,7 +40,7 @@ absl::Status UnwrapFfiStatus(const FfiStatus& status) {
     return absl::OkStatus();
   }
   absl::string_view message = "";
-  if (status.message != nullptr || status.message->empty()) {
+  if (status.message != nullptr) {
     message = *status.message;
   }
   return absl::Status(static_cast<absl::StatusCode>(status.code), message);
