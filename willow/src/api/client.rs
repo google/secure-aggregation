@@ -46,6 +46,11 @@ pub mod ffi {
         values: &'a [u64],
     }
 
+    unsafe extern "C++" {
+        include!("ffi_utils/status.rs.h");
+        type FfiStatus = status::ffi::FfiStatus;
+    }
+
     extern "Rust" {
         // cxx: types used as extern Rust types are required to be defined by the same crate that
         // contains the bridge using them
@@ -54,8 +59,7 @@ pub mod ffi {
         pub unsafe fn initialize_client(
             config: UniquePtr<CxxString>,
             out: *mut *mut WillowShellClient,
-            out_status_message: *mut UniquePtr<CxxString>,
-        ) -> i32;
+        ) -> FfiStatus;
 
         unsafe fn client_into_box(ptr: *mut WillowShellClient) -> Box<WillowShellClient>;
 
@@ -65,8 +69,7 @@ pub mod ffi {
             key: UniquePtr<CxxString>,
             nonce: &[u8],
             out: *mut Vec<u8>,
-            out_status_message: *mut UniquePtr<CxxString>,
-        ) -> i32;
+        ) -> FfiStatus;
     }
 }
 
@@ -112,23 +115,14 @@ impl WillowShellClient {
     }
 }
 
-/// SAFETY: `out` and `out_status_message` must not be null.
+/// SAFETY: `out` must be valid for writes.
 unsafe fn initialize_client(
     config: cxx::UniquePtr<cxx::CxxString>,
     out: *mut *mut WillowShellClient,
-    out_status_message: *mut cxx::UniquePtr<cxx::CxxString>,
-) -> i32 {
-    match WillowShellClient::new_from_serialized_config(config) {
-        Ok(client) => {
-            *out = Box::into_raw(Box::new(client));
-            0
-        }
-        Err(status_error) => {
-            let ffi_status: FfiStatus = status_error.into();
-            *out_status_message = ffi_status.message;
-            ffi_status.code
-        }
-    }
+) -> ffi::FfiStatus {
+    WillowShellClient::new_from_serialized_config(config)
+        .map(|client| *out = Box::into_raw(Box::new(client)))
+        .into()
 }
 
 /// Converts a raw pointer to a Box. Ideally we would use `rust::Box::from_raw`
@@ -139,24 +133,16 @@ unsafe fn client_into_box(ptr: *mut WillowShellClient) -> Box<WillowShellClient>
     Box::from_raw(ptr)
 }
 
-/// SAFETY: `out` and `out_status_message` must not be null.
+/// SAFETY: `out` must be valid for writes.
 unsafe fn generate_contribution(
     client: &mut Box<WillowShellClient>,
     data: &[ffi::DataEntryView],
     public_key: cxx::UniquePtr<cxx::CxxString>,
     nonce: &[u8],
     out: *mut Vec<u8>,
-    out_status_message: *mut cxx::UniquePtr<cxx::CxxString>,
-) -> i32 {
-    match client.generate_contribution(data, public_key, nonce) {
-        Ok(contribution) => {
-            *out = contribution;
-            0
-        }
-        Err(status_error) => {
-            let ffi_status: FfiStatus = status_error.into();
-            *out_status_message = ffi_status.message;
-            ffi_status.code
-        }
-    }
+) -> ffi::FfiStatus {
+    client
+        .generate_contribution(data, public_key, nonce)
+        .map(|contribution| *out = contribution)
+        .into()
 }

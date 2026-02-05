@@ -59,6 +59,8 @@ cc_library(
         "@abseil-cpp//absl/status:statusor",
         "@abseil-cpp//absl/strings",
         "@cxx.rs//:core",
+        "//ffi_utils:status_cc",
+        "//ffi_utils:status_macros",
         "//willow/proto/willow:aggregation_config_cc_proto",
         "//willow/proto/willow:messages_cc_proto",
         "//willow/proto/willow:server_accumulator_cc_proto",
@@ -90,6 +92,7 @@ rust_cxx_bridge(
     src = "server_accumulator.rs",
     deps = [
         ":server_accumulator",
+        "//ffi_utils:status_cxx",
     ],
 )
 
@@ -153,6 +156,7 @@ rust_cxx_bridge(
     src = "client.rs",
     deps = [
         ":client",
+        "//ffi_utils:status_cxx",
     ],
 )
 
@@ -165,7 +169,8 @@ cc_library(
         "@abseil-cpp//absl/status",
         "@abseil-cpp//absl/status:statusor",
         "@cxx.rs//:core",
-        "//shell_wrapper:shell_types_cc",
+        "//ffi_utils:cxx_utils",
+        "//ffi_utils:status_macros",
         "//willow/proto/shell:shell_ciphertexts_cc_proto",
         "//willow/proto/willow:aggregation_config_cc_proto",
         "//willow/proto/willow:messages_cc_proto",

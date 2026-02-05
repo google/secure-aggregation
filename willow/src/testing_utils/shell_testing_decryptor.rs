@@ -29,7 +29,6 @@ use prng_traits::SecurePrng;
 use proto_serialization_traits::{FromProto, ToProto};
 use protobuf::prelude::*;
 use single_thread_hkdf::SingleThreadHkdfPrng;
-use status::ffi::FfiStatus;
 use status::{StatusError, StatusErrorCode};
 use std::cell::RefCell;
 use vahe_shell::ShellVahe;
@@ -118,23 +117,9 @@ impl ShellTestingDecryptor {
             .map_err(|e| status::internal(format!("Serialize error: {}", e)))
     }
 
-    /// SAFETY: `out` and `out_status_message` must not be null.
-    unsafe fn generate_public_key_ffi(
-        &mut self,
-        out: *mut Vec<u8>,
-        out_status_message: *mut cxx::UniquePtr<cxx::CxxString>,
-    ) -> i32 {
-        match self.generate_public_key_serialized() {
-            Ok(pk) => {
-                *out = pk;
-                0
-            }
-            Err(status_error) => {
-                let ffi_status: FfiStatus = status_error.into();
-                *out_status_message = ffi_status.message;
-                ffi_status.code
-            }
-        }
+    /// SAFETY: `out` must be valid for writes.
+    unsafe fn generate_public_key_ffi(&mut self, out: *mut Vec<u8>) -> ffi::FfiStatus {
+        self.generate_public_key_serialized().map(|pk| *out = pk).into()
     }
 
     fn decrypt_serialized(
@@ -163,24 +148,13 @@ impl ShellTestingDecryptor {
         Ok(entries)
     }
 
-    /// SAFETY: all pointer arguments (`out`, `out_status_message`) must be valid for writes.
+    /// SAFETY: `out` must be valid for writes.
     unsafe fn decrypt_ffi(
         &mut self,
         contribution: &[u8],
         out: *mut Vec<ffi::EncodedDataEntry>,
-        out_status_message: *mut cxx::UniquePtr<cxx::CxxString>,
-    ) -> i32 {
-        match self.decrypt_serialized(contribution) {
-            Ok(result) => {
-                *out = result;
-                0
-            }
-            Err(status_error) => {
-                let ffi_status: FfiStatus = status_error.into();
-                *out_status_message = ffi_status.message;
-                ffi_status.code
-            }
-        }
+    ) -> ffi::FfiStatus {
+        self.decrypt_serialized(contribution).map(|result| *out = result).into()
     }
 
     fn generate_partial_decryption_response(
@@ -219,24 +193,15 @@ impl ShellTestingDecryptor {
             .map_err(|e| status::internal(format!("Serialize error: {}", e)))
     }
 
-    /// SAFETY: all pointer arguments (`out`, `out_status_message`) must be valid for writes.
+    /// SAFETY: `out` must be valid for writes.
     unsafe fn generate_partial_decryption_response_ffi(
         &mut self,
         request: &[u8],
         out: *mut Vec<u8>,
-        out_status_message: *mut cxx::UniquePtr<cxx::CxxString>,
-    ) -> i32 {
-        match self.generate_partial_decryption_response_serialized(request) {
-            Ok(response) => {
-                *out = response;
-                0
-            }
-            Err(status_error) => {
-                let ffi_status: FfiStatus = status_error.into();
-                *out_status_message = ffi_status.message;
-                ffi_status.code
-            }
-        }
+    ) -> ffi::FfiStatus {
+        self.generate_partial_decryption_response_serialized(request)
+            .map(|response| *out = response)
+            .into()
     }
 }
 
@@ -252,6 +217,12 @@ pub mod ffi {
         values: Vec<u64>,
     }
 
+    unsafe extern "C++" {
+        include!("ffi_utils/status.rs.h");
+        #[namespace = "secure_aggregation"]
+        type FfiStatus = status::ffi::FfiStatus;
+    }
+
     extern "Rust" {
         #[cxx_name = "ShellTestingDecryptorRust"]
         type ShellTestingDecryptor;
@@ -259,31 +230,27 @@ pub mod ffi {
         unsafe fn create_shell_testing_decryptor(
             config: &[u8],
             out: *mut *mut ShellTestingDecryptor,
-            out_status_message: *mut UniquePtr<CxxString>,
-        ) -> i32;
+        ) -> FfiStatus;
 
         #[rust_name = "generate_public_key_ffi"]
         unsafe fn generate_public_key(
             self: &mut ShellTestingDecryptor,
             out: *mut Vec<u8>,
-            out_status_message: *mut UniquePtr<CxxString>,
-        ) -> i32;
+        ) -> FfiStatus;
 
         #[rust_name = "decrypt_ffi"]
         unsafe fn decrypt(
             self: &mut ShellTestingDecryptor,
             contribution: &[u8],
             out: *mut Vec<EncodedDataEntry>,
-            out_status_message: *mut UniquePtr<CxxString>,
-        ) -> i32;
+        ) -> FfiStatus;
 
         #[rust_name = "generate_partial_decryption_response_ffi"]
         unsafe fn generate_partial_decryption_response(
             self: &mut ShellTestingDecryptor,
             request: &[u8],
             out: *mut Vec<u8>,
-            out_status_message: *mut UniquePtr<CxxString>,
-        ) -> i32;
+        ) -> FfiStatus;
 
         unsafe fn decryptor_into_box(ptr: *mut ShellTestingDecryptor)
             -> Box<ShellTestingDecryptor>;
@@ -301,23 +268,14 @@ fn create_shell_testing_decryptor_impl(
     Ok(Box::new(decryptor))
 }
 
-/// SAFETY: `out` and `out_status_message` must not be null.
+/// SAFETY: `out` must be valid for writes.
 unsafe fn create_shell_testing_decryptor(
     config: &[u8],
     out: *mut *mut ShellTestingDecryptor,
-    out_status_message: *mut cxx::UniquePtr<cxx::CxxString>,
-) -> i32 {
-    match create_shell_testing_decryptor_impl(config) {
-        Ok(decryptor) => {
-            *out = Box::into_raw(decryptor);
-            0
-        }
-        Err(status_error) => {
-            let ffi_status: FfiStatus = status_error.into();
-            *out_status_message = ffi_status.message;
-            ffi_status.code
-        }
-    }
+) -> ffi::FfiStatus {
+    create_shell_testing_decryptor_impl(config)
+        .map(|decryptor| *out = Box::into_raw(decryptor))
+        .into()
 }
 
 /// Converts a raw pointer to a Box. Ideally we would use `rust::Box::from_raw`

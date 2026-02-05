@@ -25,7 +25,8 @@
 #include "absl/memory/memory.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
-#include "shell_wrapper/shell_types.h"
+#include "ffi_utils/cxx_utils.h"
+#include "ffi_utils/status_macros.h"
 #include "willow/src/input_encoding/codec.h"
 #include "willow/src/testing_utils/shell_testing_decryptor.rs.h"
 
@@ -43,13 +44,8 @@ ShellTestingDecryptor::Create(
   rust::Slice<const uint8_t> slice = ToRustSlice(aggregation_config_proto);
 
   ShellTestingDecryptorRust* out;
-  std::unique_ptr<std::string> status_message;
-  int status_code =
-      create_shell_testing_decryptor(slice, &out, &status_message);
+  SECAGG_RETURN_IF_FFI_ERROR(create_shell_testing_decryptor(slice, &out));
 
-  if (status_code != 0) {
-    return absl::Status(absl::StatusCode(status_code), *status_message);
-  }
   // Use `into_box` to avoid linker issues arising from rust::Box::from_raw.
   return absl::WrapUnique(new ShellTestingDecryptor(decryptor_into_box(out)));
 }
@@ -57,12 +53,7 @@ ShellTestingDecryptor::Create(
 absl::StatusOr<willow::ShellAhePublicKey>
 ShellTestingDecryptor::GeneratePublicKey() {
   rust::Vec<uint8_t> out;
-  std::unique_ptr<std::string> status_message;
-  int status_code = decryptor_->generate_public_key(&out, &status_message);
-
-  if (status_code != 0) {
-    return absl::Status(absl::StatusCode(status_code), *status_message);
-  }
+  SECAGG_RETURN_IF_FFI_ERROR(decryptor_->generate_public_key(&out));
 
   willow::ShellAhePublicKey public_key;
   if (!public_key.ParseFromArray(out.data(), out.size())) {
@@ -79,13 +70,7 @@ absl::StatusOr<willow::EncodedData> ShellTestingDecryptor::Decrypt(
       contribution_proto.size());
 
   rust::Vec<EncodedDataEntry> rust_flat_data;
-  std::unique_ptr<std::string> status_message;
-  int status_code =
-      decryptor_->decrypt(slice, &rust_flat_data, &status_message);
-
-  if (status_code != 0) {
-    return absl::Status(absl::StatusCode(status_code), *status_message);
-  }
+  SECAGG_RETURN_IF_FFI_ERROR(decryptor_->decrypt(slice, &rust_flat_data));
 
   willow::EncodedData encoded_data;
   for (const auto& rust_entry : rust_flat_data) {
@@ -105,13 +90,8 @@ absl::StatusOr<std::string>
 ShellTestingDecryptor::GenerateSerializedPartialDecryptionResponse(
     std::string serialized_partial_decryption_request) {
   rust::Vec<uint8_t> out;
-  std::unique_ptr<std::string> status_message;
-  int status_code = decryptor_->generate_partial_decryption_response(
-      ToRustSlice(serialized_partial_decryption_request), &out,
-      &status_message);
-  if (status_code != 0) {
-    return absl::Status(absl::StatusCode(status_code), *status_message);
-  }
+  SECAGG_RETURN_IF_FFI_ERROR(decryptor_->generate_partial_decryption_response(
+      ToRustSlice(serialized_partial_decryption_request), &out));
   return std::string(reinterpret_cast<const char*>(out.data()), out.size());
 }
 

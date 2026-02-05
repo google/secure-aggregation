@@ -46,11 +46,16 @@ pub mod ffi {
         values: Vec<u64>,
     }
 
+    // Re-define FfiStatus since CXX requires shared structs to be defined in the same module
+    // (https://github.com/dtolnay/cxx/issues/297#issuecomment-727042059)
+    unsafe extern "C++" {
+        include!("ffi_utils/status.rs.h");
+        type FfiStatus = status::ffi::FfiStatus;
+    }
+
     extern "Rust" {
         type ServerAccumulator;
 
-        // We cannot use status::FfiStatus because CXX requires shared structs to be defined in the
-        // same module. So using separate message and pointer as a workaround.
         // SAFETY: All functions in this module are only called from the wrapping C++ library,
         //   ensuring that output pointers are correctly wrapped by a rust::Box, and that pointer
         //   arguments are not null.
@@ -59,36 +64,26 @@ pub mod ffi {
         unsafe fn new_server_accumulator_from_serialized_config(
             serialized_aggregation_config: UniquePtr<CxxString>,
             out: *mut *mut ServerAccumulator,
-            out_status_message: *mut UniquePtr<CxxString>,
-        ) -> i32;
+        ) -> FfiStatus;
 
         #[cxx_name = "NewServerAccumulatorFromSerializedState"]
         unsafe fn new_server_accumulator_from_serialized_state(
             serialized_server_accumulator: UniquePtr<CxxString>,
             out: *mut *mut ServerAccumulator,
-            out_status_message: *mut UniquePtr<CxxString>,
-        ) -> i32;
+        ) -> FfiStatus;
 
         #[cxx_name = "ProcessClientMessages"]
-        unsafe fn process_client_messages_ffi(
+        fn process_client_messages_ffi(
             self: &mut ServerAccumulator,
             client_messages: UniquePtr<CxxString>,
-            out_status_message: *mut UniquePtr<CxxString>,
-        ) -> i32;
+        ) -> FfiStatus;
 
         #[cxx_name = "ToSerializedState"]
-        unsafe fn to_serialized_state_ffi(
-            self: &ServerAccumulator,
-            out: *mut Vec<u8>,
-            out_status_message: *mut UniquePtr<CxxString>,
-        ) -> i32;
+        unsafe fn to_serialized_state_ffi(self: &ServerAccumulator, out: *mut Vec<u8>)
+            -> FfiStatus;
 
         #[cxx_name = "Merge"]
-        unsafe fn merge_ffi(
-            self: &mut ServerAccumulator,
-            other: Box<ServerAccumulator>,
-            out_status_message: *mut UniquePtr<CxxString>,
-        ) -> i32;
+        fn merge_ffi(self: &mut ServerAccumulator, other: Box<ServerAccumulator>) -> FfiStatus;
 
         #[cxx_name = "IntoBox"]
         unsafe fn into_box(ptr: *mut ServerAccumulator) -> Box<ServerAccumulator>;
@@ -100,23 +95,20 @@ pub mod ffi {
             accumulator: Box<ServerAccumulator>,
             out_decryption_request: *mut Vec<u8>,
             out_final_result_decryptor_state: *mut Vec<u8>,
-            out_status_message: *mut UniquePtr<CxxString>,
-        ) -> i32;
+        ) -> FfiStatus;
 
         #[cxx_name = "Decrypt"]
         unsafe fn decrypt_ffi(
             self: &mut FinalResultDecryptor,
             serialized_partial_decryption_response: UniquePtr<CxxString>,
             out: *mut Vec<EncodedDataEntry>,
-            out_status_message: *mut UniquePtr<CxxString>,
-        ) -> i32;
+        ) -> FfiStatus;
 
         #[cxx_name = "CreateFinalResultDecryptorFromSerialized"]
         unsafe fn create_final_result_decryptor_from_serialized(
             serialized_final_result_decryptor_state: UniquePtr<CxxString>,
             out: *mut *mut FinalResultDecryptor,
-            out_status_message: *mut UniquePtr<CxxString>,
-        ) -> i32;
+        ) -> FfiStatus;
 
         #[cxx_name = "FinalResultDecryptorIntoBox"]
         unsafe fn final_result_decryptor_into_box(
@@ -124,8 +116,6 @@ pub mod ffi {
         ) -> Box<FinalResultDecryptor>;
     }
 }
-
-use status::ffi::FfiStatus;
 
 pub struct ServerAccumulator {
     // Server struct used to perform aggregation of client contributions.
@@ -334,21 +324,11 @@ impl ServerAccumulator {
         Ok(())
     }
 
-    // SAFETY:
-    //   - `out_status_message` must not be null.
-    pub unsafe fn process_client_messages_ffi(
+    pub fn process_client_messages_ffi(
         &mut self,
         client_messages: cxx::UniquePtr<cxx::CxxString>,
-        out_status_message: *mut cxx::UniquePtr<cxx::CxxString>,
-    ) -> i32 {
-        match self.process_client_messages_serialized(client_messages) {
-            Ok(()) => 0,
-            Err(status_error) => {
-                let ffi_status: FfiStatus = status_error.into();
-                *out_status_message = ffi_status.message;
-                ffi_status.code
-            }
-        }
+    ) -> ffi::FfiStatus {
+        self.process_client_messages_serialized(client_messages).into()
     }
 
     // Atomically merges the other accumulator into `self`.
@@ -414,39 +394,16 @@ impl ServerAccumulator {
         })
     }
 
-    // SAFETY:
-    //   - `out_status_message` must not be null.
-    pub unsafe fn merge_ffi(
+    pub fn merge_ffi(
         self: &mut ServerAccumulator,
         other: Box<ServerAccumulator>,
-        out_status_message: *mut cxx::UniquePtr<cxx::CxxString>,
-    ) -> i32 {
-        match self.merge(other) {
-            Ok(()) => 0,
-            Err(status_error) => {
-                let ffi_status: FfiStatus = status_error.into();
-                *out_status_message = ffi_status.message;
-                ffi_status.code
-            }
-        }
+    ) -> ffi::FfiStatus {
+        self.merge(other).into()
     }
 
-    pub unsafe fn to_serialized_state_ffi(
-        &self,
-        out: *mut Vec<u8>,
-        out_status_message: *mut cxx::UniquePtr<cxx::CxxString>,
-    ) -> i32 {
-        match self.to_serialized_state() {
-            Ok(serialized_state) => {
-                *out = serialized_state;
-                0
-            }
-            Err(status_error) => {
-                let ffi_status: FfiStatus = status_error.into();
-                *out_status_message = ffi_status.message;
-                ffi_status.code
-            }
-        }
+    /// SAFETY: `out` must be valid for writes.
+    pub unsafe fn to_serialized_state_ffi(&self, out: *mut Vec<u8>) -> ffi::FfiStatus {
+        self.to_serialized_state().map(|result| *out = result).into()
     }
 }
 
@@ -521,46 +478,24 @@ impl FromProto for ServerAccumulator {
     }
 }
 
-// SAFETY:
-//   - `out` must not be null. It must be turned into a rust::Box on the C++ side.
-//   - `out_status_message` must not be null.
+/// SAFETY: `out` must be valid for writes. It must be turned into a rust::Box on the C++ side.
 unsafe fn new_server_accumulator_from_serialized_config(
     serialized_aggregation_config: cxx::UniquePtr<cxx::CxxString>,
     out: *mut *mut ServerAccumulator,
-    out_status_message: *mut cxx::UniquePtr<cxx::CxxString>,
-) -> i32 {
-    match ServerAccumulator::new_from_serialized_config(serialized_aggregation_config) {
-        Ok(server_accumulator) => {
-            *out = Box::into_raw(Box::new(server_accumulator));
-            0
-        }
-        Err(status_error) => {
-            let ffi_status: FfiStatus = status_error.into();
-            *out_status_message = ffi_status.message;
-            ffi_status.code
-        }
-    }
+) -> ffi::FfiStatus {
+    ServerAccumulator::new_from_serialized_config(serialized_aggregation_config)
+        .map(|result| *out = Box::into_raw(Box::new(result)))
+        .into()
 }
 
-// SAFETY:
-//   - `out` must not be null. It must be turned into a rust::Box on the C++ side.
-//   - `out_status_message` must not be null.
+/// SAFETY: `out` must be valid for writes. It must be turned into a rust::Box on the C++ side.
 unsafe fn new_server_accumulator_from_serialized_state(
     serialized_server_accumulator: cxx::UniquePtr<cxx::CxxString>,
     out: *mut *mut ServerAccumulator,
-    out_status_message: *mut cxx::UniquePtr<cxx::CxxString>,
-) -> i32 {
-    match ServerAccumulator::new_from_serialized_state(serialized_server_accumulator) {
-        Ok(server_accumulator) => {
-            *out = Box::into_raw(Box::new(server_accumulator));
-            0
-        }
-        Err(status_error) => {
-            let ffi_status: FfiStatus = status_error.into();
-            *out_status_message = ffi_status.message;
-            ffi_status.code
-        }
-    }
+) -> ffi::FfiStatus {
+    ServerAccumulator::new_from_serialized_state(serialized_server_accumulator)
+        .map(|result| *out = Box::into_raw(Box::new(result)))
+        .into()
 }
 
 // SAFETY:
@@ -623,26 +558,19 @@ fn finalize_accumulator(accumulator: ServerAccumulator) -> Result<(Vec<u8>, Vec<
     Ok((serialized_decryption_request, serialized_final_result_decryptor_state))
 }
 
-/// SAFETY: all pointer arguments (`out_decryption_request`, `out_final_result_decryptor_state`,
-/// `out_status_message`) must be valid for writes.
+/// SAFETY: all pointer arguments (`out_decryption_request`, `out_final_result_decryptor_state`)
+/// must be valid for writes.
 pub unsafe fn finalize_accumulator_ffi(
     accumulator: Box<ServerAccumulator>,
     out_decryption_request: *mut Vec<u8>,
     out_final_result_decryptor_state: *mut Vec<u8>,
-    out_status_message: *mut cxx::UniquePtr<cxx::CxxString>,
-) -> i32 {
-    match finalize_accumulator(*accumulator) {
-        Ok((decryption_request, final_result_decryptor_state)) => {
+) -> ffi::FfiStatus {
+    finalize_accumulator(*accumulator)
+        .map(|(decryption_request, final_result_decryptor_state)| {
             *out_decryption_request = decryption_request;
             *out_final_result_decryptor_state = final_result_decryptor_state;
-            0
-        }
-        Err(status_error) => {
-            let ffi_status: FfiStatus = status_error.into();
-            *out_status_message = ffi_status.message;
-            ffi_status.code
-        }
-    }
+        })
+        .into()
 }
 
 impl FinalResultDecryptor {
@@ -695,42 +623,22 @@ impl FinalResultDecryptor {
         Ok(entries)
     }
 
-    /// SAFETY: `out` and `out_status_message` must not be null.
+    /// SAFETY: `out` must be valid for writes.
     pub unsafe fn decrypt_ffi(
         &mut self,
         serialized_partial_decryption_response: cxx::UniquePtr<cxx::CxxString>,
         out: *mut Vec<ffi::EncodedDataEntry>,
-        out_status_message: *mut cxx::UniquePtr<cxx::CxxString>,
-    ) -> i32 {
-        match self.decrypt(serialized_partial_decryption_response) {
-            Ok(result) => {
-                *out = result;
-                0
-            }
-            Err(status_error) => {
-                let ffi_status: FfiStatus = status_error.into();
-                *out_status_message = ffi_status.message;
-                ffi_status.code
-            }
-        }
+    ) -> ffi::FfiStatus {
+        self.decrypt(serialized_partial_decryption_response).map(|result| *out = result).into()
     }
 }
 
-/// SAFETY: all pointer arguments (`out`, `out_status_message`) must be valid for writes.
+/// SAFETY: `out` must be valid for writes.
 unsafe fn create_final_result_decryptor_from_serialized(
     serialized_proto: cxx::UniquePtr<cxx::CxxString>,
     out: *mut *mut FinalResultDecryptor,
-    out_status_message: *mut cxx::UniquePtr<cxx::CxxString>,
-) -> i32 {
-    match FinalResultDecryptor::new_from_serialized(serialized_proto) {
-        Ok(final_result_decryptor) => {
-            *out = Box::into_raw(Box::new(final_result_decryptor));
-            0
-        }
-        Err(status_error) => {
-            let ffi_status: FfiStatus = status_error.into();
-            *out_status_message = ffi_status.message;
-            ffi_status.code
-        }
-    }
+) -> ffi::FfiStatus {
+    FinalResultDecryptor::new_from_serialized(serialized_proto)
+        .map(|result| *out = Box::into_raw(Box::new(result)))
+        .into()
 }

@@ -22,8 +22,9 @@
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "ffi_utils/cxx_utils.h"
+#include "ffi_utils/status_macros.h"
 #include "include/cxx.h"
-#include "shell_wrapper/shell_types.h"
 #include "willow/proto/shell/ciphertexts.pb.h"
 #include "willow/proto/willow/aggregation_config.pb.h"
 #include "willow/proto/willow/server_accumulator.pb.h"
@@ -40,12 +41,8 @@ absl::StatusOr<willow::ClientMessage> GenerateClientContribution(
   std::string config_str = aggregation_config.SerializeAsString();
   auto config_ptr = std::make_unique<std::string>(std::move(config_str));
   secure_aggregation::WillowShellClient* client_ptr = nullptr;
-  std::unique_ptr<std::string> status_message;
-  int status_code =
-      initialize_client(std::move(config_ptr), &client_ptr, &status_message);
-  if (status_code != 0) {
-    return absl::Status(absl::StatusCode(status_code), *status_message);
-  }
+  SECAGG_RETURN_IF_FFI_ERROR(
+      initialize_client(std::move(config_ptr), &client_ptr));
   // Use `into_box` to avoid linker issues arising from rust::Box::from_raw.
   auto client = client_into_box(client_ptr);
 
@@ -69,15 +66,9 @@ absl::StatusOr<willow::ClientMessage> GenerateClientContribution(
   auto key_ptr = std::make_unique<std::string>(std::move(key_str));
   rust::Slice<const uint8_t> nonce_slice = ToRustSlice(nonce);
   rust::Vec<uint8_t> result_bytes;
-  std::unique_ptr<std::string> status_message_gen;
-
   // Encrypt data.
-  int status_code_gen =
-      generate_contribution(client, entries_slice, std::move(key_ptr),
-                            nonce_slice, &result_bytes, &status_message_gen);
-  if (status_code_gen != 0) {
-    return absl::Status(absl::StatusCode(status_code_gen), *status_message_gen);
-  }
+  SECAGG_RETURN_IF_FFI_ERROR(generate_contribution(
+      client, entries_slice, std::move(key_ptr), nonce_slice, &result_bytes));
 
   // Parse string to ClientMessage.
   willow::ClientMessage client_message;

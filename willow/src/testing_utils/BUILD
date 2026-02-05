@@ -97,6 +97,7 @@ rust_cxx_bridge(
     src = "shell_testing_decryptor.rs",
     deps = [
         ":shell_testing_decryptor",
+        "//ffi_utils:status_cxx",
     ],
 )
 
@@ -109,7 +110,6 @@ rust_library(
         "@protobuf//rust:protobuf",
         "@cxx.rs//:cxx",
         "//ffi_utils:status",
-        "//shell_wrapper:shell_types_cc",
         "//willow/proto/willow:aggregation_config_rust_proto",
         "//willow/proto/willow:messages_rust_proto",
         "//willow/src/api:aggregation_config",
@@ -136,7 +136,9 @@ cc_library(
         "@abseil-cpp//absl/memory",
         "@abseil-cpp//absl/status",
         "@abseil-cpp//absl/status:statusor",
-        "//shell_wrapper:shell_types_cc",
+        "@cxx.rs//:core",
+        "//ffi_utils:cxx_utils",
+        "//ffi_utils:status_macros",
         "//willow/proto/shell:shell_ciphertexts_cc_proto",
         "//willow/proto/willow:aggregation_config_cc_proto",
         "//willow/proto/willow:messages_cc_proto",
