@@ -184,14 +184,13 @@ cc_test(
     srcs = ["client_test.cc"],
     deps = [
         ":client_cc",
-        ":client_cxx",
         "@googletest//:gtest_main",
         "@abseil-cpp//absl/status",
-        "@cxx.rs//:core",
         "//ffi_utils:status_matchers",
         "//willow/proto/willow:aggregation_config_cc_proto",
         "//willow/proto/willow:input_spec_cc_proto",
         "//willow/src/input_encoding:codec",
         "//willow/src/testing_utils:shell_testing_decryptor_cc",
+        "//willow/src/testing_utils:testing_utils_cc",
     ],
 )

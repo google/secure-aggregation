@@ -18,7 +18,6 @@
 
 #include <memory>
 #include <string>
-#include <vector>
 
 #include "absl/status/status.h"
 #include "ffi_utils/status_matchers.h"
@@ -29,6 +28,7 @@
 #include "willow/src/input_encoding/codec.h"
 #include "willow/src/input_encoding/codec_factory.h"
 #include "willow/src/testing_utils/shell_testing_decryptor.h"
+#include "willow/src/testing_utils/testing_utils.h"
 
 namespace secure_aggregation {
 namespace willow {
@@ -41,49 +41,13 @@ using ::testing::ElementsAreArray;
 using ::testing::Pair;
 using ::testing::UnorderedElementsAre;
 
-AggregationConfigProto CreateTestConfig() {
-  AggregationConfigProto config;
-  VectorConfig vector_config;
-  vector_config.set_length(8);  // 4 countries x 2 languages
-  vector_config.set_bound(100);
-  (*config.mutable_vector_configs())["metric1"] = vector_config;
-  config.set_max_number_of_decryptors(1);
-  config.set_max_number_of_clients(10);
-  config.set_key_id("test");
-  return config;
-}
-
 TEST(WillowShellClientTest, InitializeAndGenerateContribution) {
-  AggregationConfigProto config = CreateTestConfig();
+  AggregationConfigProto config = CreateTestAggregationConfigProto();
 
   // Create and encode input.
-  MetricData metric_data;
-  metric_data["metric1"] = {10, 20, 5};
-  GroupData group_by_data;
-  group_by_data["country"] = {"US", "CA", "US"};
-  group_by_data["lang"] = {"en", "es", "es"};
-  InputSpec input_spec;
-  auto* metric_spec = input_spec.add_metric_vector_specs();
-  metric_spec->set_vector_name("metric1");
-  metric_spec->set_data_type(InputSpec::INT64);
-  auto* group_by_spec1 = input_spec.add_group_by_vector_specs();
-  group_by_spec1->set_vector_name("country");
-  group_by_spec1->set_data_type(InputSpec::STRING);
-  group_by_spec1->mutable_domain_spec()->mutable_string_values()->add_values(
-      "CA");
-  group_by_spec1->mutable_domain_spec()->mutable_string_values()->add_values(
-      "GB");
-  group_by_spec1->mutable_domain_spec()->mutable_string_values()->add_values(
-      "MX");
-  group_by_spec1->mutable_domain_spec()->mutable_string_values()->add_values(
-      "US");
-  auto* group_by_spec2 = input_spec.add_group_by_vector_specs();
-  group_by_spec2->set_vector_name("lang");
-  group_by_spec2->set_data_type(InputSpec::STRING);
-  group_by_spec2->mutable_domain_spec()->mutable_string_values()->add_values(
-      "en");
-  group_by_spec2->mutable_domain_spec()->mutable_string_values()->add_values(
-      "es");
+  MetricData metric_data = CreateTestMetricData();
+  GroupData group_by_data = CreateTestGroupData();
+  InputSpec input_spec = CreateTestInputSpecProto();
   SECAGG_ASSERT_OK_AND_ASSIGN(std::unique_ptr<Codec> encoder,
                               CodecFactory::CreateExplicitCodec(input_spec));
   SECAGG_ASSERT_OK_AND_ASSIGN(EncodedData encoded_data,
@@ -129,7 +93,7 @@ TEST(WillowShellClientTest, InitializeAndGenerateContribution) {
 }
 
 TEST(WillowShellClientTest, EmptyEncodedData) {
-  AggregationConfigProto config = CreateTestConfig();
+  AggregationConfigProto config = CreateTestAggregationConfigProto();
 
   // Create empty encoded data.
   EncodedData encoded_data;
@@ -151,7 +115,7 @@ TEST(WillowShellClientTest, EmptyEncodedData) {
 
 TEST(WillowShellClientTest, InvalidAggregationConfig) {
   // Originally valid config.
-  AggregationConfigProto config = CreateTestConfig();
+  AggregationConfigProto config = CreateTestAggregationConfigProto();
 
   // Create encoded data directly.
   EncodedData encoded_data = {{"metric1", {0, 20, 0, 0, 0, 0, 10, 5}}};
