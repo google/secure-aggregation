@@ -28,7 +28,7 @@ struct FfiStatus;
 FfiStatus MakeFfiStatus();
 FfiStatus MakeFfiStatus(absl::Status status);
 FfiStatus MakeFfiStatus(int code, std::string message);
-absl::Status UnwrapFfiStatus(const FfiStatus& status);
+absl::Status UnwrapFfiStatus(FfiStatus status);
 
 // To be called from Rust.
 FfiStatus MakeFfiStatus(int32_t code, rust::Slice<const uint8_t> message);

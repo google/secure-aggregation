@@ -35,7 +35,7 @@ FfiStatus MakeFfiStatus(int code, std::string message) {
   return FfiStatus{code, std::make_unique<std::string>(std::move(message))};
 }
 
-absl::Status UnwrapFfiStatus(const FfiStatus& status) {
+absl::Status UnwrapFfiStatus(FfiStatus status) {
   if (status.code == 0) {
     return absl::OkStatus();
   }

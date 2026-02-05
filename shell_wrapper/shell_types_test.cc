@@ -154,14 +154,11 @@ TEST(ShellTypesTest, AddErrors) {
 TEST(ShellTypesTest, WriteSmallRnsPolynomialToBufferKahe) {
   constexpr int num_public_polynomials = 1;
   std::unique_ptr<std::string> public_seed;
-  FfiStatus status;
-  status = GenerateSingleThreadHkdfSeed(public_seed);
-  SECAGG_ASSERT_OK(UnwrapFfiStatus(status));
+  SECAGG_ASSERT_OK(UnwrapFfiStatus(GenerateSingleThreadHkdfSeed(public_seed)));
   KahePublicParametersWrapper params_wrapper;
-  status = CreateKahePublicParametersWrapper(
+  SECAGG_ASSERT_OK(UnwrapFfiStatus(CreateKahePublicParametersWrapper(
       kLogN, kLogT, ToRustSlice(kQs), num_public_polynomials,
-      ToRustSlice(*public_seed), &params_wrapper);
-  SECAGG_ASSERT_OK(UnwrapFfiStatus(status));
+      ToRustSlice(*public_seed), &params_wrapper)));
   ModuliWrapper moduli_wrapper =
       CreateModuliWrapperFromKaheParams(params_wrapper);
 
@@ -176,9 +173,8 @@ TEST(ShellTypesTest, WriteSmallRnsPolynomialToBufferKahe) {
   constexpr int buffer_len = 2 * kNumCoeffs;
   int64_t buffer[buffer_len];
   uint64_t n_written;
-  FfiStatus res = WriteSmallRnsPolynomialToBuffer(
-      &poly_wrapper, moduli_wrapper, buffer_len, buffer, &n_written);
-  SECAGG_EXPECT_OK(UnwrapFfiStatus(res));
+  SECAGG_EXPECT_OK(UnwrapFfiStatus(WriteSmallRnsPolynomialToBuffer(
+      &poly_wrapper, moduli_wrapper, buffer_len, buffer, &n_written)));
   EXPECT_EQ(n_written, kNumCoeffs);
 
   // We get 1 indeed.
@@ -201,23 +197,19 @@ TEST(ShellTypesTest, WriteSmallRnsPolynomialToBufferKahe) {
   poly_wrapper = {.ptr = std::make_unique<RnsPolynomial>(std::move(poly))};
 
   // Write the polynomial to a buffer.
-  res = WriteSmallRnsPolynomialToBuffer(&poly_wrapper, moduli_wrapper,
-                                        buffer_len, buffer, &n_written);
-  SECAGG_EXPECT_OK(UnwrapFfiStatus(res));
+  SECAGG_EXPECT_OK(UnwrapFfiStatus(WriteSmallRnsPolynomialToBuffer(
+      &poly_wrapper, moduli_wrapper, buffer_len, buffer, &n_written)));
   EXPECT_EQ(n_written, kNumCoeffs);
 }
 
 TEST(ShellTypesTest, ReadWriteSmallRnsPolynomialToBufferKahe) {
   constexpr int num_public_polynomials = 1;
   std::unique_ptr<std::string> public_seed;
-  FfiStatus status;
-  status = GenerateSingleThreadHkdfSeed(public_seed);
-  SECAGG_ASSERT_OK(UnwrapFfiStatus(status));
+  SECAGG_ASSERT_OK(UnwrapFfiStatus(GenerateSingleThreadHkdfSeed(public_seed)));
   KahePublicParametersWrapper params_wrapper;
-  status = CreateKahePublicParametersWrapper(
+  SECAGG_ASSERT_OK(UnwrapFfiStatus(CreateKahePublicParametersWrapper(
       kLogN, kLogT, ToRustSlice(kQs), num_public_polynomials,
-      ToRustSlice(*public_seed), &params_wrapper);
-  SECAGG_ASSERT_OK(UnwrapFfiStatus(status));
+      ToRustSlice(*public_seed), &params_wrapper)));
   ModuliWrapper moduli_wrapper =
       CreateModuliWrapperFromKaheParams(params_wrapper);
 
@@ -234,9 +226,8 @@ TEST(ShellTypesTest, ReadWriteSmallRnsPolynomialToBufferKahe) {
   }
 
   RnsPolynomialWrapper poly{nullptr};
-  status = ReadSmallRnsPolynomialFromBuffer(buffer, buffer_len, 1 << kLogN,
-                                            moduli_wrapper, &poly);
-  SECAGG_EXPECT_OK(UnwrapFfiStatus(status));
+  SECAGG_EXPECT_OK(UnwrapFfiStatus(ReadSmallRnsPolynomialFromBuffer(
+      buffer, buffer_len, 1 << kLogN, moduli_wrapper, &poly)));
   EXPECT_NE(poly.ptr, nullptr);
 
   // The coefficients of the polynomial should match the ones in the
@@ -267,23 +258,19 @@ TEST(ShellTypesTest, ReadWriteSmallRnsPolynomialToBufferKahe) {
   // Write the polynomial back to another buffer should give the same result.
   int64_t buffer_out[buffer_len];
   uint64_t n_written;
-  status = WriteSmallRnsPolynomialToBuffer(&poly, moduli_wrapper, buffer_len,
-                                           buffer_out, &n_written);
-  SECAGG_EXPECT_OK(UnwrapFfiStatus(status));
+  SECAGG_EXPECT_OK(UnwrapFfiStatus(WriteSmallRnsPolynomialToBuffer(
+      &poly, moduli_wrapper, buffer_len, buffer_out, &n_written)));
   EXPECT_EQ(absl::MakeSpan(buffer_out), absl::MakeSpan(buffer));
 }
 
 TEST(ShellTypesTest, ReadWriteErrors) {
   constexpr int num_public_polynomials = 1;
   std::unique_ptr<std::string> public_seed;
-  FfiStatus status;
-  status = GenerateSingleThreadHkdfSeed(public_seed);
-  SECAGG_ASSERT_OK(UnwrapFfiStatus(status));
+  SECAGG_ASSERT_OK(UnwrapFfiStatus(GenerateSingleThreadHkdfSeed(public_seed)));
   KahePublicParametersWrapper params_wrapper;
-  status = CreateKahePublicParametersWrapper(
+  SECAGG_ASSERT_OK(UnwrapFfiStatus(CreateKahePublicParametersWrapper(
       kLogN, kLogT, ToRustSlice(kQs), num_public_polynomials,
-      ToRustSlice(*public_seed), &params_wrapper);
-  SECAGG_ASSERT_OK(UnwrapFfiStatus(status));
+      ToRustSlice(*public_seed), &params_wrapper)));
   ModuliWrapper moduli_wrapper =
       CreateModuliWrapperFromKaheParams(params_wrapper);
 
@@ -301,13 +288,13 @@ TEST(ShellTypesTest, ReadWriteErrors) {
   constexpr int output_buffer_len = 2 * kNumCoeffs;
   int64_t output_buffer[output_buffer_len];
   uint64_t n_written;
-  status = WriteSmallRnsPolynomialToBuffer(&poly_wrapper, moduli_wrapper,
-                                           output_buffer_len, output_buffer,
-                                           &n_written);
+  auto status = WriteSmallRnsPolynomialToBuffer(&poly_wrapper, moduli_wrapper,
+                                                output_buffer_len,
+                                                output_buffer, &n_written);
 
   // We should get an error because large coefficients don't have the same value
   // mod q_1 and q_2. Note that the buffer gets filled still.
-  EXPECT_THAT(UnwrapFfiStatus(status),
+  EXPECT_THAT(UnwrapFfiStatus(std::move(status)),
               StatusIs(absl::StatusCode::kInvalidArgument,
                        HasSubstr("not a small polynomial")));
   EXPECT_EQ(n_written, kNumCoeffs);
@@ -324,7 +311,7 @@ TEST(ShellTypesTest, ReadWriteErrors) {
                                             long_input_buffer_len, 1 << kLogN,
                                             moduli_wrapper, &poly_wrapper);
   // We should get an error.
-  EXPECT_THAT(UnwrapFfiStatus(status),
+  EXPECT_THAT(UnwrapFfiStatus(std::move(status)),
               StatusIs(absl::StatusCode::kInvalidArgument,
                        HasSubstr("Buffer has too many coefficients")));
 }
@@ -332,9 +319,7 @@ TEST(ShellTypesTest, ReadWriteErrors) {
 TEST(AheTest, TestWriteRnsPolynomialToBuffer128) {
   constexpr int num_public_polynomials = 1;
   std::unique_ptr<std::string> public_seed;
-  FfiStatus status;
-  status = GenerateSingleThreadHkdfSeed(public_seed);
-  SECAGG_ASSERT_OK(UnwrapFfiStatus(status));
+  SECAGG_ASSERT_OK(UnwrapFfiStatus(GenerateSingleThreadHkdfSeed(public_seed)));
   KahePublicParametersWrapper params_wrapper;
   SECAGG_ASSERT_OK(UnwrapFfiStatus(CreateKahePublicParametersWrapper(
       kLogN, kLogT, ToRustSlice(kQs), num_public_polynomials,
@@ -388,9 +373,7 @@ TEST(AheTest, TestWriteRnsPolynomialToBuffer128) {
 TEST(AheTest, WriteRnsPolynomialToBuffer128FailsWhenBufferLenIsWrong) {
   constexpr int num_public_polynomials = 1;
   std::unique_ptr<std::string> public_seed;
-  FfiStatus status;
-  status = GenerateSingleThreadHkdfSeed(public_seed);
-  SECAGG_ASSERT_OK(UnwrapFfiStatus(status));
+  SECAGG_ASSERT_OK(UnwrapFfiStatus(GenerateSingleThreadHkdfSeed(public_seed)));
   KahePublicParametersWrapper params_wrapper;
   SECAGG_ASSERT_OK(UnwrapFfiStatus(CreateKahePublicParametersWrapper(
       kLogN, kLogT, ToRustSlice(kQs), num_public_polynomials,

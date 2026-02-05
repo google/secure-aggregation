@@ -54,19 +54,17 @@ constexpr double kSBase = 12.8;
 TEST(AheTest, EncryptDecryptOne) {
   // Create the public parameters.
   std::unique_ptr<std::string> public_seed;
-  auto status = GenerateSingleThreadHkdfSeed(public_seed);
-  SECAGG_ASSERT_OK(UnwrapFfiStatus(status));
+  SECAGG_ASSERT_OK(UnwrapFfiStatus(GenerateSingleThreadHkdfSeed(public_seed)));
   AhePublicParameters public_params;
   SECAGG_ASSERT_OK(UnwrapFfiStatus(CreateAhePublicParameters(
       kLogN, kT, kQs, std::size(kQs), kPublicKeyVariance, kSBase, kSFlood,
       ToRustSlice(*public_seed), &public_params)));
 
   std::unique_ptr<std::string> private_seed;
-  status = GenerateSingleThreadHkdfSeed(private_seed);
-  SECAGG_ASSERT_OK(UnwrapFfiStatus(status));
+  SECAGG_ASSERT_OK(UnwrapFfiStatus(GenerateSingleThreadHkdfSeed(private_seed)));
   SingleThreadHkdfWrapper prng;
-  status = CreateSingleThreadHkdf(ToRustSlice(*private_seed), prng);
-  SECAGG_ASSERT_OK(UnwrapFfiStatus(status));
+  SECAGG_ASSERT_OK(UnwrapFfiStatus(
+      CreateSingleThreadHkdf(ToRustSlice(*private_seed), prng)));
 
   RnsPolynomialWrapper sk_share;
   SECAGG_ASSERT_OK(
@@ -118,19 +116,17 @@ TEST(AheTest, EncryptDecryptOne) {
 TEST(AheTest, ExternCRecoveryTest) {
   // Create the public parameters.
   std::unique_ptr<std::string> public_seed;
-  auto status = GenerateSingleThreadHkdfSeed(public_seed);
-  SECAGG_ASSERT_OK(UnwrapFfiStatus(status));
+  SECAGG_ASSERT_OK(UnwrapFfiStatus(GenerateSingleThreadHkdfSeed(public_seed)));
   AhePublicParameters public_params;
   SECAGG_ASSERT_OK(UnwrapFfiStatus(CreateAhePublicParameters(
       kLogN, kT, kQs, std::size(kQs), kPublicKeyVariance, kSBase, kSFlood,
       ToRustSlice(*public_seed), &public_params)));
 
   std::unique_ptr<std::string> private_seed;
-  status = GenerateSingleThreadHkdfSeed(private_seed);
-  SECAGG_ASSERT_OK(UnwrapFfiStatus(status));
+  SECAGG_ASSERT_OK(UnwrapFfiStatus(GenerateSingleThreadHkdfSeed(private_seed)));
   SingleThreadHkdfWrapper prng;
-  status = CreateSingleThreadHkdf(ToRustSlice(*private_seed), prng);
-  SECAGG_ASSERT_OK(UnwrapFfiStatus(status));
+  SECAGG_ASSERT_OK(UnwrapFfiStatus(
+      CreateSingleThreadHkdf(ToRustSlice(*private_seed), prng)));
 
   std::vector<RnsPolynomialWrapper> secret_key_shares;
   std::vector<RnsPolynomialWrapper> public_key_shares;
