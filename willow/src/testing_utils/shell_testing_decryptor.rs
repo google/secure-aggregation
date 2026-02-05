@@ -116,7 +116,7 @@ impl ShellTestingDecryptor {
 
     /// SAFETY: `out` must be valid for writes.
     unsafe fn generate_public_key_ffi(&mut self, out: *mut Vec<u8>) -> ffi::FfiStatus {
-        self.generate_public_key_serialized().map(|pk| *out = pk).into()
+        self.generate_public_key_serialized().map(|pk| unsafe { *out = pk }).into()
     }
 
     fn decrypt_serialized(
@@ -151,7 +151,7 @@ impl ShellTestingDecryptor {
         contribution: &[u8],
         out: *mut Vec<ffi::EncodedDataEntry>,
     ) -> ffi::FfiStatus {
-        self.decrypt_serialized(contribution).map(|result| *out = result).into()
+        self.decrypt_serialized(contribution).map(|result| unsafe { *out = result }).into()
     }
 
     fn generate_partial_decryption_response(
@@ -194,7 +194,7 @@ impl ShellTestingDecryptor {
         out: *mut Vec<u8>,
     ) -> ffi::FfiStatus {
         self.generate_partial_decryption_response_serialized(request)
-            .map(|response| *out = response)
+            .map(|response| unsafe { *out = response })
             .into()
     }
 }
@@ -268,7 +268,7 @@ unsafe fn create_shell_testing_decryptor(
     out: *mut *mut ShellTestingDecryptor,
 ) -> ffi::FfiStatus {
     create_shell_testing_decryptor_impl(config)
-        .map(|decryptor| *out = Box::into_raw(decryptor))
+        .map(|decryptor| unsafe { *out = Box::into_raw(decryptor) })
         .into()
 }
 
@@ -277,5 +277,5 @@ unsafe fn create_shell_testing_decryptor(
 ///
 /// SAFETY: `ptr` must have been created by `Box::into_raw`, as in `create_shell_testing_decryptor`.
 unsafe fn decryptor_into_box(ptr: *mut ShellTestingDecryptor) -> Box<ShellTestingDecryptor> {
-    Box::from_raw(ptr)
+    unsafe { Box::from_raw(ptr) }
 }

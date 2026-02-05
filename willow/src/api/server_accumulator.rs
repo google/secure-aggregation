@@ -403,7 +403,7 @@ impl ServerAccumulator {
 
     /// SAFETY: `out` must be valid for writes.
     pub unsafe fn to_serialized_state_ffi(&self, out: *mut Vec<u8>) -> ffi::FfiStatus {
-        self.to_serialized_state().map(|result| *out = result).into()
+        self.to_serialized_state().map(|result| unsafe { *out = result }).into()
     }
 }
 
@@ -484,7 +484,7 @@ unsafe fn new_server_accumulator_from_serialized_config(
     out: *mut *mut ServerAccumulator,
 ) -> ffi::FfiStatus {
     ServerAccumulator::new_from_serialized_config(serialized_aggregation_config)
-        .map(|result| *out = Box::into_raw(Box::new(result)))
+        .map(|result| unsafe { *out = Box::into_raw(Box::new(result)) })
         .into()
 }
 
@@ -494,14 +494,14 @@ unsafe fn new_server_accumulator_from_serialized_state(
     out: *mut *mut ServerAccumulator,
 ) -> ffi::FfiStatus {
     ServerAccumulator::new_from_serialized_state(serialized_server_accumulator)
-        .map(|result| *out = Box::into_raw(Box::new(result)))
+        .map(|result| unsafe { *out = Box::into_raw(Box::new(result)) })
         .into()
 }
 
 // SAFETY:
 //   - `ptr` must have been created by Box::into_raw or one of the functions in this module.
 unsafe fn into_box(ptr: *mut ServerAccumulator) -> Box<ServerAccumulator> {
-    Box::from_raw(ptr)
+    unsafe { Box::from_raw(ptr) }
 }
 
 /// SAFETY:
@@ -509,7 +509,7 @@ unsafe fn into_box(ptr: *mut ServerAccumulator) -> Box<ServerAccumulator> {
 unsafe fn final_result_decryptor_into_box(
     ptr: *mut FinalResultDecryptor,
 ) -> Box<FinalResultDecryptor> {
-    Box::from_raw(ptr)
+    unsafe { Box::from_raw(ptr) }
 }
 
 /// Final result decryptor.
@@ -566,7 +566,7 @@ pub unsafe fn finalize_accumulator_ffi(
     out_final_result_decryptor_state: *mut Vec<u8>,
 ) -> ffi::FfiStatus {
     finalize_accumulator(*accumulator)
-        .map(|(decryption_request, final_result_decryptor_state)| {
+        .map(|(decryption_request, final_result_decryptor_state)| unsafe {
             *out_decryption_request = decryption_request;
             *out_final_result_decryptor_state = final_result_decryptor_state;
         })
@@ -629,7 +629,9 @@ impl FinalResultDecryptor {
         serialized_partial_decryption_response: cxx::UniquePtr<cxx::CxxString>,
         out: *mut Vec<ffi::EncodedDataEntry>,
     ) -> ffi::FfiStatus {
-        self.decrypt(serialized_partial_decryption_response).map(|result| *out = result).into()
+        self.decrypt(serialized_partial_decryption_response)
+            .map(|result| unsafe { *out = result })
+            .into()
     }
 }
 
@@ -639,6 +641,6 @@ unsafe fn create_final_result_decryptor_from_serialized(
     out: *mut *mut FinalResultDecryptor,
 ) -> ffi::FfiStatus {
     FinalResultDecryptor::new_from_serialized(serialized_proto)
-        .map(|result| *out = Box::into_raw(Box::new(result)))
+        .map(|result| unsafe { *out = Box::into_raw(Box::new(result)) })
         .into()
 }

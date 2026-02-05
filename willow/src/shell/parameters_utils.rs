@@ -71,7 +71,7 @@ unsafe fn create_human_readable_shell_config(
     out: *mut Vec<u8>,
 ) -> ffi::FfiStatus {
     create_human_readable_shell_config_impl(aggregation_config_proto)
-        .map(|result| *out = result)
+        .map(|result| unsafe { *out = result })
         .into()
 }
 

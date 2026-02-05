@@ -120,7 +120,7 @@ unsafe fn initialize_client(
     out: *mut *mut WillowShellClient,
 ) -> ffi::FfiStatus {
     WillowShellClient::new_from_serialized_config(config)
-        .map(|client| *out = Box::into_raw(Box::new(client)))
+        .map(|client| unsafe { *out = Box::into_raw(Box::new(client)) })
         .into()
 }
 
@@ -129,7 +129,7 @@ unsafe fn initialize_client(
 ///
 /// SAFETY: `ptr` must have been created by `Box::into_raw`, as in `initialize_client`.
 unsafe fn client_into_box(ptr: *mut WillowShellClient) -> Box<WillowShellClient> {
-    Box::from_raw(ptr)
+    unsafe { Box::from_raw(ptr) }
 }
 
 /// SAFETY: `out` must be valid for writes.
@@ -142,6 +142,6 @@ unsafe fn generate_contribution(
 ) -> ffi::FfiStatus {
     client
         .generate_contribution(data, public_key, nonce)
-        .map(|contribution| *out = contribution)
+        .map(|contribution| unsafe { *out = contribution })
         .into()
 }
