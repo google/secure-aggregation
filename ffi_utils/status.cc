@@ -40,6 +40,13 @@ FfiStatus MakeFfiStatus(int32_t code, rust::Slice<const uint8_t> message) {
                                     ToAbslStringView(message)));
 }
 
+FfiStatus CloneFfiStatus(const FfiStatus& status) {
+  if (status.ptr == nullptr) {
+    return MakeFfiStatus();
+  }
+  return MakeFfiStatus(*status.ptr);
+}
+
 absl::Status UnwrapFfiStatus(FfiStatus status) {
   if (status.ptr == nullptr) {
     return absl::OkStatus();

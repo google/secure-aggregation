@@ -46,11 +46,19 @@ pub mod ffi {
         pub fn FfiStatusCode(status: &FfiStatus) -> i32;
         #[rust_name = "ffi_status_message"]
         pub fn FfiStatusMessage<'a>(status: &'a FfiStatus) -> &'a [u8];
+        #[rust_name = "clone_ffi_status"]
+        pub fn CloneFfiStatus(status: &FfiStatus) -> FfiStatus;
     }
 }
 
 pub type Status = Result<(), StatusError>;
 pub type StatusOr<T> = Result<T, StatusError>;
+
+impl Clone for ffi::FfiStatus {
+    fn clone(&self) -> Self {
+        ffi::clone_ffi_status(self)
+    }
+}
 
 /// All cases of C++ StatusErrorCode except `StatusErrorCode::kOk`.
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
@@ -410,6 +418,21 @@ mod tests {
             Err(StatusError { code: StatusErrorCode::Cancelled, .. }) => Ok(()),
             status => fail!("unexpected status: {:?}", status),
         }
+    }
+
+    #[gtest]
+    fn test_clone_ok() {
+        let status = ffi::make_ok_ffi_status();
+        let status2 = status.clone();
+        expect_eq!(ffi_status_code(&status2), 0);
+    }
+
+    #[gtest]
+    fn test_clone_error() {
+        let status = ffi::make_ffi_status(1, b"test");
+        let status2 = status.clone();
+        expect_eq!(ffi_status_code(&status2), 1);
+        expect_eq!(ffi_status_message(&status2), b"test");
     }
 
     #[gtest]

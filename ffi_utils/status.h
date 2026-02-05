@@ -29,6 +29,8 @@ FfiStatus MakeFfiStatus();
 FfiStatus MakeFfiStatus(absl::Status status);
 FfiStatus MakeFfiStatus(int32_t code, rust::Slice<const uint8_t> message);
 
+FfiStatus CloneFfiStatus(const FfiStatus& status);
+
 absl::Status UnwrapFfiStatus(FfiStatus status);
 int32_t FfiStatusCode(const FfiStatus& status);
 rust::Slice<const uint8_t> FfiStatusMessage(const FfiStatus& status);
