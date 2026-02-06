@@ -32,8 +32,6 @@ constexpr size_t kMaxGlobalOutputDomainSize = 1000000;
 // Codec.
 class CodecFactory {
  public:
-  static absl::Status ValidateSpec(const InputSpec& input_spec);
-
   // Creates an instance of ExplicitCodec.
   static absl::StatusOr<std::unique_ptr<Codec>> CreateExplicitCodec(
       InputSpec input_spec,
