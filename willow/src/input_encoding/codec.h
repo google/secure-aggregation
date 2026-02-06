@@ -27,7 +27,7 @@ namespace willow {
 
 using MetricData = absl::flat_hash_map<std::string, std::vector<int64_t>>;
 using GroupData = absl::flat_hash_map<std::string, std::vector<std::string>>;
-using EncodedData = absl::flat_hash_map<std::string, std::vector<int64_t>>;
+using EncodedData = absl::flat_hash_map<std::string, std::vector<uint64_t>>;
 
 struct DecodedData {
   GroupData group_data;
