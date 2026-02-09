@@ -51,5 +51,6 @@ cc_test(
         "@abseil-cpp//absl/status",
         "//ffi_utils:status_matchers",
         "//willow/proto/willow:input_spec_cc_proto",
+        "//willow/src/testing_utils:testing_utils_cc",
     ],
 )

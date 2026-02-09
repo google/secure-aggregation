@@ -131,6 +131,7 @@ cc_library(
     name = "shell_testing_decryptor_cc",
     srcs = ["shell_testing_decryptor.cc"],
     hdrs = ["shell_testing_decryptor.h"],
+    visibility = ["//visibility:public"],
     deps = [
         ":shell_testing_decryptor_cxx",
         "@abseil-cpp//absl/memory",
@@ -155,5 +156,17 @@ cc_test(
         "@abseil-cpp//absl/status",
         "//ffi_utils:status_matchers",
         "//willow/proto/willow:aggregation_config_cc_proto",
+    ],
+)
+
+cc_library(
+    name = "testing_utils_cc",
+    srcs = ["testing_utils.cc"],
+    hdrs = ["testing_utils.h"],
+    visibility = ["//visibility:public"],
+    deps = [
+        "//willow/proto/willow:aggregation_config_cc_proto",
+        "//willow/proto/willow:input_spec_cc_proto",
+        "//willow/src/input_encoding:codec",
     ],
 )
