@@ -187,7 +187,7 @@ message CommitteeSelectorResponse {
   oneof msg {
     CreateCommitteeResponse create_committee = 1;
     VolunteerForCommitteeResponse volunteer_for_committee = 2;
-    CommitteeStatusResponse check_committee_status = 3;
+    CommitteeStatusResponse committee_status = 3;
     CheckVolunteerStatusResponse check_volunteer_status = 4;
     VolunteerBatchForCommitteeResponse volunteer_batch_for_committee = 5;
     CommitteeSelectorStatus error = 6;
