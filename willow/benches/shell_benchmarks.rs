@@ -22,16 +22,16 @@ use aggregation_config::AggregationConfig;
 use ahe_traits::AheBase;
 use client_traits::SecureAggregationClient;
 use decryptor_traits::SecureAggregationDecryptor;
-use kahe_shell::ShellKahe;
 use kahe_traits::KaheBase;
 use messages::{
     CiphertextContribution, DecryptionRequestContribution, DecryptorPublicKey,
     PartialDecryptionRequest,
 };
-use parameters_shell::{create_shell_ahe_config, create_shell_kahe_config};
 use server_traits::SecureAggregationServer;
+use shell_kahe::ShellKahe;
+use shell_parameters::create_shell_configs;
+use shell_vahe::ShellVahe;
 use testing_utils::{generate_random_nonce, generate_random_unsigned_vector};
-use vahe_shell::ShellVahe;
 use verifier_traits::SecureAggregationVerifier;
 use willow_v1_client::WillowV1Client;
 use willow_v1_decryptor::{DecryptorState, WillowV1Decryptor};
@@ -124,8 +124,7 @@ fn setup_base(args: &Args) -> BaseInputs {
         max_decryptor_dropouts: 0,
         key_id: b"benchmark".to_vec(),
     };
-    let ahe_config = create_shell_ahe_config(aggregation_config.max_number_of_decryptors).unwrap();
-    let kahe_config = create_shell_kahe_config(&aggregation_config).unwrap();
+    let (kahe_config, ahe_config) = create_shell_configs(&aggregation_config).unwrap();
 
     // Create common KAHE/VAHE instances.
     let kahe = Rc::new(ShellKahe::new(kahe_config.clone(), CONTEXT_STRING).unwrap());

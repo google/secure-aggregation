@@ -17,15 +17,16 @@ use client_traits::SecureAggregationClient;
 use decryptor_traits::SecureAggregationDecryptor;
 use googletest::prelude::container_eq;
 use googletest::{gtest, verify_eq, verify_that};
-use kahe_shell::ShellKahe;
 use kahe_traits::KaheBase;
 use messages::{
     CiphertextContribution, ClientMessage, DecryptionRequestContribution, DecryptorPublicKeyShare,
     PartialDecryptionRequest, PartialDecryptionResponse,
 };
-use parameters_shell::{create_shell_ahe_config, create_shell_kahe_config};
 use proto_serialization_traits::{FromProto, ToProto};
 use server_traits::SecureAggregationServer;
+use shell_kahe::ShellKahe;
+use shell_parameters::{create_shell_ahe_config, create_shell_kahe_config};
+use shell_vahe::ShellVahe;
 use status::StatusErrorCode;
 use status_matchers_rs::status_is;
 use std::collections::HashMap;
@@ -33,7 +34,6 @@ use std::rc::Rc;
 use testing_utils::{
     generate_aggregation_config, generate_random_nonce, generate_random_unsigned_vector,
 };
-use vahe_shell::ShellVahe;
 use verifier_traits::SecureAggregationVerifier;
 use willow_v1_client::WillowV1Client;
 use willow_v1_decryptor::{DecryptorState, WillowV1Decryptor};
