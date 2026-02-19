@@ -26,19 +26,26 @@ concurrency:
 
 jobs:
   build:
+    strategy:
+      matrix:
+        bazel-version: [7, 8, 9]
     runs-on:
       labels: ubuntu-24.04-64core
     steps:
       - name: Check out repository code
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # pin@v6.0.1
 
+      - name: Set bazel version
+        run: echo "${{ matrix.bazel-version }}.x" > .bazelversion
+
       - name: Cache bazel build artifacts
         uses: actions/cache@9255dc7a253b0ccc959486e2bca901246202afeb # pin@v5.0.1
         with:
           path: |
             ~/.cache/bazel
-          key: ${{ runner.os }}-${{ hashFiles('.bazelrc', '.bazelversion', 'MODULE.bazel.lock') }}-${{ github.sha }}
+          key: ${{ runner.os }}-bazel-v${{ matrix.bazel-version }}-${{ hashFiles('.bazelrc', '.bazelversion', 'MODULE.bazel.lock') }}-${{ github.sha }}
           restore-keys: |
+            ${{ runner.os }}-bazel-v${{ matrix.bazel-version }}-${{ hashFiles('.bazelrc', '.bazelversion', 'MODULE.bazel.lock') }}-
             ${{ runner.os }}-${{ hashFiles('.bazelrc', '.bazelversion', 'MODULE.bazel.lock') }}-
 
       - name: "Run `bazel build`"
