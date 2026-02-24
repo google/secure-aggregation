@@ -20,7 +20,9 @@
 #include <vector>
 
 #include "absl/container/flat_hash_map.h"
+#include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "willow/proto/willow/input_spec.pb.h"
 
 namespace secure_aggregation {
 namespace willow {
@@ -62,6 +64,12 @@ class Codec {
   // The input `encoded_data` is the result of the secure aggregation.
   virtual absl::StatusOr<DecodedData> Decode(
       const EncodedData& encoded_data) const = 0;
+
+  // Validates that the output vectors in the query match the specification
+  // used to construct this Codec.
+  virtual absl::Status ValidateExampleQuery(
+      const absl::flat_hash_map<std::string, std::string>& query_output_specs)
+      const = 0;
 };
 
 }  // namespace willow
