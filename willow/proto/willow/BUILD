@@ -21,6 +21,21 @@ package(
 )
 
 proto_library(
+    name = "committee_selector_proto",
+    srcs = ["committee_selector.proto"],
+    deps = [
+        "@protobuf//:any_proto",
+        "@protobuf//:timestamp_proto",
+        
+    ],
+)
+
+cc_proto_library(
+    name = "committee_selector_cc_proto",
+    deps = [":committee_selector_proto"],
+)
+
+proto_library(
     name = "aggregation_config_proto",
     srcs = ["aggregation_config.proto"],
     deps = [

@@ -1,0 +1,195 @@
+// Copyright 2026 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+edition = "2023";
+
+package secure_aggregation.willow;
+
+import "google/protobuf/any.proto";
+import "google/protobuf/timestamp.proto";
+
+option java_multiple_files = true;
+option java_outer_classname = "CommitteeSelectorProto";
+
+// Request from the untrusted frontend to a TEE to create a committee.
+// Returns CreateCommitteeResponse.
+message CreateCommitteeRequest {}
+
+// Response from the TEE to the untrusted frontend after creating a committee.
+message CreateCommitteeResponse {
+  int64 committee_id = 1 ;
+}
+
+// A message sent from client to untrusted frontend signaling intent to
+// volunteer for the committee. Returns VolunteerForCommitteeResponse.
+message VolunteerForCommitteeRequest {
+  // Member's public key used to uniquely identify the member.
+  bytes member_public_key = 1 ;
+
+  // An endorsement of the client's public key, for example:
+  // an Android Key Attestation X.509 certificate.
+  google.protobuf.Any key_endorsement = 2
+      ;
+}
+
+// A record of a client who volunteered for a committee.
+message VolunteerRecord {
+  // A short digest of the member's public key used to uniquely identify the
+  // member.
+  int64 member_public_key_digest = 1
+      ;
+
+  // The committee ID the member is volunteering for.
+  int64 committee_id = 2 ;
+
+  // The status of the endorsement of the member's public key.
+  EndorsementStatus key_endorsement_status = 3
+      ;
+}
+
+// A response from the untrusted frontend to the client after recording it's
+// volunteer request for the committee.
+message VolunteerForCommitteeResponse {
+  VolunteerRecord volunteer_record = 1;
+
+  // An acknowledgement that the request was handled.
+  // For example, a measurement and endorsement from a TEE.
+  google.protobuf.Any volunteer_recorded_attestation = 2
+      ;
+
+  // Suggested time after which clients can return to check the status of their
+  // volunteer request.
+  google.protobuf.Timestamp check_status_after = 3
+      ;
+}
+
+// A message passed from the untrusted frontend to a TEE to record a batch of
+// committee volunteers. Returns VolunteerBatchForCommitteeResponse.
+message VolunteerBatchForCommitteeRequest {
+  // A batch of volunteers signaling intent to join the cohort.
+  repeated VolunteerForCommitteeRequest volunteers = 1;
+}
+
+// A response from the TEE to the untrusted frontend after recording a batch of
+// committee volunteers.
+message VolunteerBatchForCommitteeResponse {
+  repeated VolunteerRecord volunteer_records = 1;
+}
+
+// A message passed from the untrusted frontend to a TEE to sample a committee
+// from the cohort. Returns CommitteeStatusResponse.
+message SampleCommitteeRequest {
+  int64 committee_id = 1 ;
+}
+
+// Request from the untrusted frontend to a TEE to check the status of a
+// committee. Returns CommitteeStatusResponse.
+message CheckCommitteeStatusRequest {
+  int64 committee_id = 1 ;
+}
+
+// A response from the TEE to untrusted frontend with the output of the
+// committee selection process.
+message CommitteeStatusResponse {
+  int64 committee_id = 1 ;
+
+  // The status of the committee selection process.
+  enum SampleCommitteeStatus {
+    SAMPLE_COMMITTEE_STATUS_UNKNOWN = 0;
+    SAMPLE_COMMITTEE_STATUS_PENDING = 1;
+    SAMPLE_COMMITTEE_STATUS_SUCCESS = 2;
+    SAMPLE_COMMITTEE_STATUS_FAILURE = 3;
+  }
+  SampleCommitteeStatus status = 2;
+
+  // Optional: The public keys of the committee members if the selection process
+  // succeeded.
+  repeated int64 committee_members_public_key_digests = 3
+      ;
+}
+
+// Request from a client to untrusted frontend to check their committee
+// selection status. Returns CheckVolunteerStatusResponse.
+message CheckVolunteerStatusRequest {
+  // Member's public key used to uniquely identify the member.
+  bytes member_public_key = 1 ;
+
+  // The committee ID the member volunteered for and is checking the status of.
+  int64 committee_id = 2 ;
+}
+
+// Represents a member or volunteer's status within a committee selection.
+enum MemberStatus {
+  MEMBER_STATUS_UNKNOWN = 0;
+  MEMBER_STATUS_VOLUNTEERED = 1;   // Waiting for committee assignment.
+  MEMBER_STATUS_ASSIGNED = 2;      // Assigned to an active committee but
+                                   //   not yet acknowledged.
+  MEMBER_STATUS_NOT_SELECTED = 3;  // Member was not selected for the committee.
+  MEMBER_STATUS_COMPLETED = 4;     // Acknowledged committee assignment.
+  MEMBER_STATUS_FAILED = 5;        // Encountered an error.
+}
+
+// The method and state of the endorsement of the client’s public key.
+enum EndorsementStatus {
+  ENDORSEMENT_UNKNOWN = 0;
+  ENDORSEMENT_FAILED = 1;
+  ENDORSEMENT_ANDROID_KEY_ATTESTATION_VALID = 2;
+}
+
+// Response from the untrusted frontend to a client with their committee
+// selection status.
+message CheckVolunteerStatusResponse {
+  MemberStatus status = 1 ;
+
+  // An acknowledgement that the CheckVolunteerStatusRequest was handled.
+  // For example, a measurement and endorsement from a TEE.
+  google.protobuf.Any committee_selection_attestation = 2
+      ;
+
+  // Optional: If the member was selected, the size of the committee that the
+  // member was selected for is returned.
+  int32 committee_size = 3 ;
+}
+
+// Generic error status returned from the TEE to the untrusted frontend for the
+// CommitteeSelector.
+message CommitteeSelectorStatus {
+  int32 code = 1;
+  string message = 2;
+}
+
+// CommitteeSelectorRequest and CommitteeSelectorResponse wrap the individual
+// request and response messages above, and are used by the replicated
+// implementation of the CommitteeSelector.
+message CommitteeSelectorRequest {
+  oneof msg {
+    CreateCommitteeRequest create_committee = 1;
+    VolunteerForCommitteeRequest volunteer_for_committee = 2;
+    SampleCommitteeRequest sample_committee = 3;
+    CheckCommitteeStatusRequest check_committee_status = 4;
+    CheckVolunteerStatusRequest check_volunteer_status = 5;
+    VolunteerBatchForCommitteeRequest volunteer_batch_for_committee = 6;
+  }
+}
+
+message CommitteeSelectorResponse {
+  oneof msg {
+    CreateCommitteeResponse create_committee = 1;
+    VolunteerForCommitteeResponse volunteer_for_committee = 2;
+    CommitteeStatusResponse check_committee_status = 3;
+    CheckVolunteerStatusResponse check_volunteer_status = 4;
+    VolunteerBatchForCommitteeResponse volunteer_batch_for_committee = 5;
+    CommitteeSelectorStatus error = 6;
+  }
+}
