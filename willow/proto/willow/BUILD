@@ -14,6 +14,7 @@
 
 load("@protobuf//bazel:cc_proto_library.bzl", "cc_proto_library")
 load("@protobuf//bazel:proto_library.bzl", "proto_library")
+load("@protobuf//bazel:py_proto_library.bzl", "py_proto_library")
 load("@protobuf//rust:defs.bzl", "rust_proto_library")
 
 package(
@@ -86,6 +87,12 @@ proto_library(
 
 cc_proto_library(
     name = "input_spec_cc_proto",
+    deps = [":input_spec_proto"],
+)
+
+py_proto_library(
+    name = "input_spec_py_pb2",
+    visibility = ["//visibility:public"],
     deps = [":input_spec_proto"],
 )
 
