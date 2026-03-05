@@ -48,18 +48,29 @@ PYBIND11_MODULE(codec_bindings, m) {
 
   m.def(
       "CreateExplicitCodec",
-      [](const std::string& serialized_input_spec,
-         size_t max_flattened_domain_size)
+      [](const std::string& serialized_input_spec)
           -> absl::StatusOr<std::unique_ptr<Codec>> {
         InputSpec input_spec;
         if (!input_spec.ParseFromString(serialized_input_spec)) {
           return absl::InvalidArgumentError("Failed to parse InputSpec");
         }
+        return CodecFactory::CreateExplicitCodec(input_spec);
+      },
+      py::arg("serialized_input_spec"));
+
+  m.def(
+      "ValidateExplicitCodecInputSpec",
+      [](const std::string& serialized_input_spec,
+         size_t max_flattened_domain_size) -> absl::Status {
+        InputSpec input_spec;
+        if (!input_spec.ParseFromString(serialized_input_spec)) {
+          return absl::InvalidArgumentError("Failed to parse InputSpec");
+        }
         if (max_flattened_domain_size == 0) {
-          return CodecFactory::CreateExplicitCodec(input_spec);
+          return CodecFactory::ValidateExplicitCodecInputSpec(input_spec);
         } else {
-          return CodecFactory::CreateExplicitCodec(input_spec,
-                                                   max_flattened_domain_size);
+          return CodecFactory::ValidateExplicitCodecInputSpec(
+              input_spec, max_flattened_domain_size);
         }
       },
       py::arg("serialized_input_spec"),

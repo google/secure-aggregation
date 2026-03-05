@@ -270,7 +270,7 @@ TEST(CodecFactoryTest, ValidateInputAndSpecGlobalDomainSizeExceeded) {
         ->add_values(std::to_string(i));
   }
 
-  EXPECT_THAT(CodecFactory::CreateExplicitCodec(input_spec),
+  EXPECT_THAT(CodecFactory::ValidateExplicitCodecInputSpec(input_spec),
               StatusIs(absl::StatusCode::kInvalidArgument,
                        HasSubstr("Global output domain size exceeds")));
 }
@@ -292,10 +292,10 @@ TEST(CodecFactoryTest, ValidateInputAndSpecCustomGlobalDomainSize) {
   group_by_spec->mutable_domain_spec()->mutable_string_values()->add_values(
       "b");
   // Domain size is 2.
-  EXPECT_THAT(CodecFactory::CreateExplicitCodec(input_spec, 1),
+  EXPECT_THAT(CodecFactory::ValidateExplicitCodecInputSpec(input_spec, 1),
               StatusIs(absl::StatusCode::kInvalidArgument,
                        HasSubstr("Global output domain size exceeds")));
-  SECAGG_EXPECT_OK(CodecFactory::CreateExplicitCodec(input_spec, 2));
+  SECAGG_EXPECT_OK(CodecFactory::ValidateExplicitCodecInputSpec(input_spec, 2));
 }
 
 TEST(CodecFactoryTest, EncodeSimpleGroupBy) {
