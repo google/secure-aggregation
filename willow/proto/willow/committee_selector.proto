@@ -41,6 +41,10 @@ message VolunteerForCommitteeRequest {
   // an Android Key Attestation X.509 certificate.
   google.protobuf.Any key_endorsement = 2
       ;
+
+  // The name of the population that the client belongs to.
+  string population_name = 3 ;
+
 }
 
 // A record of a client who volunteered for a committee.
@@ -58,20 +62,34 @@ message VolunteerRecord {
       ;
 }
 
-// A response from the untrusted frontend to the client after recording it's
-// volunteer request for the committee.
+// A response from the untrusted frontend to the client after recording its
+// volunteer request for the committee. This is either a VolunteerRecorded or
+// NoActiveCommitteeSelection message.
 message VolunteerForCommitteeResponse {
-  VolunteerRecord volunteer_record = 1;
+  // A response from the untrusted frontend to the client after recording its
+  // volunteer request for an active committee selection.
+  message VolunteerRecorded {
+    VolunteerRecord volunteer_record = 1;
 
-  // An acknowledgement that the request was handled.
-  // For example, a measurement and endorsement from a TEE.
-  google.protobuf.Any volunteer_recorded_attestation = 2
-      ;
+    // An acknowledgement that the request was handled.
+    // For example, a measurement and endorsement from a TEE.
+    google.protobuf.Any attestation = 2
+        ;
 
-  // Suggested time after which clients can return to check the status of their
-  // volunteer request.
-  google.protobuf.Timestamp check_status_after = 3
-      ;
+    // Optional: Suggested time after which clients can return to check the
+    // status of their volunteer request (namely when the committee selection
+    // was expected to complete)
+    google.protobuf.Timestamp check_status_after = 3
+        ;
+  }
+
+  message NoActiveCommitteeSelection {
+  }
+
+  oneof msg {
+    VolunteerRecorded volunteer_recorded = 1;
+    NoActiveCommitteeSelection no_active_committee_selection = 2;
+  }
 }
 
 // A message passed from the untrusted frontend to a TEE to record a batch of
@@ -82,9 +100,16 @@ message VolunteerBatchForCommitteeRequest {
 }
 
 // A response from the TEE to the untrusted frontend after recording a batch of
-// committee volunteers.
+// committee volunteers. Must be in the same order as the requests in
+// VolunteerBatchForCommitteeRequest.
 message VolunteerBatchForCommitteeResponse {
   repeated VolunteerRecord volunteer_records = 1;
+
+  // An acknowledgement that the request was handled.
+  // For example, a measurement and endorsement from a TEE. We expect that the
+  // attestation is the same for all volunteers in the batch.
+  google.protobuf.Any volunteer_recorded_attestation = 2
+      ;
 }
 
 // A message passed from the untrusted frontend to a TEE to sample a committee
