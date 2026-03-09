@@ -371,31 +371,6 @@ rust_test(
     ],
 )
 
-rust_library(
-    name = "zk_quadratic_innerproduct",
-    testonly = 1,
-    srcs = ["zk_quadratic_ip.rs"],
-    deps = [
-        ":prng_traits",
-        ":zk_traits",
-        "@crate_index//:curve25519-dalek",
-        "@crate_index//:merlin",
-        "@crate_index//:rand",
-        "@crate_index//:sha3",
-        "@crate_index//:thiserror",
-        "//ffi_utils:status",
-    ],
-)
-
-rust_test(
-    name = "zk_quadratic_innerproduct_test",
-    crate = ":zk_quadratic_innerproduct",
-    deps = [
-        "@crate_index//:googletest",
-        "//ffi_utils:status_matchers_rs",
-    ],
-)
-
 # RLWE relation zero-knowledge proof.
 rust_library(
     name = "zk_rlwe_relation",
