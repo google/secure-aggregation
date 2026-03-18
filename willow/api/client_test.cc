@@ -16,6 +16,7 @@
 
 #include "willow/api/client.h"
 
+#include <cstdint>
 #include <memory>
 #include <string>
 
@@ -137,6 +138,70 @@ TEST(WillowShellClientTest, InvalidAggregationConfig) {
   EXPECT_THAT(
       GenerateClientContribution(config, encoded_data, public_key, nonce),
       StatusIs(absl::StatusCode::kInvalidArgument));
+}
+
+TEST(WillowShellClientTest, CreateAggregationConfigSuccess) {
+  InputSpec input_spec = CreateTestInputSpecProto();
+  SECAGG_ASSERT_OK_AND_ASSIGN(
+      AggregationConfigProto config,
+      CreateAggregationConfig(input_spec, /*key_id=*/"test",
+                              /*max_number_of_clients=*/10));
+
+  AggregationConfigProto expected_config = CreateTestAggregationConfigProto();
+  EXPECT_EQ(config.max_number_of_decryptors(),
+            expected_config.max_number_of_decryptors());
+  EXPECT_EQ(config.max_number_of_clients(),
+            expected_config.max_number_of_clients());
+  EXPECT_EQ(config.key_id(), expected_config.key_id());
+
+  const auto& vector_configs = config.vector_configs();
+  const auto& expected_vector_configs = expected_config.vector_configs();
+  EXPECT_EQ(vector_configs.size(), expected_vector_configs.size());
+  for (const auto& [key, value] : expected_vector_configs) {
+    ASSERT_TRUE(vector_configs.contains(key));
+    EXPECT_EQ(vector_configs.at(key).length(), value.length());
+    EXPECT_EQ(vector_configs.at(key).bound(), value.bound());
+  }
+}
+
+TEST(WillowShellClientTest, CreateAggregationConfigDefaultBound) {
+  InputSpec input_spec = CreateTestInputSpecProto();
+  // Clear the interval to verify that the default bound is used.
+  input_spec.mutable_metric_vector_specs(0)
+      ->mutable_domain_spec()
+      ->clear_interval();
+
+  int64_t default_bound = 12345;
+  SECAGG_ASSERT_OK_AND_ASSIGN(
+      AggregationConfigProto config,
+      CreateAggregationConfig(input_spec, /*key_id=*/"test",
+                              /*max_number_of_clients=*/10,
+                              /*max_number_of_decryptors=*/1,
+                              /*max_decryptor_dropouts=*/0,
+                              /*default_max_metric_value=*/default_bound));
+
+  const auto& vector_configs = config.vector_configs();
+  ASSERT_TRUE(vector_configs.contains("metric1"));
+  EXPECT_EQ(vector_configs.at("metric1").bound(), default_bound);
+}
+
+TEST(WillowShellClientTest, CreateAggregationConfigFailsOnEmptyDomain) {
+  InputSpec input_spec = CreateTestInputSpecProto();
+  ASSERT_GT(input_spec.group_by_vector_specs_size(), 0);
+
+  // Clear the string values to zero length.
+  input_spec.mutable_group_by_vector_specs(0)
+      ->mutable_domain_spec()
+      ->mutable_string_values()
+      ->clear_values();
+
+  EXPECT_THAT(CreateAggregationConfig(input_spec, "test", 10),
+              StatusIs(absl::StatusCode::kInvalidArgument));
+
+  // Also fails if domain is not set.
+  input_spec.mutable_group_by_vector_specs(0)->clear_domain_spec();
+  EXPECT_THAT(CreateAggregationConfig(input_spec, "test", 10),
+              StatusIs(absl::StatusCode::kInvalidArgument));
 }
 
 }  // namespace

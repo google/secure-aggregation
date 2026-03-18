@@ -22,6 +22,8 @@
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/str_cat.h"
+#include "absl/strings/string_view.h"
 #include "ffi_utils/cxx_utils.h"
 #include "ffi_utils/status_macros.h"
 #include "include/cxx.h"
@@ -29,14 +31,53 @@
 #include "willow/input_encoding/codec.h"
 #include "willow/proto/shell/ciphertexts.pb.h"
 #include "willow/proto/willow/aggregation_config.pb.h"
+#include "willow/proto/willow/input_spec.pb.h"
 #include "willow/proto/willow/server_accumulator.pb.h"
 
 namespace secure_aggregation {
 
+absl::StatusOr<willow::AggregationConfigProto> CreateAggregationConfig(
+    const willow::InputSpec& input_spec_proto, absl::string_view key_id,
+    int64_t max_number_of_clients, int64_t max_number_of_decryptors,
+    int64_t max_decryptor_dropouts, int64_t default_max_metric_value) {
+  willow::AggregationConfigProto config_proto;
+  config_proto.set_max_number_of_clients(max_number_of_clients);
+  config_proto.set_max_number_of_decryptors(max_number_of_decryptors);
+  config_proto.set_max_decryptor_dropouts(max_decryptor_dropouts);
+  config_proto.set_key_id(std::string(key_id));
+  // All metrics have same vector length, corresponding to the Cartesian product
+  // of group-by domains.
+  int64_t flattened_domain_size = 1;
+  for (const auto& group_by_spec : input_spec_proto.group_by_vector_specs()) {
+    if (group_by_spec.domain_spec().string_values().values_size() == 0) {
+      return absl::InvalidArgumentError(absl::StrCat(
+          "Missing domain, invalid domain type (must be StringValues), or "
+          "empty string_values for group by vector: ",
+          group_by_spec.vector_name()));
+    }
+    flattened_domain_size *=
+        group_by_spec.domain_spec().string_values().values_size();
+  }
+  // Build VectorConfig (length and bound) for each metric.
+  for (const auto& metric_spec : input_spec_proto.metric_vector_specs()) {
+    auto& vector_config =
+        (*config_proto.mutable_vector_configs())[metric_spec.vector_name()];
+    vector_config.set_length(flattened_domain_size);
+    if (metric_spec.has_domain_spec() &&
+        metric_spec.domain_spec().has_interval()) {
+      vector_config.set_bound(
+          static_cast<int64_t>(metric_spec.domain_spec().interval().max()));
+    } else {
+      vector_config.set_bound(default_max_metric_value);
+    }
+  }
+  return config_proto;
+}
+
 absl::StatusOr<willow::ClientMessage> GenerateClientContribution(
     const willow::AggregationConfigProto& aggregation_config,
     const willow::EncodedData& encoded_data,
-    const willow::ShellAhePublicKey& public_key, const std::string& nonce) {
+    const willow::ShellAhePublicKey& public_key, absl::string_view nonce) {
   // Initialize client.
   std::string config_str = aggregation_config.SerializeAsString();
   auto config_ptr = std::make_unique<std::string>(std::move(config_str));
