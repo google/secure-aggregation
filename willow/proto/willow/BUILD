@@ -22,6 +22,20 @@ package(
 )
 
 proto_library(
+    name = "auth_token_proto",
+    srcs = ["auth_token.proto"],
+    deps = [
+        "@protobuf//:timestamp_proto",
+        
+    ],
+)
+
+cc_proto_library(
+    name = "auth_token_cc_proto",
+    deps = [":auth_token_proto"],
+)
+
+proto_library(
     name = "committee_selector_proto",
     srcs = ["committee_selector.proto"],
     deps = [
