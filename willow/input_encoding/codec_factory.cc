@@ -68,6 +68,10 @@ class ExplicitCodecImpl : public Codec {
   absl::StatusOr<DecodedData> Decode(
       const EncodedData& encoded_data) const override;
 
+  absl::Status ValidateExampleQuery(
+      const absl::flat_hash_map<std::string, std::string>& query_output_specs)
+      const override;
+
  private:
   InputSpec input_spec_;
   // Map of group-by key names to their specs.
@@ -342,6 +346,31 @@ absl::StatusOr<DecodedData> ExplicitCodecImpl::Decode(
     }
   }
   return decoded_data;
+}
+
+absl::Status ExplicitCodecImpl::ValidateExampleQuery(
+    const absl::flat_hash_map<std::string, std::string>& query_output_specs)
+    const {
+  for (const auto& [name, type] : query_output_specs) {
+    auto group_it = group_by_spec_map_.find(name);
+    auto metric_it = metric_spec_map_.find(name);
+
+    if (group_it != group_by_spec_map_.end()) {
+      if (type != "STRING") {
+        return absl::InvalidArgumentError(absl::StrCat(
+            "Vector ", name, " in query is group-by but type is not STRING."));
+      }
+    } else if (metric_it != metric_spec_map_.end()) {
+      if (type != "INT64") {
+        return absl::InvalidArgumentError(absl::StrCat(
+            "Vector ", name, " in query is metric but type is not INT64."));
+      }
+    } else {
+      return absl::InvalidArgumentError(
+          absl::StrCat("Vector ", name, " in query not found in input spec."));
+    }
+  }
+  return absl::OkStatus();
 }
 
 absl::StatusOr<std::unique_ptr<Codec>> CodecFactory::CreateExplicitCodec(

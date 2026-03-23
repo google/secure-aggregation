@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+load("@rules_python//python:defs.bzl", pytype_strict_contrib_test = "py_test")
+load("@pybind11_bazel//:build_defs.bzl", pytype_pybind_extension = "pybind_extension")
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load("@rules_cc//cc:cc_test.bzl", "cc_test")
 
@@ -52,5 +54,28 @@ cc_test(
         "//ffi_utils:status_matchers",
         "//willow/proto/willow:input_spec_cc_proto",
         "//willow/testing_utils:testing_utils_cc",
+    ],
+)
+
+pytype_pybind_extension(
+    name = "codec_bindings",
+    srcs = ["codec_bindings.cc"],
+    deps = [
+        ":codec",
+        "@abseil-cpp//absl/container:flat_hash_map",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:statusor",
+        "@pybind11_abseil//pybind11_abseil:status_casters",
+        "//willow/proto/willow:input_spec_cc_proto",
+    ],
+)
+
+pytype_strict_contrib_test(
+    name = "codec_bindings_test",
+    srcs = ["codec_bindings_test.py"],
+    deps = [
+        ":codec_bindings",
+        "@pybind11_abseil//pybind11_abseil:status",
+        "//willow/proto/willow:input_spec_py_pb2",
     ],
 )
