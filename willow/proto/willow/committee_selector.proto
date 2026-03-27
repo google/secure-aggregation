@@ -45,6 +45,8 @@ message VolunteerForCommitteeRequest {
   // The name of the population that the client belongs to.
   string population_name = 3 ;
 
+  // Authorization token for this request.
+  string auth_token = 4 ;
 }
 
 // A record of a client who volunteered for a committee.
@@ -90,6 +92,9 @@ message VolunteerForCommitteeResponse {
     VolunteerRecorded volunteer_recorded = 1;
     NoActiveCommitteeSelection no_active_committee_selection = 2;
   }
+
+  // Authorization token to use for future requests.
+  string auth_token = 3 ;
 }
 
 // A message passed from the untrusted frontend to a TEE to record a batch of
