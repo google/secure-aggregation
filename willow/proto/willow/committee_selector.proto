@@ -157,6 +157,12 @@ message CheckVolunteerStatusRequest {
 
   // The committee ID the member volunteered for and is checking the status of.
   int64 committee_id = 2 ;
+
+  // The name of the population that the client belongs to.
+  string population_name = 3 ;
+
+  // Authorization token for this request.
+  string auth_token = 4 ;
 }
 
 // Represents a member or volunteer's status within a committee selection.
@@ -190,6 +196,9 @@ message CheckVolunteerStatusResponse {
   // Optional: If the member was selected, the size of the committee that the
   // member was selected for is returned.
   int32 committee_size = 3 ;
+
+  // Authorization token to use for future requests.
+  string auth_token = 4 ;
 }
 
 // Generic error status returned from the TEE to the untrusted frontend for the
