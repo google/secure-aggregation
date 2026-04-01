@@ -34,7 +34,12 @@ class CodecFactory {
  public:
   // Creates an instance of ExplicitCodec.
   static absl::StatusOr<std::unique_ptr<Codec>> CreateExplicitCodec(
-      InputSpec input_spec,
+      InputSpec input_spec);
+
+  // Check that the combined size of the string domains is less than the
+  // maximum allowed size.
+  static absl::Status ValidateExplicitCodecInputSpec(
+      const InputSpec& input_spec,
       size_t max_flattened_domain_size = kMaxGlobalOutputDomainSize);
 };
 

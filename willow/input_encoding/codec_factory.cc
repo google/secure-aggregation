@@ -373,10 +373,8 @@ absl::Status ExplicitCodecImpl::ValidateExampleQuery(
   return absl::OkStatus();
 }
 
-absl::StatusOr<std::unique_ptr<Codec>> CodecFactory::CreateExplicitCodec(
-    InputSpec input_spec, size_t max_flattened_domain_size) {
-  // Check that the combined size of the string domains is less than the
-  // maximum allowed size.
+absl::Status CodecFactory::ValidateExplicitCodecInputSpec(
+    const InputSpec& input_spec, size_t max_flattened_domain_size) {
   size_t flattened_domain_size = 1;
   for (const auto& spec : input_spec.group_by_vector_specs()) {
     flattened_domain_size *= spec.domain_spec().string_values().values_size();
@@ -385,6 +383,11 @@ absl::StatusOr<std::unique_ptr<Codec>> CodecFactory::CreateExplicitCodec(
           "Global output domain size exceeds maximum threshold.");
     }
   }
+  return absl::OkStatus();
+}
+
+absl::StatusOr<std::unique_ptr<Codec>> CodecFactory::CreateExplicitCodec(
+    InputSpec input_spec) {
   // Check that specs include at least one metric vector.
   if (input_spec.metric_vector_specs().empty()) {
     return absl::InvalidArgumentError(
