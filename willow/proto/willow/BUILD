@@ -116,6 +116,20 @@ rust_proto_library(
 )
 
 proto_library(
+    name = "multidecryptor_protocol_messages_proto",
+    srcs = ["multidecryptor_protocol_messages.proto"],
+    deps = [
+        "@protobuf//:any_proto",
+        "@protobuf//:timestamp_proto",
+    ],
+)
+
+cc_proto_library(
+    name = "multidecryptor_protocol_messages_cc_proto",
+    deps = [":multidecryptor_protocol_messages_proto"],
+)
+
+proto_library(
     name = "server_accumulator_proto",
     srcs = ["server_accumulator.proto"],
     deps = [

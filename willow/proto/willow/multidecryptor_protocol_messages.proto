@@ -1,0 +1,133 @@
+// Copyright 2026 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+edition = "2023";
+
+package secure_aggregation.willow;
+
+import "google/protobuf/any.proto";
+import "google/protobuf/timestamp.proto";
+
+option java_multiple_files = true;
+option java_outer_classname = "MultidecryptorProtocolMessagesProto";
+
+// Represents a message within a protocol execution.
+message ProtocolMessage {
+  int32 sender_member_id = 1;     // Which member sent it.
+  int32 recipient_member_id = 2;  // Which member it is for.
+  bytes payload = 3;               // Protocol-specific message content.
+  // Timestamp when the message was sent. Output only (client should not set).
+  google.protobuf.Timestamp timestamp = 4;
+  // Unique ID assigned to the message. Output only (client should not set).
+  string message_id = 5;
+}
+
+// Request to check for active protocols for the member's committee.
+message CheckActiveProtocolsRequest {
+  // The member's current authentication token.
+  string auth_token = 1;
+  // The member's unique identifier within the committee.
+  int32 member_id = 2;
+  // The committee's unique identifier.
+  int64 committee_id = 3;
+}
+
+// Response indicating any active protocols.
+message CheckActiveProtocolsResponse {
+  // A refreshed authentication token for the member.
+  string refreshed_auth_token = 1;
+
+  // Optional message for the client.
+  string status_message = 2;
+
+  oneof result {
+    // Indicates the committee has been disbanded.
+    CommitteeDisbanded committee_disbanded = 3;
+    // List of active sessions requiring attention.
+    ActiveSessions active_sessions = 4;
+  }
+}
+
+// Indicates that the committee has been disbanded and no further protocols
+// will be executed. The client should return the the volunteer pool.
+message CommitteeDisbanded {}
+
+// Wrapper for a list of active sessions.
+message ActiveSessions {
+  repeated ActiveSession sessions = 1;
+}
+
+// Details about an active session.
+message ActiveSession {
+  // The unique identifier for the protocol session.
+  string session_id = 1;
+
+  enum ProtocolType {
+    PROTOCOL_TYPE_UNSPECIFIED = 0;
+    GENERATE_KEYS = 1;
+    DECRYPT_AGGREGATE = 2;
+  }
+  // The type of protocol for this session.
+  ProtocolType protocol_type = 2;
+
+  // Additional details about the session, if needed.
+  google.protobuf.Any details = 3;
+}
+
+// Request to publish a message for a protocol session.
+message PublishProtocolMessageRequest {
+  // The member's current authentication token.
+  string auth_token = 1;
+  // The member's unique identifier.
+  int32 member_id = 2;
+  // The unique identifier for the protocol session.
+  string session_id = 3;
+  // The protocol-specific message content.
+  ProtocolMessage protocol_message = 4;
+}
+
+// Response after publishing a message.
+message PublishProtocolMessageResponse {
+  // A refreshed authentication token for the member.
+  string refreshed_auth_token = 1;
+  // Unique ID assigned to the published message.
+  string message_id = 2;
+  // Optional status message.
+  string status_message = 3;
+}
+
+// Request to retrieve messages for a protocol session.
+message GetProtocolMessagesRequest {
+  // The member's current authentication token.
+  string auth_token = 1;
+  // The member's unique identifier.
+  int32 member_id = 2;
+  // The unique identifier for the protocol session.
+  string session_id = 3;
+  // The timestamp of the last message received by the client.
+  google.protobuf.Timestamp since_timestamp = 4;
+  // The maximum number of messages to return. The service may return fewer than
+  // this value.
+  // If unspecified, at most 50 messages will be returned.
+  // The maximum value is 1000; values above 1000 will be coerced to 1000.
+  int32 page_size = 5;
+}
+
+// Response containing messages for the member.
+message GetProtocolMessagesResponse {
+  // A refreshed authentication token for the member.
+  string refreshed_auth_token = 1;
+  // The list of messages for the member.
+  repeated ProtocolMessage messages = 2;
+}
