@@ -24,12 +24,12 @@ option java_outer_classname = "CommitteeSelectorProto";
 
 // Request from the untrusted frontend to a TEE to create a committee.
 // Returns CreateCommitteeResponse.
-message CreateCommitteeRequest {}
-
-// Response from the TEE to the untrusted frontend after creating a committee.
-message CreateCommitteeResponse {
+message CreateCommitteeRequest {
   int64 committee_id = 1 ;
 }
+
+// Response from the TEE to the untrusted frontend after creating a committee.
+message CreateCommitteeResponse {}
 
 // A message sent from client to untrusted frontend signaling intent to
 // volunteer for the committee. Returns VolunteerForCommitteeResponse.
@@ -178,9 +178,9 @@ enum MemberStatus {
 
 // The method and state of the endorsement of the client’s public key.
 enum EndorsementStatus {
-  ENDORSEMENT_UNKNOWN = 0;
-  ENDORSEMENT_FAILED = 1;
-  ENDORSEMENT_ANDROID_KEY_ATTESTATION_VALID = 2;
+  ENDORSEMENT_STATUS_UNKNOWN = 0;
+  ENDORSEMENT_STATUS_FAILED = 1;
+  ENDORSEMENT_STATUS_ANDROID_KEY_ATTESTATION_VALID = 2;
 }
 
 // Response from the untrusted frontend to a client with their committee
