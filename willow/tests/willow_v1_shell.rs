@@ -639,6 +639,134 @@ fn encrypt_decrypt_many_clients_decryptors() -> googletest::Result<()> {
     )
 }
 
+// Helper method to run encrypt and decrypt simulation with a specific input length.
+fn run_encrypt_decrypt_simulation_helper(input_length: usize) -> googletest::Result<()> {
+    const INPUT_DOMAIN: i64 = 1i64 << 30;
+    const MAX_NUM_CLIENTS: i64 = 100_000;
+    const MAX_NUM_DECRYPTORS: i64 = 1;
+    const NUM_CLIENTS: usize = 3;
+
+    let default_id = String::from("default");
+    let aggregation_config = generate_aggregation_config(
+        default_id.clone(),
+        input_length as isize,
+        INPUT_DOMAIN,
+        MAX_NUM_DECRYPTORS,
+        MAX_NUM_CLIENTS,
+    );
+
+    // The parameters used by `create_shell_ahe_config` below is secure for only a single
+    // decryptor when assuming all clients are corrupted.
+    let max_number_of_decryptors = 1;
+
+    // Create common KAHE/VAHE instances.
+    let vahe = Rc::new(
+        ShellVahe::new(create_shell_ahe_config(max_number_of_decryptors).unwrap(), CONTEXT_STRING)
+            .unwrap(),
+    );
+    let kahe = Rc::new(
+        ShellKahe::new(create_shell_kahe_config(&aggregation_config).unwrap(), CONTEXT_STRING)
+            .unwrap(),
+    );
+
+    // Create server.
+    let server = WillowV1Server { kahe: Rc::clone(&kahe), vahe: Rc::clone(&vahe) };
+    let mut server_state = ServerState::default();
+
+    // Create verifier.
+    let verifier = WillowV1Verifier { vahe: Rc::clone(&vahe) };
+    let mut verifier_state = VerifierState::default();
+
+    // Create decryptor.
+    let mut decryptor_state = DecryptorState::default();
+    let decryptor = WillowV1Decryptor::new_with_randomly_generated_seed(Rc::clone(&vahe)).unwrap();
+
+    // Decryptor generates public key share.
+    let public_key_share = decryptor.create_public_key_share(&mut decryptor_state).unwrap();
+
+    // Server handles the public key share.
+    server
+        .handle_decryptor_public_key_share(public_key_share, "Decryptor 0", &mut server_state)
+        .unwrap();
+
+    // Server creates the public key.
+    let public_key = server.create_decryptor_public_key(&server_state).unwrap();
+
+    // Create clients, and each client generates their messages.
+    let client_input_values = vec![1u64; input_length];
+    let mut expected_output = vec![0u64; input_length];
+    for _ in 0..NUM_CLIENTS {
+        for i in 0..input_length {
+            expected_output[i] += client_input_values[i];
+        }
+    }
+
+    let mut client_messages = vec![];
+    for _ in 0..NUM_CLIENTS {
+        let client =
+            WillowV1Client::new_with_randomly_generated_seed(Rc::clone(&kahe), Rc::clone(&vahe))
+                .unwrap();
+
+        let client_plaintext =
+            HashMap::from([(default_id.as_str(), client_input_values.as_slice())]);
+        let nonce = generate_random_nonce();
+        let client_message =
+            client.create_client_message(&client_plaintext, &public_key, &nonce).unwrap();
+        client_messages.push(client_message);
+    }
+
+    // Sort client messages by nonce.
+    client_messages.sort_by(|a, b| a.nonce.cmp(&b.nonce));
+
+    // Handle client messages.
+    for client_message in client_messages {
+        let (ciphertext_contribution, decryption_request_contribution) =
+            server.split_client_message(client_message).unwrap();
+        verifier.verify_and_include(decryption_request_contribution, &mut verifier_state).unwrap();
+        server.handle_ciphertext_contribution(ciphertext_contribution, &mut server_state).unwrap();
+    }
+
+    // Verifier creates the partial decryption request.
+    let pd_ct = verifier.create_partial_decryption_request(verifier_state).unwrap();
+
+    // Decryptor performs partial decryption.
+    let pd = decryptor.handle_partial_decryption_request(pd_ct, &decryptor_state).unwrap();
+
+    // Server handles the partial decryption.
+    server.handle_partial_decryption(pd, &mut server_state).unwrap();
+
+    // Server recovers the aggregation result.
+    let aggregation_result = server.recover_aggregation_result(&server_state).unwrap();
+
+    // Check that the (padded) result matches the client plaintext.
+    verify_that!(aggregation_result.keys().collect::<Vec<_>>(), container_eq([&default_id]))?;
+    verify_eq!(
+        aggregation_result.get(default_id.as_str()).unwrap()[..expected_output.len()],
+        expected_output
+    )
+}
+
+/// Encrypt and decrypt with parameters that trigger `total_input_length <= 1000`.
+/// Reference: [shell_parameters.rs](file:///google3/third_party/secure_aggregation/willow/crypto/shell_parameters.rs)
+#[gtest]
+fn encrypt_decrypt_large_input_simulation_1k() -> googletest::Result<()> {
+    run_encrypt_decrypt_simulation_helper(1000)
+}
+
+/// Encrypt and decrypt with parameters that trigger `total_input_length <= 100_000`.
+/// Reference: [shell_parameters.rs](file:///google3/third_party/secure_aggregation/willow/crypto/shell_parameters.rs)
+#[gtest]
+fn encrypt_decrypt_large_input_simulation_100k() -> googletest::Result<()> {
+    run_encrypt_decrypt_simulation_helper(10000)
+}
+
+/// Encrypt and decrypt with parameters that trigger `total_input_length <= 10_000_000`.
+/// Reference: [shell_parameters.rs](file:///google3/third_party/secure_aggregation/willow/crypto/shell_parameters.rs)
+#[gtest]
+fn encrypt_decrypt_large_input_simulation_10m() -> googletest::Result<()> {
+    run_encrypt_decrypt_simulation_helper(100001)
+}
+
 // Encrypt and decrypt with multiple clients and multiple decryptors, but no dropout.
 #[gtest]
 fn encrypt_decrypt_no_dropout() -> googletest::Result<()> {
