@@ -76,14 +76,9 @@ const KAHE_FOR_FIXED_AHE_QS_100K_10M: [u64; 4] = [
 /// - input of length 10M with 32-bit domain
 /// - max number of clients 10M
 /// - max number of decryptors 100
-const KAHE_FOR_FIXED_AHE_LOG_N_10M_10M: usize = 14;
-const KAHE_FOR_FIXED_AHE_LOG_T_10M_10M: usize = 224;
-const KAHE_FOR_FIXED_AHE_QS_10M_10M: [u64; 4] = [
-    2305843009211596801, // 61 bits
-    2305843009211400193, // 61 bits
-    2305843009210515457, // 61 bits
-    2305843009210023937, // 61 bits
-];
+const KAHE_FOR_FIXED_AHE_LOG_N_10M_10M: usize = KAHE_FOR_FIXED_AHE_LOG_N_100K_10M;
+const KAHE_FOR_FIXED_AHE_LOG_T_10M_10M: usize = KAHE_FOR_FIXED_AHE_LOG_T_100K_10M;
+const KAHE_FOR_FIXED_AHE_QS_10M_10M: [u64; 4] = KAHE_FOR_FIXED_AHE_QS_100K_10M;
 
 pub fn create_shell_ahe_config(
     max_number_of_decryptors: i64,
