@@ -140,6 +140,11 @@ proto_library(
 )
 
 cc_proto_library(
+    name = "session_enums_cc_proto",
+    deps = [":session_enums_proto"],
+)
+
+cc_proto_library(
     name = "multidecryptor_protocol_messages_cc_proto",
     deps = [":multidecryptor_protocol_messages_proto"],
 )
