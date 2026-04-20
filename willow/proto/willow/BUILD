@@ -13,6 +13,7 @@
 # limitations under the License.
 
 load("@protobuf//bazel:cc_proto_library.bzl", "cc_proto_library")
+load("@protobuf//bazel:java_proto_library.bzl", "java_proto_library")
 load("@protobuf//bazel:proto_library.bzl", "proto_library")
 load("@protobuf//bazel:py_proto_library.bzl", "py_proto_library")
 load("@protobuf//rust:defs.bzl", "rust_proto_library")
@@ -93,6 +94,14 @@ cc_proto_library(
 py_proto_library(
     name = "input_spec_py_pb2",
     visibility = ["//visibility:public"],
+    deps = [":input_spec_proto"],
+)
+
+java_proto_library(
+    name = "input_spec_java_proto",
+    visibility = [
+        "//visibility:public",
+    ],
     deps = [":input_spec_proto"],
 )
 
