@@ -350,7 +350,7 @@ mod tests {
         let mut transcript = MerlinTranscript::new(b"linear_ip_zkp_test");
         verify_that!(
             verifier.verify(&statement, &proof, &mut transcript),
-            status_is(status::StatusErrorCode::PermissionDenied)
+            status_is(status::StatusErrorCode::PERMISSION_DENIED)
         )
     }
 }

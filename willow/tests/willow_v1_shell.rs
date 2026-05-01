@@ -488,7 +488,7 @@ fn encrypt_decrypt_multiple_clients_including_invalid_proofs() -> googletest::Re
             server.split_client_message(client_message).unwrap();
         verify_that!(
             verifier.verify_and_include(decryption_request_contribution, &mut verifier_state),
-            status_is(StatusErrorCode::PermissionDenied)
+            status_is(StatusErrorCode::PERMISSION_DENIED)
         )?;
     }
 

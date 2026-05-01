@@ -157,7 +157,7 @@ fn encrypt_decrypt_long() -> Result<()> {
         (0..num_values_too_long).map(|_| rand::thread_rng().gen_range(0..input_domain)).collect();
     let plaintext_too_long = HashMap::from([(DEFAULT_ID, input_values_too_long.as_slice())]);
     match encrypt(&plaintext_too_long, &packed_vector_configs, &secret_key, &params, &mut prng) {
-        Err(e) => expect_that!(e, status_is(StatusErrorCode::InvalidArgument)),
+        Err(e) => expect_that!(e, status_is(StatusErrorCode::INVALID_ARGUMENT)),
         Ok(_) => fail!("Expected call to fail")?,
     }
 
