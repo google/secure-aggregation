@@ -366,7 +366,7 @@ mod tests {
             setup
                 .verifier
                 .verify_and_include(setup.decryption_request_contribution, &mut verifier_state,),
-            status_is(status::StatusErrorCode::FAILED_PRECONDITION)
+            status_is(status::StatusErrorCode::FailedPrecondition)
                 .with_message(contains_substring("already processed."))
         )
     }
@@ -388,7 +388,7 @@ mod tests {
             setup
                 .verifier
                 .verify_and_include(setup.decryption_request_contribution, &mut verifier_state,),
-            status_is(status::StatusErrorCode::INVALID_ARGUMENT).with_message(eq(
+            status_is(status::StatusErrorCode::InvalidArgument).with_message(eq(
                 "`nonce_bounds.0` must be less than or equal to `nonce_bounds.1`"
             ))
         )
@@ -410,7 +410,7 @@ mod tests {
         // Try to merge the states, should fail.
         verify_that!(
             setup.verifier.merge_states(verifier_state_1, verifier_state_2),
-            err(status_is(status::StatusErrorCode::INVALID_ARGUMENT).with_message(eq(
+            err(status_is(status::StatusErrorCode::InvalidArgument).with_message(eq(
                 "`nonce_bounds.0` must be less than or equal to `nonce_bounds.1`"
             )))
         )
@@ -462,7 +462,7 @@ mod tests {
 
         verify_that!(
             &setup.verifier.create_partial_decryption_request(verifier_state),
-            err(status_is(status::StatusErrorCode::FAILED_PRECONDITION)
+            err(status_is(status::StatusErrorCode::FailedPrecondition)
                 .with_message(contains_substring("at least one client message ")))
         )
     }

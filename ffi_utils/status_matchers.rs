@@ -23,11 +23,11 @@ use std::result::Result;
 ///
 /// ```
 /// verify_that!(cancelled("cancelled"),
-///   status_is(StatusErrorCode::CANCELLED))?;  // Passes
+///   status_is(StatusErrorCode::Cancelled))?;  // Passes
 /// verify_that!(internal("out of bound"),
-///   status_is(StatusErrorCode::INVALID_ARGUMENT))?;   // Fails
+///   status_is(StatusErrorCode::InvalidArgument))?;   // Fails
 /// verify_that!(Ok("Some value"),
-///   status_is(StatusErrorCode::CANCELLED))?;   // Fails
+///   status_is(StatusErrorCode::Cancelled))?;   // Fails
 /// ```
 ///
 /// If you are looking for the Rust correspondent to `testing::status::IsOk()`
@@ -158,38 +158,38 @@ mod tests {
 
     #[gtest]
     fn matches_status() -> Result<()> {
-        verify_that!(cancelled("cancelled"), status_is(StatusErrorCode::CANCELLED))
+        verify_that!(cancelled("cancelled"), status_is(StatusErrorCode::Cancelled))
     }
 
     #[gtest]
     fn matches_status_with_message() -> Result<()> {
         verify_that!(
             cancelled("cancelled"),
-            status_is(StatusErrorCode::CANCELLED).with_message(eq("cancelled"))
+            status_is(StatusErrorCode::Cancelled).with_message(eq("cancelled"))
         )
     }
 
     #[gtest]
     fn matches_status_error() -> Result<()> {
         verify_that!(
-            StatusError::new_with_current_location(StatusErrorCode::CANCELLED, "cancelled",),
-            status_is(StatusErrorCode::CANCELLED)
+            StatusError::new_with_current_location(StatusErrorCode::Cancelled, "cancelled",),
+            status_is(StatusErrorCode::Cancelled)
         )
     }
 
     #[gtest]
     fn matches_status_error_with_message() -> Result<()> {
         verify_that!(
-            StatusError::new_with_current_location(StatusErrorCode::CANCELLED, "cancelled",),
-            status_is(StatusErrorCode::CANCELLED).with_message(eq("cancelled"))
+            StatusError::new_with_current_location(StatusErrorCode::Cancelled, "cancelled",),
+            status_is(StatusErrorCode::Cancelled).with_message(eq("cancelled"))
         )
     }
 
     #[gtest]
     fn wrong_code_failure_message() -> Result<()> {
         let result = verify_that!(
-            StatusError::new_untracked(StatusErrorCode::CANCELLED, "cancelled"),
-            status_is(StatusErrorCode::INVALID_ARGUMENT)
+            StatusError::new_untracked(StatusErrorCode::Cancelled, "cancelled"),
+            status_is(StatusErrorCode::InvalidArgument)
         );
 
         verify_that!(
@@ -198,7 +198,7 @@ mod tests {
                 r#"
                     Expected: is a StatusError with code INVALID_ARGUMENT
                     Actual: StatusError {
-                        code: CANCELLED,
+                        code: Cancelled,
                         message: "cancelled",
                         loc: None,
                     },

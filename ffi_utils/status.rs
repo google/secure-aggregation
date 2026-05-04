@@ -76,24 +76,23 @@ impl Debug for ffi::FfiStatus {
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 #[non_exhaustive]
 #[repr(i32)]
-#[allow(non_camel_case_types)]
 pub enum StatusErrorCode {
-    CANCELLED = 1,
-    UNKNOWN = 2,
-    INVALID_ARGUMENT = 3,
-    DEADLINE_EXCEEDED = 4,
-    NOT_FOUND = 5,
-    ALREADY_EXISTS = 6,
-    PERMISSION_DENIED = 7,
-    RESOURCE_EXHAUSTED = 8,
-    FAILED_PRECONDITION = 9,
-    ABORTED = 10,
-    OUT_OF_RANGE = 11,
-    UNIMPLEMENTED = 12,
-    INTERNAL = 13,
-    UNAVAILABLE = 14,
-    DATA_LOSS = 15,
-    UNAUTHENTICATED = 16,
+    Cancelled = 1,
+    Unknown = 2,
+    InvalidArgument = 3,
+    DeadlineExceeded = 4,
+    NotFound = 5,
+    AlreadyExists = 6,
+    PermissionDenied = 7,
+    ResourceExhausted = 8,
+    FailedPrecondition = 9,
+    Aborted = 10,
+    OutOfRange = 11,
+    Unimplemented = 12,
+    Internal = 13,
+    Unavailable = 14,
+    DataLoss = 15,
+    Unauthenticated = 16,
 }
 
 /// Holds a wrapped non-OK absl::Status.
@@ -137,7 +136,7 @@ impl StatusError {
 
     /// Returns the canonical error code of this status.
     pub fn code(&self) -> StatusErrorCode {
-        ffi::ffi_status_code(&self.ffi_status).try_into().unwrap_or(StatusErrorCode::UNKNOWN)
+        ffi::ffi_status_code(&self.ffi_status).try_into().unwrap_or(StatusErrorCode::Unknown)
     }
 
     /// Returns the error message associated with this error code.
@@ -188,22 +187,22 @@ impl StatusErrorCode {
     pub fn as_str(self) -> &'static str {
         // Same as `absl::StatusCodeToString`
         match self {
-            StatusErrorCode::CANCELLED => "CANCELLED",
-            StatusErrorCode::UNKNOWN => "UNKNOWN",
-            StatusErrorCode::INVALID_ARGUMENT => "INVALID_ARGUMENT",
-            StatusErrorCode::DEADLINE_EXCEEDED => "DEADLINE_EXCEEDED",
-            StatusErrorCode::NOT_FOUND => "NOT_FOUND",
-            StatusErrorCode::ALREADY_EXISTS => "ALREADY_EXISTS",
-            StatusErrorCode::PERMISSION_DENIED => "PERMISSION_DENIED",
-            StatusErrorCode::RESOURCE_EXHAUSTED => "RESOURCE_EXHAUSTED",
-            StatusErrorCode::FAILED_PRECONDITION => "FAILED_PRECONDITION",
-            StatusErrorCode::ABORTED => "ABORTED",
-            StatusErrorCode::OUT_OF_RANGE => "OUT_OF_RANGE",
-            StatusErrorCode::UNIMPLEMENTED => "UNIMPLEMENTED",
-            StatusErrorCode::INTERNAL => "INTERNAL",
-            StatusErrorCode::UNAVAILABLE => "UNAVAILABLE",
-            StatusErrorCode::DATA_LOSS => "DATA_LOSS",
-            StatusErrorCode::UNAUTHENTICATED => "UNAUTHENTICATED",
+            StatusErrorCode::Cancelled => "CANCELLED",
+            StatusErrorCode::Unknown => "UNKNOWN",
+            StatusErrorCode::InvalidArgument => "INVALID_ARGUMENT",
+            StatusErrorCode::DeadlineExceeded => "DEADLINE_EXCEEDED",
+            StatusErrorCode::NotFound => "NOT_FOUND",
+            StatusErrorCode::AlreadyExists => "ALREADY_EXISTS",
+            StatusErrorCode::PermissionDenied => "PERMISSION_DENIED",
+            StatusErrorCode::ResourceExhausted => "RESOURCE_EXHAUSTED",
+            StatusErrorCode::FailedPrecondition => "FAILED_PRECONDITION",
+            StatusErrorCode::Aborted => "ABORTED",
+            StatusErrorCode::OutOfRange => "OUT_OF_RANGE",
+            StatusErrorCode::Unimplemented => "UNIMPLEMENTED",
+            StatusErrorCode::Internal => "INTERNAL",
+            StatusErrorCode::Unavailable => "UNAVAILABLE",
+            StatusErrorCode::DataLoss => "DATA_LOSS",
+            StatusErrorCode::Unauthenticated => "UNAUTHENTICATED",
         }
     }
 }
@@ -213,22 +212,22 @@ impl TryFrom<i32> for StatusErrorCode {
 
     fn try_from(value: i32) -> Result<Self, Self::Error> {
         Ok(match value {
-            1 => StatusErrorCode::CANCELLED,
-            2 => StatusErrorCode::UNKNOWN,
-            3 => StatusErrorCode::INVALID_ARGUMENT,
-            4 => StatusErrorCode::DEADLINE_EXCEEDED,
-            5 => StatusErrorCode::NOT_FOUND,
-            6 => StatusErrorCode::ALREADY_EXISTS,
-            7 => StatusErrorCode::PERMISSION_DENIED,
-            8 => StatusErrorCode::RESOURCE_EXHAUSTED,
-            9 => StatusErrorCode::FAILED_PRECONDITION,
-            10 => StatusErrorCode::ABORTED,
-            11 => StatusErrorCode::OUT_OF_RANGE,
-            12 => StatusErrorCode::UNIMPLEMENTED,
-            13 => StatusErrorCode::INTERNAL,
-            14 => StatusErrorCode::UNAVAILABLE,
-            15 => StatusErrorCode::DATA_LOSS,
-            16 => StatusErrorCode::UNAUTHENTICATED,
+            1 => StatusErrorCode::Cancelled,
+            2 => StatusErrorCode::Unknown,
+            3 => StatusErrorCode::InvalidArgument,
+            4 => StatusErrorCode::DeadlineExceeded,
+            5 => StatusErrorCode::NotFound,
+            6 => StatusErrorCode::AlreadyExists,
+            7 => StatusErrorCode::PermissionDenied,
+            8 => StatusErrorCode::ResourceExhausted,
+            9 => StatusErrorCode::FailedPrecondition,
+            10 => StatusErrorCode::Aborted,
+            11 => StatusErrorCode::OutOfRange,
+            12 => StatusErrorCode::Unimplemented,
+            13 => StatusErrorCode::Internal,
+            14 => StatusErrorCode::Unavailable,
+            15 => StatusErrorCode::DataLoss,
+            16 => StatusErrorCode::Unauthenticated,
             _ => return Err(StatusErrorCodeTryFromError(())),
         })
     }
@@ -273,8 +272,8 @@ impl std::fmt::Display for StatusErrorCodeTryFromError {
         write!(
             f,
             "error status code out of range: must be between {} and {}",
-            StatusErrorCode::CANCELLED as i32,
-            StatusErrorCode::UNAUTHENTICATED as i32
+            StatusErrorCode::Cancelled as i32,
+            StatusErrorCode::Unauthenticated as i32
         )
     }
 }
@@ -305,18 +304,18 @@ pub fn rust_status_from_cpp(status: ffi::FfiStatus) -> Status {
 
 #[track_caller]
 pub fn cancelled(msg: &str) -> StatusError {
-    StatusError::new(StatusErrorCode::CANCELLED, msg.as_bytes(), core::panic::Location::caller())
+    StatusError::new(StatusErrorCode::Cancelled, msg.as_bytes(), core::panic::Location::caller())
 }
 
 #[track_caller]
 pub fn unknown(msg: &str) -> StatusError {
-    StatusError::new(StatusErrorCode::UNKNOWN, msg.as_bytes(), core::panic::Location::caller())
+    StatusError::new(StatusErrorCode::Unknown, msg.as_bytes(), core::panic::Location::caller())
 }
 
 #[track_caller]
 pub fn invalid_argument(msg: &str) -> StatusError {
     StatusError::new(
-        StatusErrorCode::INVALID_ARGUMENT,
+        StatusErrorCode::InvalidArgument,
         msg.as_bytes(),
         core::panic::Location::caller(),
     )
@@ -325,7 +324,7 @@ pub fn invalid_argument(msg: &str) -> StatusError {
 #[track_caller]
 pub fn deadline_exceeded(msg: &str) -> StatusError {
     StatusError::new(
-        StatusErrorCode::DEADLINE_EXCEEDED,
+        StatusErrorCode::DeadlineExceeded,
         msg.as_bytes(),
         core::panic::Location::caller(),
     )
@@ -333,13 +332,13 @@ pub fn deadline_exceeded(msg: &str) -> StatusError {
 
 #[track_caller]
 pub fn not_found(msg: &str) -> StatusError {
-    StatusError::new(StatusErrorCode::NOT_FOUND, msg.as_bytes(), core::panic::Location::caller())
+    StatusError::new(StatusErrorCode::NotFound, msg.as_bytes(), core::panic::Location::caller())
 }
 
 #[track_caller]
 pub fn already_exists(msg: &str) -> StatusError {
     StatusError::new(
-        StatusErrorCode::ALREADY_EXISTS,
+        StatusErrorCode::AlreadyExists,
         msg.as_bytes(),
         core::panic::Location::caller(),
     )
@@ -348,7 +347,7 @@ pub fn already_exists(msg: &str) -> StatusError {
 #[track_caller]
 pub fn permission_denied(msg: &str) -> StatusError {
     StatusError::new(
-        StatusErrorCode::PERMISSION_DENIED,
+        StatusErrorCode::PermissionDenied,
         msg.as_bytes(),
         core::panic::Location::caller(),
     )
@@ -357,7 +356,7 @@ pub fn permission_denied(msg: &str) -> StatusError {
 #[track_caller]
 pub fn resource_exhausted(msg: &str) -> StatusError {
     StatusError::new(
-        StatusErrorCode::RESOURCE_EXHAUSTED,
+        StatusErrorCode::ResourceExhausted,
         msg.as_bytes(),
         core::panic::Location::caller(),
     )
@@ -366,7 +365,7 @@ pub fn resource_exhausted(msg: &str) -> StatusError {
 #[track_caller]
 pub fn failed_precondition(msg: &str) -> StatusError {
     StatusError::new(
-        StatusErrorCode::FAILED_PRECONDITION,
+        StatusErrorCode::FailedPrecondition,
         msg.as_bytes(),
         core::panic::Location::caller(),
     )
@@ -374,18 +373,18 @@ pub fn failed_precondition(msg: &str) -> StatusError {
 
 #[track_caller]
 pub fn aborted(msg: &str) -> StatusError {
-    StatusError::new(StatusErrorCode::ABORTED, msg.as_bytes(), core::panic::Location::caller())
+    StatusError::new(StatusErrorCode::Aborted, msg.as_bytes(), core::panic::Location::caller())
 }
 
 #[track_caller]
 pub fn out_of_range(msg: &str) -> StatusError {
-    StatusError::new(StatusErrorCode::OUT_OF_RANGE, msg.as_bytes(), core::panic::Location::caller())
+    StatusError::new(StatusErrorCode::OutOfRange, msg.as_bytes(), core::panic::Location::caller())
 }
 
 #[track_caller]
 pub fn unimplemented(msg: &str) -> StatusError {
     StatusError::new(
-        StatusErrorCode::UNIMPLEMENTED,
+        StatusErrorCode::Unimplemented,
         msg.as_bytes(),
         core::panic::Location::caller(),
     )
@@ -393,23 +392,23 @@ pub fn unimplemented(msg: &str) -> StatusError {
 
 #[track_caller]
 pub fn internal(msg: &str) -> StatusError {
-    StatusError::new(StatusErrorCode::INTERNAL, msg.as_bytes(), core::panic::Location::caller())
+    StatusError::new(StatusErrorCode::Internal, msg.as_bytes(), core::panic::Location::caller())
 }
 
 #[track_caller]
 pub fn unavailable(msg: &str) -> StatusError {
-    StatusError::new(StatusErrorCode::UNAVAILABLE, msg.as_bytes(), core::panic::Location::caller())
+    StatusError::new(StatusErrorCode::Unavailable, msg.as_bytes(), core::panic::Location::caller())
 }
 
 #[track_caller]
 pub fn data_loss(msg: &str) -> StatusError {
-    StatusError::new(StatusErrorCode::DATA_LOSS, msg.as_bytes(), core::panic::Location::caller())
+    StatusError::new(StatusErrorCode::DataLoss, msg.as_bytes(), core::panic::Location::caller())
 }
 
 #[track_caller]
 pub fn unauthenticated(msg: &str) -> StatusError {
     StatusError::new(
-        StatusErrorCode::UNAUTHENTICATED,
+        StatusErrorCode::Unauthenticated,
         msg.as_bytes(),
         core::panic::Location::caller(),
     )
@@ -442,7 +441,7 @@ mod tests {
     #[gtest]
     fn test() -> Result<()> {
         let status = fail_whale();
-        if status.is_err() && status.as_ref().err().unwrap().code() == StatusErrorCode::CANCELLED {
+        if status.is_err() && status.as_ref().err().unwrap().code() == StatusErrorCode::Cancelled {
             Ok(())
         } else {
             fail!("unexpected status: {:?}", status)
@@ -481,7 +480,7 @@ mod tests {
 
     #[gtest]
     fn test_ffi_status_from_status_error() {
-        let error = StatusError::new_untracked(StatusErrorCode::CANCELLED, b"test");
+        let error = StatusError::new_untracked(StatusErrorCode::Cancelled, b"test");
         let ffi_status: ffi::FfiStatus = error.into();
         expect_eq!(ffi_status_code(&ffi_status), 1);
         expect_eq!(ffi_status_message(&ffi_status), b"test");
@@ -492,7 +491,7 @@ mod tests {
         let ffi_status = ffi::make_ffi_status(1, b"test");
         let rust_status = rust_status_from_cpp(ffi_status);
         assert!(rust_status.is_err());
-        expect_eq!(&rust_status.as_ref().err().unwrap().code(), &StatusErrorCode::CANCELLED);
+        expect_eq!(&rust_status.as_ref().err().unwrap().code(), &StatusErrorCode::Cancelled);
         expect_eq!(&rust_status.as_ref().err().unwrap().message_bytes(), &b"test");
     }
 
@@ -506,9 +505,9 @@ mod tests {
 
     #[gtest]
     fn test_ffi_status_from_non_ok_status() {
-        let rust_status = Err(StatusError::new_untracked(StatusErrorCode::CANCELLED, b"test"));
+        let rust_status = Err(StatusError::new_untracked(StatusErrorCode::Cancelled, b"test"));
         let ffi_status: ffi::FfiStatus = rust_status.into();
-        expect_eq!(ffi_status_code(&ffi_status), StatusErrorCode::CANCELLED as i32);
+        expect_eq!(ffi_status_code(&ffi_status), StatusErrorCode::Cancelled as i32);
         expect_eq!(ffi_status_message(&ffi_status), b"test");
     }
 }

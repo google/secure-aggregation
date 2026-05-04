@@ -940,7 +940,7 @@ mod test {
         let pt_1 = generate_random_signed_vector(NUM_VALUES_1, MAX_ABSOLUTE_VALUE);
         let mut pt_2 = generate_random_signed_vector(NUM_VALUES_2, MAX_ABSOLUTE_VALUE);
         let res = ahe.add_plaintexts_in_place(&pt_1, &mut pt_2);
-        verify_that!(res, status_is(StatusErrorCode::INVALID_ARGUMENT))?;
+        verify_that!(res, status_is(StatusErrorCode::InvalidArgument))?;
 
         // Create new plaintexts.
         let pt_1 = generate_random_signed_vector(NUM_VALUES_1, MAX_ABSOLUTE_VALUE);
@@ -951,7 +951,7 @@ mod test {
         let (ct_1, _) = ahe.encrypt(&pt_1, &pk, &mut prng)?;
         let (mut ct_2, _) = ahe.encrypt(&pt_2, &pk, &mut prng)?;
         let res = ahe.add_ciphertexts_in_place(&ct_1, &mut ct_2);
-        verify_that!(res, status_is(StatusErrorCode::INVALID_ARGUMENT))?;
+        verify_that!(res, status_is(StatusErrorCode::InvalidArgument))?;
 
         // Create new ciphertexts.
         let (ct_1, _) = ahe.encrypt(&pt_1, &pk, &mut prng)?;
@@ -974,7 +974,7 @@ mod test {
 
         // Recovery, check that we can't combine different lengths.
         let res = ahe.recover(&partial_decryption_1, &ct_2.component_b, None);
-        verify_that!(res, status_is(StatusErrorCode::INVALID_ARGUMENT))?;
+        verify_that!(res, status_is(StatusErrorCode::InvalidArgument))?;
 
         Ok(())
     }
