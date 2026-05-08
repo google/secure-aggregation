@@ -17,16 +17,22 @@ use ahe_traits::AheBase;
 use kahe_traits::{HasKahe, KaheBase};
 use messages_rust_proto::{
     CiphertextContribution as CiphertextContributionProto, ClientMessage as ClientMessageProto,
+    DPSetupContribution as DPSetupContributionProto,
     DecryptionRequestContribution as DecryptionRequestContributionProto,
+    KeyContribution as KeyContributionProto,
     PartialDecryptionRequest as PartialDecryptionRequestProto,
     PartialDecryptionResponse as PartialDecryptionResponseProto,
+    RecoveryRequest as RecoveryRequestProto, RecoveryResponse as RecoveryResponseProto,
+    SecretSharingContribution as SecretSharingContributionProto,
+    SetupContribution as SetupContributionProto,
+    VerifyKeyContributionsRequest as VerifyKeyContributionsRequestProto,
 };
-use proofs_rust_proto::RlweRelationProofListProto;
+use proofs_rust_proto::{RlweRelationProofListProto, RlweRelationProofProto};
 use proto_serialization_traits::{FromProto, ToProto};
 use protobuf::{proto, AsView};
 use shell_ciphertexts_rust_proto::{
     ShellAheCiphertext, ShellAhePartialDecCiphertext, ShellAhePartialDecryption,
-    ShellAheRecoverCiphertext, ShellKaheCiphertext,
+    ShellAhePublicKeyShare, ShellAheRecoverCiphertext, ShellKaheCiphertext,
 };
 use status::StatusError;
 use std::fmt::Debug;
@@ -417,6 +423,289 @@ pub struct RecoveryResponse {
 /// and construct the aggregated public key.
 pub struct VerifyKeyContributionsRequest<Vahe: VaheBase> {
     pub key_contributions: Vec<KeyContribution<Vahe>>,
+}
+
+// --- ToProto / FromProto implementations for wire messages ---
+
+impl ToProto for SecretSharingContribution {
+    type Proto = SecretSharingContributionProto;
+
+    fn to_proto(&self, _ctx: ()) -> Result<Self::Proto, StatusError> {
+        Ok(proto!(SecretSharingContributionProto { encrypted_share: self.encrypted_share.clone() }))
+    }
+}
+
+impl FromProto for SecretSharingContribution {
+    type Proto = SecretSharingContributionProto;
+
+    fn from_proto(
+        proto: impl AsView<Proxied = Self::Proto>,
+        _ctx: (),
+    ) -> Result<Self, StatusError> {
+        let proto = proto.as_view();
+        Ok(SecretSharingContribution { encrypted_share: proto.encrypted_share().to_vec() })
+    }
+}
+
+impl<'a, C, Vahe> ToProto<&'a C> for DPSetupContribution<Vahe>
+where
+    C: HasVahe<Vahe = Vahe>,
+    Vahe: VaheBase + 'a,
+    Vahe::PartialDecCiphertext: ToProto<&'a Vahe, Proto = ShellAhePartialDecCiphertext>,
+    Vahe::EncryptionProof: ToProto<Proto = RlweRelationProofListProto>,
+{
+    type Proto = DPSetupContributionProto;
+
+    fn to_proto(&self, context: &'a C) -> Result<Self::Proto, StatusError> {
+        let mut proto = proto!(DPSetupContributionProto {
+            dp_partial_dec_ciphertext: self.dp_partial_dec_ciphertext.to_proto(context.vahe())?,
+        });
+        if let Some(proof) = &self.dp_partial_dec_ciphertext_proof {
+            proto.set_dp_partial_dec_ciphertext_proof(proof.to_proto(())?);
+        }
+        Ok(proto)
+    }
+}
+
+impl<'a, C, Vahe> FromProto<&'a C> for DPSetupContribution<Vahe>
+where
+    C: HasVahe<Vahe = Vahe>,
+    Vahe: VaheBase + 'a,
+    Vahe::PartialDecCiphertext: FromProto<&'a Vahe, Proto = ShellAhePartialDecCiphertext>,
+    Vahe::EncryptionProof: FromProto<Proto = RlweRelationProofListProto>,
+{
+    type Proto = DPSetupContributionProto;
+
+    fn from_proto(
+        proto: impl AsView<Proxied = Self::Proto>,
+        context: &'a C,
+    ) -> Result<Self, StatusError> {
+        let proto = proto.as_view();
+        let dp_partial_dec_ciphertext_proof = if proto.has_dp_partial_dec_ciphertext_proof() {
+            Some(Vahe::EncryptionProof::from_proto(proto.dp_partial_dec_ciphertext_proof(), ())?)
+        } else {
+            None
+        };
+        Ok(DPSetupContribution {
+            dp_partial_dec_ciphertext: Vahe::PartialDecCiphertext::from_proto(
+                proto.dp_partial_dec_ciphertext(),
+                context.vahe(),
+            )?,
+            dp_partial_dec_ciphertext_proof,
+        })
+    }
+}
+
+impl<'a, C, Vahe> ToProto<&'a C> for KeyContribution<Vahe>
+where
+    C: HasVahe<Vahe = Vahe>,
+    Vahe: VaheBase + 'a,
+    Vahe::PublicKeyShare: ToProto<&'a Vahe, Proto = ShellAhePublicKeyShare>,
+    Vahe::KeyGenProof: ToProto<Proto = RlweRelationProofProto>,
+{
+    type Proto = KeyContributionProto;
+
+    fn to_proto(&self, context: &'a C) -> Result<Self::Proto, StatusError> {
+        let mut proto = proto!(KeyContributionProto {
+            public_key_share: self.public_key_share.to_proto(context.vahe())?,
+        });
+        if let Some(proof) = &self.proof {
+            proto.set_proof(proof.to_proto(())?);
+        }
+        Ok(proto)
+    }
+}
+
+impl<'a, C, Vahe> FromProto<&'a C> for KeyContribution<Vahe>
+where
+    C: HasVahe<Vahe = Vahe>,
+    Vahe: VaheBase + 'a,
+    Vahe::PublicKeyShare: FromProto<&'a Vahe, Proto = ShellAhePublicKeyShare>,
+    Vahe::KeyGenProof: FromProto<Proto = RlweRelationProofProto>,
+{
+    type Proto = KeyContributionProto;
+
+    fn from_proto(
+        proto: impl AsView<Proxied = Self::Proto>,
+        context: &'a C,
+    ) -> Result<Self, StatusError> {
+        let proto = proto.as_view();
+        let proof = if proto.has_proof() {
+            Some(Vahe::KeyGenProof::from_proto(proto.proof(), ())?)
+        } else {
+            None
+        };
+        Ok(KeyContribution {
+            public_key_share: Vahe::PublicKeyShare::from_proto(
+                proto.public_key_share(),
+                context.vahe(),
+            )?,
+            proof,
+        })
+    }
+}
+
+impl<'a, C, Vahe> ToProto<&'a C> for SetupContribution<Vahe>
+where
+    C: HasVahe<Vahe = Vahe>,
+    Vahe: VaheBase + 'a,
+    Vahe::PublicKeyShare: ToProto<&'a Vahe, Proto = ShellAhePublicKeyShare>,
+    Vahe::PartialDecCiphertext: ToProto<&'a Vahe, Proto = ShellAhePartialDecCiphertext>,
+    Vahe::KeyGenProof: ToProto<Proto = RlweRelationProofProto>,
+    Vahe::EncryptionProof: ToProto<Proto = RlweRelationProofListProto>,
+{
+    type Proto = SetupContributionProto;
+
+    fn to_proto(&self, context: &'a C) -> Result<Self::Proto, StatusError> {
+        let mut proto = proto!(SetupContributionProto {
+            key_contribution: self.key_contribution.to_proto(context)?,
+        });
+        if let Some(dp_setup) = &self.dp_setup {
+            proto.set_dp_setup(dp_setup.to_proto(context)?);
+        }
+        if let Some(shares) = &self.encrypted_randomness_shares {
+            for share in shares {
+                proto.encrypted_randomness_shares_mut().push(share.to_proto(())?);
+            }
+        }
+        Ok(proto)
+    }
+}
+
+impl<'a, C, Vahe> FromProto<&'a C> for SetupContribution<Vahe>
+where
+    C: HasVahe<Vahe = Vahe>,
+    Vahe: VaheBase + 'a,
+    Vahe::PublicKeyShare: FromProto<&'a Vahe, Proto = ShellAhePublicKeyShare>,
+    Vahe::PartialDecCiphertext: FromProto<&'a Vahe, Proto = ShellAhePartialDecCiphertext>,
+    Vahe::KeyGenProof: FromProto<Proto = RlweRelationProofProto>,
+    Vahe::EncryptionProof: FromProto<Proto = RlweRelationProofListProto>,
+{
+    type Proto = SetupContributionProto;
+
+    fn from_proto(
+        proto: impl AsView<Proxied = Self::Proto>,
+        context: &'a C,
+    ) -> Result<Self, StatusError> {
+        let proto = proto.as_view();
+        let dp_setup = if proto.has_dp_setup() {
+            Some(DPSetupContribution::from_proto(proto.dp_setup(), context)?)
+        } else {
+            None
+        };
+        let encrypted_randomness_shares = {
+            let shares: Result<Vec<_>, _> = proto
+                .encrypted_randomness_shares()
+                .iter()
+                .map(|s| SecretSharingContribution::from_proto(s, ()))
+                .collect();
+            let shares = shares?;
+            if shares.is_empty() {
+                None
+            } else {
+                Some(shares)
+            }
+        };
+        Ok(SetupContribution {
+            key_contribution: KeyContribution::from_proto(proto.key_contribution(), context)?,
+            dp_setup,
+            encrypted_randomness_shares,
+        })
+    }
+}
+
+impl ToProto for RecoveryRequest {
+    type Proto = RecoveryRequestProto;
+
+    fn to_proto(&self, _ctx: ()) -> Result<Self::Proto, StatusError> {
+        let mut proto = proto!(RecoveryRequestProto {});
+        for share in &self.encrypted_shares {
+            proto.encrypted_shares_mut().push(share.to_proto(())?);
+        }
+        Ok(proto)
+    }
+}
+
+impl FromProto for RecoveryRequest {
+    type Proto = RecoveryRequestProto;
+
+    fn from_proto(
+        proto: impl AsView<Proxied = Self::Proto>,
+        _ctx: (),
+    ) -> Result<Self, StatusError> {
+        let proto = proto.as_view();
+        let encrypted_shares: Result<Vec<_>, _> = proto
+            .encrypted_shares()
+            .iter()
+            .map(|s| SecretSharingContribution::from_proto(s, ()))
+            .collect();
+        Ok(RecoveryRequest { encrypted_shares: encrypted_shares? })
+    }
+}
+
+impl ToProto for RecoveryResponse {
+    type Proto = RecoveryResponseProto;
+
+    fn to_proto(&self, _ctx: ()) -> Result<Self::Proto, StatusError> {
+        Ok(proto!(RecoveryResponseProto {
+            decrypted_shares: self.decrypted_shares.iter().map(|s| s.as_slice()),
+        }))
+    }
+}
+
+impl FromProto for RecoveryResponse {
+    type Proto = RecoveryResponseProto;
+
+    fn from_proto(
+        proto: impl AsView<Proxied = Self::Proto>,
+        _ctx: (),
+    ) -> Result<Self, StatusError> {
+        let proto = proto.as_view();
+        let decrypted_shares: Vec<Vec<u8>> =
+            proto.decrypted_shares().iter().map(|s| s.to_vec()).collect();
+        Ok(RecoveryResponse { decrypted_shares })
+    }
+}
+
+impl<'a, C, Vahe> ToProto<&'a C> for VerifyKeyContributionsRequest<Vahe>
+where
+    C: HasVahe<Vahe = Vahe>,
+    Vahe: VaheBase + 'a,
+    Vahe::PublicKeyShare: ToProto<&'a Vahe, Proto = ShellAhePublicKeyShare>,
+    Vahe::KeyGenProof: ToProto<Proto = RlweRelationProofProto>,
+{
+    type Proto = VerifyKeyContributionsRequestProto;
+
+    fn to_proto(&self, context: &'a C) -> Result<Self::Proto, StatusError> {
+        let mut proto = proto!(VerifyKeyContributionsRequestProto {});
+        for kc in &self.key_contributions {
+            proto.key_contributions_mut().push(kc.to_proto(context)?);
+        }
+        Ok(proto)
+    }
+}
+
+impl<'a, C, Vahe> FromProto<&'a C> for VerifyKeyContributionsRequest<Vahe>
+where
+    C: HasVahe<Vahe = Vahe>,
+    Vahe: VaheBase + 'a,
+    Vahe::PublicKeyShare: FromProto<&'a Vahe, Proto = ShellAhePublicKeyShare>,
+    Vahe::KeyGenProof: FromProto<Proto = RlweRelationProofProto>,
+{
+    type Proto = VerifyKeyContributionsRequestProto;
+
+    fn from_proto(
+        proto: impl AsView<Proxied = Self::Proto>,
+        context: &'a C,
+    ) -> Result<Self, StatusError> {
+        let proto = proto.as_view();
+        let key_contributions: Result<Vec<_>, _> = proto
+            .key_contributions()
+            .iter()
+            .map(|kc| KeyContribution::from_proto(kc, context))
+            .collect();
+        Ok(VerifyKeyContributionsRequest { key_contributions: key_contributions? })
+    }
 }
 
 /// Tracks a multi-decryptor's progress through the protocol.

@@ -82,3 +82,48 @@ message FinalizedAccumulatorResult {
   // result.
   bytes final_result_decryptor_state = 2;
 }
+
+// An encrypted share of the PRNG state for secret sharing.
+message SecretSharingContribution {
+  bytes encrypted_share = 1;
+}
+
+// Public key independent half of ciphertext for DP noise.
+message DPSetupContribution {
+  // The public-key-independent half of the DP noise ciphertext (component_a).
+  ShellAhePartialDecCiphertext dp_partial_dec_ciphertext = 1;
+  // Proof of correct encryption, if applicable.
+  RlweRelationProofListProto dp_partial_dec_ciphertext_proof = 2;
+}
+
+// A public key share and proof of knowledge of the secret key from a decryptor.
+message KeyContribution {
+  ShellAhePublicKeyShare public_key_share = 1;
+  // Optional: absent if this is the only reputable decryptor.
+  RlweRelationProofProto proof = 2;
+}
+
+// The initial contribution to the decryption key from a decryptor.
+message SetupContribution {
+  KeyContribution key_contribution = 1;
+  // Only present if DP noise is being added.
+  DPSetupContribution dp_setup = 2;
+  // Encrypted randomness shares, only used by non-reputable decryptors.
+  repeated SecretSharingContribution encrypted_randomness_shares = 3;
+}
+
+// A request to a surviving decryptor to decrypt shares of dropped decryptors.
+message RecoveryRequest {
+  repeated SecretSharingContribution encrypted_shares = 1;
+}
+
+// A response containing the decrypted shares of dropped decryptors.
+message RecoveryResponse {
+  repeated bytes decrypted_shares = 1;
+}
+
+// A request from the coordinator to reputable decryptors to verify key
+// contributions.
+message VerifyKeyContributionsRequest {
+  repeated KeyContribution key_contributions = 1;
+}
