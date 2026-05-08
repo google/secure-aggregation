@@ -250,6 +250,7 @@ where
             state.validate()?;
             Ok(PartialDecryptionRequest {
                 partial_dec_ciphertext: state.partial_dec_ciphertext_sum,
+                aggregation_config: None,
             })
         } else {
             Err(status::failed_precondition(

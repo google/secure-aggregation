@@ -12,20 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use aggregation_config::AggregationConfig;
 use ahe_traits::{AheKeygen, PartialDec};
 use decryptor_traits::SecureAggregationDecryptor;
+use kahe_traits::KaheBase;
 use messages::{DecryptorPublicKeyShare, PartialDecryptionRequest, PartialDecryptionResponse};
 use messages_rust_proto::DecryptorStateProto;
 use prng_traits::SecurePrng;
 use proto_serialization_traits::{FromProto, ToProto};
 use protobuf::AsView;
 use shell_ciphertexts_rust_proto::ShellAheSecretKeyShare;
+use shell_kahe::ShellKahe;
 use status::StatusError;
 use std::cell::RefCell;
 use std::rc::Rc;
 use vahe_traits::{EncryptVerify, HasVahe, VaheBase};
 
-/// Lightweight decryptor directly exposing KAHE/VAHE types. It verifies only the client proofs,
+/// Lightweight decryptor directly exposing VAHE types. It verifies only the client proofs,
 /// does not provide verifiable partial decryptions.
 pub struct WillowV1Decryptor<Vahe: VaheBase> {
     pub vahe: Rc<Vahe>,
@@ -48,12 +51,14 @@ impl<Vahe: VaheBase> WillowV1Decryptor<Vahe> {
 }
 
 pub struct DecryptorState<Vahe: VaheBase> {
-    sk_share: Option<Vahe::SecretKeyShare>,
+    pub sk_share: Option<Vahe::SecretKeyShare>,
+    pub kahe: Option<Rc<ShellKahe>>,
+    pub aggregation_config: Option<AggregationConfig>,
 }
 
 impl<Vahe: VaheBase> Default for DecryptorState<Vahe> {
     fn default() -> Self {
-        Self { sk_share: None }
+        Self { sk_share: None, kahe: None, aggregation_config: None }
     }
 }
 
@@ -69,6 +74,9 @@ where
         let mut proto = DecryptorStateProto::new();
         if let Some(sk) = &self.sk_share {
             proto.set_sk_share(sk.to_proto(context.vahe())?);
+        }
+        if let Some(config) = &self.aggregation_config {
+            proto.set_aggregation_config(config.to_proto(())?);
         }
         Ok(proto)
     }
@@ -92,7 +100,19 @@ where
         } else {
             None
         };
-        Ok(DecryptorState { sk_share })
+        let aggregation_config = if proto.has_aggregation_config() {
+            Some(AggregationConfig::from_proto(proto.aggregation_config(), ())?)
+        } else {
+            None
+        };
+        let kahe = if let Some(config) = &aggregation_config {
+            use shell_parameters::create_shell_configs;
+            let (kahe_config, _) = create_shell_configs(config)?;
+            Some(Rc::new(ShellKahe::new(kahe_config, &config.key_id)?))
+        } else {
+            None
+        };
+        Ok(DecryptorState { sk_share, kahe, aggregation_config })
     }
 }
 
@@ -104,6 +124,7 @@ where
     Vahe: VaheBase + EncryptVerify + PartialDec + AheKeygen,
 {
     type DecryptorState = DecryptorState<Vahe>;
+    type Kahe = ShellKahe;
 
     /// Creates a public key share to be sent to the Server, updating the
     /// decryptor state.
@@ -121,8 +142,16 @@ where
     fn handle_partial_decryption_request(
         &self,
         partial_decryption_request: PartialDecryptionRequest<Vahe>,
-        decryptor_state: &Self::DecryptorState,
-    ) -> Result<PartialDecryptionResponse<Vahe>, status::StatusError> {
+        decryptor_state: &mut Self::DecryptorState,
+    ) -> Result<PartialDecryptionResponse<ShellKahe, Vahe>, status::StatusError> {
+        if let Some(config) = &partial_decryption_request.aggregation_config {
+            if decryptor_state.kahe.is_none() {
+                use shell_parameters::create_shell_configs;
+                let (kahe_config, _) = create_shell_configs(config)?;
+                decryptor_state.kahe = Some(Rc::new(ShellKahe::new(kahe_config, &config.key_id)?));
+                decryptor_state.aggregation_config = Some(config.clone());
+            }
+        }
         let Some(ref sk_share) = decryptor_state.sk_share else {
             return Err(status::failed_precondition(
                 "decryptor_state does not contain a secret key share",
@@ -134,7 +163,7 @@ where
             sk_share,
             &mut self.prng.borrow_mut(),
         )?;
-        Ok(PartialDecryptionResponse { partial_decryption: pd })
+        Ok(PartialDecryptionResponse { partial_decryption: pd, dp_ciphertext_contribution: None })
     }
 }
 
@@ -171,6 +200,40 @@ mod tests {
         let decryptor_state_roundtrip =
             DecryptorState::from_proto(decryptor_state_proto, &decryptor)?;
         verify_true!(decryptor_state_roundtrip.sk_share.is_some())?;
+
+        Ok(())
+    }
+
+    #[gtest]
+    fn decryptor_state_with_config_roundtrip() -> googletest::Result<()> {
+        use kahe_traits::KaheBase;
+        use shell_kahe::ShellKahe;
+        use shell_parameters::create_shell_kahe_config;
+        use testing_utils::generate_aggregation_config;
+
+        let vahe =
+            Rc::new(ShellVahe::new(create_shell_ahe_config(1).unwrap(), CONTEXT_STRING).unwrap());
+        let decryptor = WillowV1Decryptor::new_with_randomly_generated_seed(vahe)?;
+
+        let config = generate_aggregation_config("default".to_string(), 16, 10, 1, 1);
+        let kahe_config = create_shell_kahe_config(&config).unwrap();
+        let kahe = Rc::new(ShellKahe::new(kahe_config, &config.key_id).unwrap());
+
+        let mut decryptor_state = DecryptorState::default();
+        decryptor.create_public_key_share(&mut decryptor_state)?;
+        decryptor_state.kahe = Some(kahe);
+        decryptor_state.aggregation_config = Some(config);
+
+        verify_true!(decryptor_state.kahe.is_some())?;
+        verify_true!(decryptor_state.aggregation_config.is_some())?;
+
+        let decryptor_state_proto = decryptor_state.to_proto(&decryptor)?;
+        let decryptor_state_roundtrip =
+            DecryptorState::from_proto(decryptor_state_proto, &decryptor)?;
+
+        verify_true!(decryptor_state_roundtrip.sk_share.is_some())?;
+        verify_true!(decryptor_state_roundtrip.kahe.is_some())?;
+        verify_true!(decryptor_state_roundtrip.aggregation_config.is_some())?;
 
         Ok(())
     }

@@ -52,6 +52,13 @@ impl HasVahe for ShellTestingDecryptor {
     }
 }
 
+impl kahe_traits::HasKahe for ShellTestingDecryptor {
+    type Kahe = ShellKahe;
+    fn kahe(&self) -> &Self::Kahe {
+        &self.kahe
+    }
+}
+
 impl ShellTestingDecryptor {
     /// Creates a new ShellTestingDecryptor, using the given context string to seed KAHE and AHE
     /// public parameters.
@@ -157,7 +164,7 @@ impl ShellTestingDecryptor {
     fn generate_partial_decryption_response(
         &mut self,
         request: &PartialDecryptionRequest<ShellVahe>,
-    ) -> Result<PartialDecryptionResponse<ShellVahe>, StatusError> {
+    ) -> Result<PartialDecryptionResponse<ShellKahe, ShellVahe>, StatusError> {
         match &self.secret_key {
             None => Err(status::invalid_argument("No secret key available")),
             Some(sk_share) => {
@@ -166,7 +173,10 @@ impl ShellTestingDecryptor {
                     sk_share,
                     &mut self.prng.borrow_mut(),
                 )?;
-                Ok(PartialDecryptionResponse { partial_decryption })
+                Ok(PartialDecryptionResponse {
+                    partial_decryption,
+                    dp_ciphertext_contribution: None,
+                })
             }
         }
     }
@@ -181,7 +191,7 @@ impl ShellTestingDecryptor {
         let request = PartialDecryptionRequest::from_proto(request_proto, self)?;
         let response = self.generate_partial_decryption_response(&request)?;
         response
-            .to_proto(self)
+            .to_proto((self, Some(&self.kahe)))
             .map_err(|e| status::internal(&format!("ToProto error: {}", e)))?
             .serialize()
             .map_err(|e| status::internal(&format!("Serialize error: {}", e)))

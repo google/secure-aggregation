@@ -103,7 +103,7 @@ fn encrypt_decrypt_one() -> googletest::Result<()> {
     let pd_ct = verifier.create_partial_decryption_request(verifier_state).unwrap();
 
     // Decryptor creates partial decryption.
-    let pd = decryptor.handle_partial_decryption_request(pd_ct, &decryptor_state).unwrap();
+    let pd = decryptor.handle_partial_decryption_request(pd_ct, &mut decryptor_state).unwrap();
 
     // Server handles the partial decryption.
     server.handle_partial_decryption(pd, &mut server_state).unwrap();
@@ -226,11 +226,11 @@ fn encrypt_decrypt_one_serialized() -> googletest::Result<()> {
         PartialDecryptionRequest::from_proto(pd_ct_proto, &decryptor)?;
 
     // Decryptor creates partial decryption.
-    let pd = decryptor.handle_partial_decryption_request(pd_ct, &decryptor_state).unwrap();
+    let pd = decryptor.handle_partial_decryption_request(pd_ct, &mut decryptor_state).unwrap();
 
     // Serialize and deserialize the partial decryption.
-    let pd_proto = pd.to_proto(&decryptor)?;
-    let pd: PartialDecryptionResponse<ShellVahe> =
+    let pd_proto = pd.to_proto((&decryptor, None))?;
+    let pd: PartialDecryptionResponse<ShellKahe, ShellVahe> =
         PartialDecryptionResponse::from_proto(pd_proto, &server)?;
 
     // Server handles the partial decryption.
@@ -348,7 +348,7 @@ fn encrypt_decrypt_multiple_clients() -> googletest::Result<()> {
         let pd_ct = verifier.create_partial_decryption_request(verifier_state).unwrap();
 
         // Decryptor creates partial decryption.
-        let pd = decryptor.handle_partial_decryption_request(pd_ct, &decryptor_state).unwrap();
+        let pd = decryptor.handle_partial_decryption_request(pd_ct, &mut decryptor_state).unwrap();
 
         // Server handles the partial decryption.
         server.handle_partial_decryption(pd, &mut server_state).unwrap();
@@ -496,7 +496,7 @@ fn encrypt_decrypt_multiple_clients_including_invalid_proofs() -> googletest::Re
     let pd_ct = verifier.create_partial_decryption_request(verifier_state).unwrap();
 
     // Decryptor creates partial decryption.
-    let pd = decryptor.handle_partial_decryption_request(pd_ct, &decryptor_state).unwrap();
+    let pd = decryptor.handle_partial_decryption_request(pd_ct, &mut decryptor_state).unwrap();
 
     // Server handles the partial decryption.
     server.handle_partial_decryption(pd, &mut server_state).unwrap();
@@ -621,7 +621,7 @@ fn encrypt_decrypt_many_clients_decryptors() -> googletest::Result<()> {
     for i in 0..NUM_DECRYPTORS {
         // Each decryptor creates partial decryption.
         let pd = decryptors[i]
-            .handle_partial_decryption_request(pd_ct.clone(), &decryptor_states[i])
+            .handle_partial_decryption_request(pd_ct.clone(), &mut decryptor_states[i])
             .unwrap();
 
         // Server handles the partial decryption.
@@ -741,7 +741,7 @@ fn encrypt_decrypt_no_dropout() -> googletest::Result<()> {
     // Decryptors perform partial decryption.
     for i in 0..decryptors.len() {
         let pd = decryptors[i]
-            .handle_partial_decryption_request(pd_ct.clone(), &decryptor_states[i])
+            .handle_partial_decryption_request(pd_ct.clone(), &mut decryptor_states[i])
             .unwrap();
         // Server handles the partial decryption.
         server.handle_partial_decryption(pd, &mut server_state).unwrap();

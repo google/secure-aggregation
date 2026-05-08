@@ -29,11 +29,13 @@ rust_library(
     deps = [
         "@protobuf//rust:protobuf",
         "//ffi_utils:status",
+        "//willow/api:aggregation_config",
         "//willow/api:proto_serialization_traits",
         "//willow/crypto:ahe_traits",
         "//willow/crypto:kahe_traits",
         "//willow/crypto:vahe_traits",
         "//willow/proto/shell:shell_ciphertexts_rust_proto",
+        "//willow/proto/willow:aggregation_config_rust_proto",
         "//willow/proto/willow:messages_rust_proto",
         "//willow/proto/zk:proofs_rust_proto",
     ],
@@ -74,6 +76,8 @@ rust_library(
     deps = [
         ":messages",
         "//ffi_utils:status",
+        "//willow/crypto:ahe_traits",
+        "//willow/crypto:kahe_traits",
         "//willow/crypto:vahe_traits",
     ],
 )
@@ -130,8 +134,10 @@ rust_test(
         "@crate_index//:googletest",
         "//willow/api:proto_serialization_traits",
         "//willow/crypto:ahe_traits",
+        "//willow/crypto:shell_kahe",
         "//willow/crypto:shell_parameters",
         "//willow/crypto:shell_vahe",
+        "//willow/testing_utils",
     ],
 )
 
@@ -145,9 +151,13 @@ rust_library(
         ":messages",
         "@protobuf//rust:protobuf",
         "//ffi_utils:status",
+        "//willow/api:aggregation_config",
         "//willow/api:proto_serialization_traits",
         "//willow/crypto:ahe_traits",
+        "//willow/crypto:kahe_traits",
         "//willow/crypto:prng_traits",
+        "//willow/crypto:shell_kahe",
+        "//willow/crypto:shell_parameters",
         "//willow/crypto:vahe_traits",
         "//willow/proto/shell:shell_ciphertexts_rust_proto",
         "//willow/proto/willow:messages_rust_proto",

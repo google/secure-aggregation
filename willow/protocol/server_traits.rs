@@ -70,7 +70,7 @@ pub trait SecureAggregationServer: HasKahe + HasVahe {
     /// server state.
     fn handle_partial_decryption(
         &self,
-        partial_decryption_response: PartialDecryptionResponse<Vahe<Self>>,
+        partial_decryption_response: PartialDecryptionResponse<Kahe<Self>, Vahe<Self>>,
         server_state: &mut Self::ServerState,
     ) -> Result<(), StatusError>;
 

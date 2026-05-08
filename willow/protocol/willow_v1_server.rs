@@ -259,9 +259,14 @@ where
     /// server state.
     fn handle_partial_decryption(
         &self,
-        partial_decryption_response: PartialDecryptionResponse<Vahe>,
+        partial_decryption_response: PartialDecryptionResponse<Kahe, Vahe>,
         server_state: &mut Self::ServerState,
     ) -> Result<(), status::StatusError> {
+        if partial_decryption_response.dp_ciphertext_contribution.is_some() {
+            return Err(status::failed_precondition(
+                "DP ciphertext contributions are not yet supported.",
+            ));
+        }
         let partial_decryption = partial_decryption_response.partial_decryption;
         if let Some(ref mut partial_decryption_sum) = server_state.partial_decryption_sum {
             self.vahe
@@ -441,7 +446,7 @@ mod tests {
         verifier.verify_and_include(decryption_request_contribution, &mut verifier_state)?;
         server.handle_ciphertext_contribution(ciphertext_contribution, &mut server_state)?;
         let pd_ct = verifier.create_partial_decryption_request(verifier_state)?;
-        let pd = decryptor.handle_partial_decryption_request(pd_ct, &decryptor_state)?;
+        let pd = decryptor.handle_partial_decryption_request(pd_ct, &mut decryptor_state)?;
         server.handle_partial_decryption(pd, &mut server_state)?;
 
         // Check populated state serialization

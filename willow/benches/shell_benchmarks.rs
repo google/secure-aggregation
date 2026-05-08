@@ -324,8 +324,10 @@ fn setup_server_recover_aggregation_result(args: &Args) -> ServerRecoverInputs {
     let pd_ct = inputs.verifier.create_partial_decryption_request(inputs.verifier_state).unwrap();
 
     // Decryptor creates partial decryption.
-    let pd =
-        inputs.decryptor.handle_partial_decryption_request(pd_ct, &inputs.decryptor_state).unwrap();
+    let pd = inputs
+        .decryptor
+        .handle_partial_decryption_request(pd_ct, &mut inputs.decryptor_state)
+        .unwrap();
 
     // Server handles the partial decryption.
     inputs.server.handle_partial_decryption(pd, &mut inputs.server_state).unwrap();
@@ -384,7 +386,7 @@ fn run_decryptor_partial_decryption(inputs: &mut DecryptorInputs) {
         .decryptor
         .handle_partial_decryption_request(
             black_box(inputs.partial_decryption_request.clone()),
-            black_box(&inputs.decryptor_state),
+            black_box(&mut inputs.decryptor_state),
         )
         .unwrap();
     let _ = black_box(res); // Prevent optimization.

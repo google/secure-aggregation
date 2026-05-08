@@ -109,6 +109,7 @@ proto_library(
     name = "messages_proto",
     srcs = ["messages.proto"],
     deps = [
+        ":aggregation_config_proto",
         "//willow/proto/shell:shell_ciphertexts_proto",
         "//willow/proto/zk:proofs_proto",
     ],

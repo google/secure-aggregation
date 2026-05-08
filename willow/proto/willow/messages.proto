@@ -17,6 +17,7 @@ syntax = "proto3";
 package secure_aggregation.willow;
 
 import "willow/proto/shell/ciphertexts.proto";
+import "willow/proto/willow/aggregation_config.proto";
 import "willow/proto/zk/proofs.proto";
 
 option java_multiple_files = true;
@@ -32,10 +33,13 @@ message ClientMessage {
 
 message PartialDecryptionRequest {
   ShellAhePartialDecCiphertext partial_dec_ciphertext = 1;
+  AggregationConfigProto aggregation_config = 2;
 }
 
 message PartialDecryptionResponse {
   ShellAhePartialDecryption partial_decryption = 1;
+  // Noise contribution to the final aggregated result.
+  CiphertextContribution dp_ciphertext_contribution = 2;
 }
 
 message CiphertextContribution {
@@ -51,6 +55,7 @@ message DecryptionRequestContribution {
 
 message DecryptorStateProto {
   ShellAheSecretKeyShare sk_share = 1;
+  AggregationConfigProto aggregation_config = 2;
 }
 
 message ServerStateProto {
