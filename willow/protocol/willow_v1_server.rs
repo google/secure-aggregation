@@ -18,7 +18,7 @@ use messages::{
     CiphertextContribution, ClientMessage, DecryptionRequestContribution, DecryptorPublicKey,
     DecryptorPublicKeyShare, PartialDecryptionResponse,
 };
-use messages_rust_proto::ServerStateProto;
+use messages_rust_proto::ServerState as ServerStateProto;
 use proto_serialization_traits::{FromProto, ToProto};
 use protobuf::AsView;
 use server_traits::SecureAggregationServer;

@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use messages::{DecryptionRequestContribution, PartialDecryptionRequest};
-use messages_rust_proto::VerifierStateProto;
+use messages_rust_proto::VerifierState as VerifierStateProto;
 use proto_serialization_traits::{FromProto, ToProto};
 use protobuf::{proto, AsView};
 use shell_ciphertexts_rust_proto::ShellAhePartialDecCiphertext;

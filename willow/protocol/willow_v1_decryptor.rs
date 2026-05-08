@@ -17,7 +17,7 @@ use ahe_traits::{AheKeygen, PartialDec};
 use decryptor_traits::SecureAggregationDecryptor;
 use kahe_traits::KaheBase;
 use messages::{DecryptorPublicKeyShare, PartialDecryptionRequest, PartialDecryptionResponse};
-use messages_rust_proto::DecryptorStateProto;
+use messages_rust_proto::DecryptorState as DecryptorStateProto;
 use prng_traits::SecurePrng;
 use proto_serialization_traits::{FromProto, ToProto};
 use protobuf::AsView;

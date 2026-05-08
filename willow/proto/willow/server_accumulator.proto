@@ -23,11 +23,11 @@ option java_multiple_files = true;
 option java_outer_classname = "ServerAccumulatorProto";
 
 message ServerAccumulatorState {
-  ServerStateProto server_state = 1;
+  ServerState server_state = 1;
   AggregationConfigProto aggregation_config = 3;
   // We have one verifier state per range of nonces processed by this
   // accumulator. States get merged when adjacent ranges are processed.
-  repeated VerifierStateProto verifier_states = 2;
+  repeated VerifierState verifier_states = 2;
   // The ranges of nonces processed by this accumulator. In the same order as
   // the corresponding verifier states.
   repeated NonceRange processed_nonce_ranges = 4;
@@ -46,6 +46,6 @@ message NonceRange {
 
 // State for creating a FinalResultDecryptor.
 message FinalResultDecryptorState {
-  ServerStateProto server_state = 1;
+  ServerState server_state = 1;
   AggregationConfigProto aggregation_config = 2;
 }

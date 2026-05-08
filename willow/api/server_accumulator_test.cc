@@ -476,7 +476,7 @@ TEST_F(ServerAccumulatorTest, VerifiesCorrectly) {
   ASSERT_TRUE(state.ParseFromString(serialized_state));
 
   ASSERT_EQ(state.verifier_states_size(), 1);
-  willow::VerifierStateProto verifier_state = state.verifier_states(0);
+  willow::VerifierState verifier_state = state.verifier_states(0);
 
   // Proto should be non-empty, i.e. the underlying Rust Option should be Some.
   ASSERT_GE(verifier_state.ByteSizeLong(), 1);

@@ -53,19 +53,19 @@ message DecryptionRequestContribution {
   bytes nonce = 3;
 }
 
-message DecryptorStateProto {
+message DecryptorState {
   ShellAheSecretKeyShare sk_share = 1;
   AggregationConfigProto aggregation_config = 2;
 }
 
-message ServerStateProto {
+message ServerState {
   map<string, ShellAhePublicKeyShare> decryptor_public_key_shares = 1;
   ShellKaheCiphertext client_sum_kahe = 2;
   ShellAheRecoverCiphertext client_sum_ahe_recover = 3;
   ShellAhePartialDecryption partial_decryption_sum = 4;
 }
 
-message VerifierStateProto {
+message VerifierState {
   ShellAhePartialDecCiphertext partial_dec_ciphertext_sum = 1;
   bytes nonce_lower_bound = 2;
   bytes nonce_upper_bound = 3;
