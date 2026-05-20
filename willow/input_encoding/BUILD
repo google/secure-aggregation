@@ -24,6 +24,25 @@ package(
 )
 
 cc_library(
+    name = "time_utils",
+    srcs = [
+        "time_utils.cc",
+    ],
+    hdrs = [
+        "time_utils.h",
+    ],
+    deps = [
+        "@protobuf//:duration_cc_proto",
+        "@protobuf//:timestamp_cc_proto",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:statusor",
+        "@abseil-cpp//absl/strings",
+        "@abseil-cpp//absl/time",
+        "//willow/proto/willow:input_spec_cc_proto",
+    ],
+)
+
+cc_library(
     name = "codec",
     srcs = [
         "codec_factory.cc",
@@ -33,12 +52,15 @@ cc_library(
         "codec_factory.h",
     ],
     deps = [
+        ":time_utils",
         "@abseil-cpp//absl/container:flat_hash_map",
         "@abseil-cpp//absl/log:check",
         "@abseil-cpp//absl/memory",
         "@abseil-cpp//absl/status",
         "@abseil-cpp//absl/status:statusor",
         "@abseil-cpp//absl/strings",
+        "@abseil-cpp//absl/time",
+        "//ffi_utils:status_macros",
         "//willow/proto/willow:input_spec_cc_proto",
     ],
 )
@@ -48,12 +70,30 @@ cc_test(
     srcs = ["explicit_codec_test.cc"],
     deps = [
         ":codec",
+        ":time_utils",
+        "@protobuf//:duration_cc_proto",
         "@googletest//:gtest_main",
         "@abseil-cpp//absl/container:flat_hash_map",
         "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/time",
         "//ffi_utils:status_matchers",
         "//willow/proto/willow:input_spec_cc_proto",
         "//willow/testing_utils:testing_utils_cc",
+    ],
+)
+
+cc_test(
+    name = "time_utils_test",
+    srcs = ["time_utils_test.cc"],
+    deps = [
+        ":time_utils",
+        "@protobuf//:duration_cc_proto",
+        "@protobuf//:timestamp_cc_proto",
+        "@googletest//:gtest_main",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/time",
+        "//ffi_utils:status_matchers",
+        "//willow/proto/willow:input_spec_cc_proto",
     ],
 )
 

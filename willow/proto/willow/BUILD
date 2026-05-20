@@ -84,6 +84,10 @@ rust_proto_library(
 proto_library(
     name = "input_spec_proto",
     srcs = ["input_spec.proto"],
+    deps = [
+        "@protobuf//:duration_proto",
+        "@protobuf//:timestamp_proto",
+    ],
 )
 
 cc_proto_library(

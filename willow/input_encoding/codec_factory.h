@@ -15,11 +15,16 @@
 #ifndef SECURE_AGGREGATION_WILLOW_INPUT_ENCODING_CODEC_FACTORY_H_
 #define SECURE_AGGREGATION_WILLOW_INPUT_ENCODING_CODEC_FACTORY_H_
 #include <cstddef>
+#include <cstdint>
 #include <memory>
+#include <optional>
+#include <string>
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/time/time.h"
 #include "willow/input_encoding/codec.h"
+#include "willow/input_encoding/time_utils.h"
 #include "willow/proto/willow/input_spec.pb.h"
 
 namespace secure_aggregation {
@@ -33,14 +38,29 @@ constexpr size_t kMaxGlobalOutputDomainSize = 1000000;
 class CodecFactory {
  public:
   // Creates an instance of ExplicitCodec.
+  //
+  // `encoding_time` is used during encoding to evaluate staleness for
+  // time domains. Must be set if the input spec contains any TimeDomain and the
+  // codec is used for encoding.
+  //
+  // `decoding_anchor_time` is used during decoding to align the modular periods
+  // back to absolute timestamps. It represents the start time of the current
+  // aggregation window. Must be set if the input spec contains any TimeDomain
+  // and the codec is used for decoding.
   static absl::StatusOr<std::unique_ptr<Codec>> CreateExplicitCodec(
-      InputSpec input_spec);
+      InputSpec input_spec,
+      std::optional<absl::Time> encoding_time = std::nullopt,
+      std::optional<absl::Time> decoding_anchor_time = std::nullopt);
 
   // Check that the combined size of the string domains is less than the
   // maximum allowed size.
   static absl::Status ValidateExplicitCodecInputSpec(
       const InputSpec& input_spec,
       size_t max_flattened_domain_size = kMaxGlobalOutputDomainSize);
+
+  // Returns the domain size of a group-by vector spec. If it is a TimeDomain,
+  // returns num_periods + 1. Otherwise, returns the number of string values.
+  static int GetDomainSize(const InputSpec::InputVectorSpec& spec);
 };
 
 }  // namespace willow

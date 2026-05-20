@@ -46,6 +46,12 @@ PYBIND11_MODULE(codec_bindings, m) {
              return self.ValidateExampleQuery(cpp_map);
            });
 
+  // Creates an ExplicitCodec from a serialized InputSpec.
+  //
+  // Remark: 'encoding_time' and 'decoding_anchor_time' are not exposed to
+  // Python because these bindings are currently only used to validate example
+  // queries (ValidateExampleQuery), which does not require encoding or
+  // decoding.
   m.def(
       "CreateExplicitCodec",
       [](const std::string& serialized_input_spec)

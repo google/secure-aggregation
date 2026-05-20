@@ -195,6 +195,7 @@ cc_test(
     srcs = ["client_test.cc"],
     deps = [
         ":client_cc",
+        "@protobuf//:duration_cc_proto",
         "@googletest//:gtest_main",
         "@abseil-cpp//absl/status",
         "//ffi_utils:status_matchers",

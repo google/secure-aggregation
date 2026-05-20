@@ -23,6 +23,7 @@
 #include "absl/status/status.h"
 #include "ffi_utils/status_matchers.h"
 #include "gmock/gmock.h"
+#include "google/protobuf/duration.pb.h"
 #include "gtest/gtest.h"
 #include "willow/input_encoding/codec.h"
 #include "willow/input_encoding/codec_factory.h"
@@ -183,6 +184,33 @@ TEST(WillowShellClientTest, CreateAggregationConfigDefaultBound) {
   const auto& vector_configs = config.vector_configs();
   ASSERT_TRUE(vector_configs.contains("metric1"));
   EXPECT_EQ(vector_configs.at("metric1").bound(), default_bound);
+}
+
+TEST(WillowShellClientTest, CreateAggregationConfigSuccessWithTimeDomain) {
+  InputSpec input_spec;
+  auto* metric_spec = input_spec.add_metric_vector_specs();
+  metric_spec->set_vector_name("metric1");
+  metric_spec->set_data_type(InputSpec::INT64);
+  metric_spec->mutable_domain_spec()->mutable_interval()->set_max(100);
+
+  auto* group_by_spec = input_spec.add_group_by_vector_specs();
+  group_by_spec->set_vector_name("time");
+  group_by_spec->set_data_type(InputSpec::STRING);
+  auto* time_domain = group_by_spec->mutable_domain_spec()->mutable_time();
+  time_domain->mutable_period_duration()->set_seconds(86400);  // 1 day
+  time_domain->set_num_periods(6);
+  time_domain->set_timezone("UTC");
+
+  SECAGG_ASSERT_OK_AND_ASSIGN(
+      AggregationConfigProto config,
+      CreateAggregationConfig(input_spec, /*key_id=*/"test",
+                              /*max_number_of_clients=*/10));
+
+  // Expected flattened_domain_size = num_periods + 1 = 7
+  const auto& vector_configs = config.vector_configs();
+  ASSERT_TRUE(vector_configs.contains("metric1"));
+  EXPECT_EQ(vector_configs.at("metric1").length(), 7);
+  EXPECT_EQ(vector_configs.at("metric1").bound(), 100);
 }
 
 TEST(WillowShellClientTest, CreateAggregationConfigFailsOnEmptyDomain) {

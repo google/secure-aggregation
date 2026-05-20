@@ -18,6 +18,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -28,7 +29,10 @@
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
+#include "absl/time/time.h"
+#include "ffi_utils/status_macros.h"
 #include "willow/input_encoding/codec.h"
+#include "willow/input_encoding/time_utils.h"
 #include "willow/proto/willow/input_spec.pb.h"
 
 namespace secure_aggregation {
@@ -87,6 +91,12 @@ class ExplicitCodecImpl : public Codec {
   // The indices within their respective domain of each group-by key.
   absl::flat_hash_map<GroupDomainKey, int> group_by_domain_indices_;
 
+  std::optional<absl::Time> encoding_time_;
+  std::optional<absl::Time> decoding_anchor_time_;
+
+  // Map of group-by key names to their TimeDomainInfo if they are time domains.
+  absl::flat_hash_map<std::string, TimeDomainInfo> time_domains_;
+
   absl::Status ValidateData(const GroupData& group_by_data,
                             const MetricData& metric_data) const;
 
@@ -94,35 +104,52 @@ class ExplicitCodecImpl : public Codec {
 
   size_t GetCombinedIndex(const std::vector<int>& indices) const;
 
+  int EncodeGroupValue(const std::string& group_name,
+                       const std::string& value) const;
+
+  absl::StatusOr<std::string> DecodeGroupValue(const std::string& group_name,
+                                               int bucket_index) const;
+
   explicit ExplicitCodecImpl(
       InputSpec input_spec,
       absl::flat_hash_map<std::string, const InputVectorSpec*>
           group_by_spec_map,
-      absl::flat_hash_map<std::string, const InputVectorSpec*> metric_spec_map)
+      absl::flat_hash_map<std::string, const InputVectorSpec*> metric_spec_map,
+      std::optional<absl::Time> encoding_time,
+      std::optional<absl::Time> decoding_anchor_time)
       : input_spec_(std::move(input_spec)),
         group_by_spec_map_(std::move(group_by_spec_map)),
-        metric_spec_map_(std::move(metric_spec_map)) {
+        metric_spec_map_(std::move(metric_spec_map)),
+        encoding_time_(encoding_time),
+        decoding_anchor_time_(decoding_anchor_time) {
     group_by_keys_.reserve(group_by_spec_map_.size());
-    // Compute sorted group-by keys.
+    // Compute sorted group-by keys and initialize domains.
     for (const auto& [key, spec] : group_by_spec_map_) {
       group_by_keys_.push_back(spec->vector_name());
-      // Precompute indices into domains to allow efficient lookups.
-      const auto& domain = spec->domain_spec().string_values();
-      for (int i = 0; i < domain.values_size(); ++i) {
-        group_by_domain_indices_[GroupDomainKey{spec->vector_name(),
-                                                domain.values(i)}] = i;
+      if (spec->domain_spec().has_time()) {
+        // Validation in CodecFactory ensures this succeeds.
+        auto ts_info_or = ParseTimeDomain(spec->domain_spec().time());
+        CHECK(ts_info_or.ok());
+        time_domains_[spec->vector_name()] = *std::move(ts_info_or);
+      } else {
+        // Precompute indices into domains to allow efficient lookups for string
+        // domains.
+        const auto& domain = spec->domain_spec().string_values();
+        for (int i = 0; i < domain.values_size(); ++i) {
+          group_by_domain_indices_[GroupDomainKey{spec->vector_name(),
+                                                  domain.values(i)}] = i;
+        }
       }
     }
     std::sort(group_by_keys_.begin(), group_by_keys_.end());
-    // Compute the sizes of the string domains for each group-by key.
+    // Compute the sizes of the string/timestamp domains for each group-by key.
     flattened_domain_size_ = 1;
     group_by_domain_sizes_.reserve(group_by_keys_.size());
     for (const auto& key : group_by_keys_) {
       auto spec_it = group_by_spec_map_.find(key);
       CHECK(spec_it !=
             group_by_spec_map_.end());  // We expect the key to be present.
-      int domain_size =
-          spec_it->second->domain_spec().string_values().values_size();
+      int domain_size = CodecFactory::GetDomainSize(*spec_it->second);
       group_by_domain_sizes_.push_back(domain_size);
       flattened_domain_size_ *= domain_size;
     }
@@ -131,6 +158,7 @@ class ExplicitCodecImpl : public Codec {
 };
 
 absl::Status ExplicitCodecImpl::ValidateData(
+
     const GroupData& group_by_data, const MetricData& metric_data) const {
   // Check that all vectors in metric_data and group_by_data are present in
   // metric_spec_map and group_by_spec_map_, respectively. This ensures that the
@@ -207,11 +235,24 @@ absl::Status ExplicitCodecImpl::ValidateData(
     }
     // Check that all values in group_by_data are in the domain provided in the
     // input_spec.
-    for (const auto& d : data) {
-      if (!group_by_domain_indices_.contains(GroupDomainKey{name, d})) {
-        return absl::InvalidArgumentError(
-            absl::StrCat("Domain mismatch for key ", name,
-                         ": group_by_data value ", d, " not found in domain."));
+    if (spec->domain_spec().has_time()) {
+      const auto& ts_info = time_domains_.at(name);
+      for (const auto& d : data) {
+        absl::Time t;
+        std::string err;
+        if (!absl::ParseTime(ts_info.format, d, ts_info.timezone, &t, &err)) {
+          return absl::InvalidArgumentError(
+              absl::StrCat("Failed to parse timestamp ", d, " with format ",
+                           ts_info.format, ": ", err));
+        }
+      }
+    } else {
+      for (const auto& d : data) {
+        if (!group_by_domain_indices_.contains(GroupDomainKey{name, d})) {
+          return absl::InvalidArgumentError(absl::StrCat(
+              "Domain mismatch for key ", name, ": group_by_data value ", d,
+              " not found in domain."));
+        }
       }
     }
   }
@@ -251,11 +292,67 @@ size_t ExplicitCodecImpl::GetCombinedIndex(
   return combined_index;
 }
 
+// Helper function to encode a single group-by value into the corresponding
+// index in its domain.
+int ExplicitCodecImpl::EncodeGroupValue(const std::string& group_name,
+                                        const std::string& value) const {
+  auto spec_it = group_by_spec_map_.find(group_name);
+  CHECK(spec_it != group_by_spec_map_.end());
+  if (spec_it->second->domain_spec().has_time()) {
+    const auto& ts_info = time_domains_.at(group_name);
+    absl::Time t;
+    // Already validated in ValidateData.
+    CHECK(
+        absl::ParseTime(ts_info.format, value, ts_info.timezone, &t, nullptr));
+    // encoding_time_ is guaranteed to have a value if there is a time domain
+    // due to the validation check at the start of Encode().
+    return EncodeTime(t, ts_info, *encoding_time_);
+  } else {
+    auto it = group_by_domain_indices_.find(GroupDomainKey{group_name, value});
+    // ValidateData ensures the key exists in the domain.
+    CHECK(it != group_by_domain_indices_.end());
+    return it->second;
+  }
+}
+
+// Helper function to decode a bucket index back to its original string
+// representation.
+absl::StatusOr<std::string> ExplicitCodecImpl::DecodeGroupValue(
+    const std::string& group_name, int bucket_index) const {
+  auto spec_it = group_by_spec_map_.find(group_name);
+  CHECK(spec_it != group_by_spec_map_.end());
+
+  if (spec_it->second->domain_spec().has_time()) {
+    const auto& ts_info = time_domains_.at(group_name);
+    if (bucket_index == ts_info.num_periods) {
+      return std::string(kInvalidTimestamp);
+    }
+    // decoding_anchor_time_ is guaranteed to have value if time_domains_ is not
+    // empty.
+    SECAGG_ASSIGN_OR_RETURN(
+        auto reconstructed_time,
+        DecodeTime(bucket_index, ts_info, *decoding_anchor_time_));
+    return absl::FormatTime(ts_info.format, reconstructed_time,
+                            ts_info.timezone);
+  } else {
+    const auto& domain = spec_it->second->domain_spec().string_values();
+    if (bucket_index < 0 || bucket_index >= domain.values_size()) {
+      return absl::InvalidArgumentError(
+          absl::StrCat("Index ", bucket_index, " for key ", group_name,
+                       " is out of bounds [0, ", domain.values_size(), ")."));
+    }
+    return domain.values(bucket_index);
+  }
+}
+
 absl::StatusOr<EncodedData> ExplicitCodecImpl::Encode(
     const GroupData& group_by_data, const MetricData& metric_data) const {
-  if (absl::Status status = ValidateData(group_by_data, metric_data);
-      !status.ok()) {
-    return status;
+  SECAGG_RETURN_IF_ERROR(ValidateData(group_by_data, metric_data));
+
+  if (!time_domains_.empty() && !encoding_time_.has_value()) {
+    return absl::FailedPreconditionError(
+        "encoding_time is required in the constructor for encoding time "
+        "domains");
   }
 
   absl::flat_hash_map<std::string, std::vector<int64_t>> result;
@@ -273,11 +370,8 @@ absl::StatusOr<EncodedData> ExplicitCodecImpl::Encode(
         for (const auto& group_name : group_by_keys_) {
           auto it_data = group_by_data.find(group_name);
           CHECK(it_data != group_by_data.end());
-          auto key = it_data->second[i];
-          auto it =
-              group_by_domain_indices_.find(GroupDomainKey{group_name, key});
-          // ValidateData ensures the key exists in the domain.
-          indices.push_back(it->second);
+          const std::string& group_value = it_data->second[i];
+          indices.push_back(EncodeGroupValue(group_name, group_value));
         }
         result[metric_name][GetCombinedIndex(indices)] = values[i];
       }
@@ -288,6 +382,13 @@ absl::StatusOr<EncodedData> ExplicitCodecImpl::Encode(
 
 absl::StatusOr<DecodedData> ExplicitCodecImpl::Decode(
     const EncodedData& encoded_data) const {
+  // If the input spec defines any time domain, we must have a decoding anchor
+  // time to reconstruct the absolute timestamps during decoding.
+  if (!time_domains_.empty() && !decoding_anchor_time_.has_value()) {
+    return absl::FailedPreconditionError(
+        "decoding_anchor_time is required in the constructor for decoding time "
+        "domains");
+  }
   DecodedData decoded_data;
 
   if (group_by_keys_.empty()) {
@@ -329,16 +430,9 @@ absl::StatusOr<DecodedData> ExplicitCodecImpl::Decode(
       std::vector<int> indices = GetIndices(i);
       for (int j = 0; j < group_by_keys_.size(); ++j) {
         const auto& key_name = group_by_keys_[j];
-        auto spec_it = group_by_spec_map_.find(key_name);
-        CHECK(spec_it != group_by_spec_map_.end());
-        const auto& domain = spec_it->second->domain_spec().string_values();
-        // Check that the index is in the domain.
-        if (indices[j] >= domain.values_size()) {
-          return absl::InvalidArgumentError(absl::StrCat(
-              "Index ", indices[j], " for key ", key_name, " is out of bounds ",
-              "[0, ", domain.values_size(), ")."));
-        }
-        decoded_data.group_data[key_name].push_back(domain.values(indices[j]));
+        SECAGG_ASSIGN_OR_RETURN(std::string decoded_val,
+                                DecodeGroupValue(key_name, indices[j]));
+        decoded_data.group_data[key_name].push_back(decoded_val);
       }
       for (const auto& [metric_name, values] : encoded_data) {
         decoded_data.metric_data[metric_name].push_back(values[i]);
@@ -377,7 +471,20 @@ absl::Status CodecFactory::ValidateExplicitCodecInputSpec(
     const InputSpec& input_spec, size_t max_flattened_domain_size) {
   size_t flattened_domain_size = 1;
   for (const auto& spec : input_spec.group_by_vector_specs()) {
-    flattened_domain_size *= spec.domain_spec().string_values().values_size();
+    if (spec.domain_spec().has_time()) {
+      if (spec.data_type() != InputSpec::STRING) {
+        return absl::InvalidArgumentError(
+            "Time domain can only be used with STRING data type.");
+      }
+      SECAGG_ASSIGN_OR_RETURN(auto ts_info,
+                              ParseTimeDomain(spec.domain_spec().time()));
+      flattened_domain_size *= (ts_info.num_periods + 1);  // +1 for invalid
+    } else if (spec.domain_spec().has_string_values()) {
+      flattened_domain_size *= spec.domain_spec().string_values().values_size();
+    } else {
+      return absl::InvalidArgumentError(
+          "Unsupported domain type for group-by vector");
+    }
     if (max_flattened_domain_size < flattened_domain_size) {
       return absl::InvalidArgumentError(
           "Global output domain size exceeds maximum threshold.");
@@ -387,7 +494,8 @@ absl::Status CodecFactory::ValidateExplicitCodecInputSpec(
 }
 
 absl::StatusOr<std::unique_ptr<Codec>> CodecFactory::CreateExplicitCodec(
-    InputSpec input_spec) {
+    InputSpec input_spec, std::optional<absl::Time> encoding_time,
+    std::optional<absl::Time> decoding_anchor_time) {
   // Check that specs include at least one metric vector.
   if (input_spec.metric_vector_specs().empty()) {
     return absl::InvalidArgumentError(
@@ -408,9 +516,28 @@ absl::StatusOr<std::unique_ptr<Codec>> CodecFactory::CreateExplicitCodec(
           absl::StrCat("Duplicate vector name: ", spec.vector_name()));
     }
   }
-  return absl::WrapUnique(new ExplicitCodecImpl(std::move(input_spec),
-                                                std::move(group_by_spec_map),
-                                                std::move(metric_spec_map)));
+  // Validate input spec (including time domains if present)
+  for (const auto& spec : input_spec.group_by_vector_specs()) {
+    if (spec.domain_spec().has_time()) {
+      if (spec.data_type() != InputSpec::STRING) {
+        return absl::InvalidArgumentError(
+            "Time domain can only be used with STRING data type.");
+      }
+      SECAGG_RETURN_IF_ERROR(
+          ParseTimeDomain(spec.domain_spec().time()).status());
+    }
+  }
+
+  return absl::WrapUnique(new ExplicitCodecImpl(
+      std::move(input_spec), std::move(group_by_spec_map),
+      std::move(metric_spec_map), encoding_time, decoding_anchor_time));
+}
+
+int CodecFactory::GetDomainSize(const InputSpec::InputVectorSpec& spec) {
+  if (spec.domain_spec().has_time()) {
+    return spec.domain_spec().time().num_periods() + 1;
+  }
+  return spec.domain_spec().string_values().values_size();
 }
 
 }  // namespace willow

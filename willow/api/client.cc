@@ -29,6 +29,7 @@
 #include "include/cxx.h"
 #include "willow/api/client.rs.h"
 #include "willow/input_encoding/codec.h"
+#include "willow/input_encoding/codec_factory.h"
 #include "willow/proto/shell/ciphertexts.pb.h"
 #include "willow/proto/willow/aggregation_config.pb.h"
 #include "willow/proto/willow/input_spec.pb.h"
@@ -49,14 +50,19 @@ absl::StatusOr<willow::AggregationConfigProto> CreateAggregationConfig(
   // of group-by domains.
   int64_t flattened_domain_size = 1;
   for (const auto& group_by_spec : input_spec_proto.group_by_vector_specs()) {
-    if (group_by_spec.domain_spec().string_values().values_size() == 0) {
-      return absl::InvalidArgumentError(absl::StrCat(
-          "Missing domain, invalid domain type (must be StringValues), or "
-          "empty string_values for group by vector: ",
-          group_by_spec.vector_name()));
+    if (!group_by_spec.domain_spec().has_time() &&
+        !group_by_spec.domain_spec().has_string_values()) {
+      return absl::InvalidArgumentError(
+          absl::StrCat("Unsupported domain type for group-by vector: ",
+                       group_by_spec.vector_name()));
     }
-    flattened_domain_size *=
-        group_by_spec.domain_spec().string_values().values_size();
+    int domain_size = willow::CodecFactory::GetDomainSize(group_by_spec);
+    if (domain_size <= 0) {
+      return absl::InvalidArgumentError(
+          absl::StrCat("Empty or invalid domain size for group by vector: ",
+                       group_by_spec.vector_name()));
+    }
+    flattened_domain_size *= domain_size;
   }
   // Build VectorConfig (length and bound) for each metric.
   for (const auto& metric_spec : input_spec_proto.metric_vector_specs()) {
