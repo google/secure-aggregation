@@ -34,7 +34,7 @@ message CreateCommitteeResponse {}
 // A message sent from client to untrusted frontend signaling intent to
 // volunteer for the committee. Returns VolunteerForCommitteeResponse.
 message VolunteerForCommitteeRequest {
-  // Member's public key used to uniquely identify the member.
+  // Member's ephemeral public key, which rotates every day.
   bytes member_public_key = 1 ;
 
   // An endorsement of the client's public key, for example:
@@ -51,8 +51,8 @@ message VolunteerForCommitteeRequest {
 
 // A record of a client who volunteered for a committee.
 message VolunteerRecord {
-  // A short digest of the member's public key used to uniquely identify the
-  // member.
+  // A short digest of an ephemeral public key of the user that rotates every
+  // day and is not linkable between days.
   int64 member_public_key_digest = 1
       ;
 
@@ -143,8 +143,7 @@ message CommitteeStatusResponse {
   }
   SampleCommitteeStatus status = 2;
 
-  // Optional: The public keys of the committee members if the selection process
-  // succeeded.
+  // Optional: The digests of ephemeral public keys of the users.
   repeated int64 committee_members_public_key_digests = 3
       ;
 }
@@ -152,7 +151,7 @@ message CommitteeStatusResponse {
 // Request from a client to untrusted frontend to check their committee
 // selection status. Returns CheckVolunteerStatusResponse.
 message CheckVolunteerStatusRequest {
-  // Member's public key used to uniquely identify the member.
+  // Member's ephemeral public key, which rotates every day.
   bytes member_public_key = 1 ;
 
   // The committee ID the member volunteered for and is checking the status of.
