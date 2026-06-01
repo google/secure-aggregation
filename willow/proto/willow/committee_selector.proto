@@ -34,7 +34,7 @@ message CreateCommitteeResponse {}
 // A message sent from client to untrusted frontend signaling intent to
 // volunteer for the committee. Returns VolunteerForCommitteeResponse.
 message VolunteerForCommitteeRequest {
-  // Member's ephemeral public key, which rotates every day.
+  // Member's ephemeral public key, which rotates roughly every 30 days.
   bytes member_public_key = 1 ;
 
   // An endorsement of the client's public key, for example:
