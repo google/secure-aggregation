@@ -59,13 +59,6 @@ pub trait SecureAggregationBaseMultiDecryptor: HasVahe {
         decryptor_state: &mut Self::DecryptorState,
     ) -> Result<SetupContribution<Self::Vahe>, StatusError>;
 
-    /// Creates a public key share to be sent to the Server, updating the
-    /// decryptor state.
-    fn create_public_key_share(
-        &self,
-        decryptor_state: &mut Self::DecryptorState,
-    ) -> Result<DecryptorPublicKeyShare<<Self as HasVahe>::Vahe>, StatusError>;
-
     /// Handles a partial decryption request received from the Server. Returns a
     /// partial decryption to the Server.
     fn handle_partial_decryption_request<Kahe: KaheBase>(
