@@ -16,6 +16,8 @@ syntax = "proto3";
 
 package secure_aggregation.willow;
 
+import "google/protobuf/timestamp.proto";
+
 option java_multiple_files = true;
 option java_outer_classname = "KeyProto";
 
@@ -29,4 +31,11 @@ message Key {
   // The raw key material. This is the serialized bytes of the key material
   // returned by the key generation service.
   bytes key_material = 2;
+
+  // The timestamp that indicates when the key was produced. This is used to
+  // distinguish keys in the same series.
+  google.protobuf.Timestamp timestamp = 3;
+
+  // The session_tag from GenerateKeyRequest for diagnostic purposes.
+  string session_tag = 4;
 }

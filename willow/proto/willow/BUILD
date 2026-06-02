@@ -69,6 +69,9 @@ cc_proto_library(
 proto_library(
     name = "key_proto",
     srcs = ["key.proto"],
+    deps = [
+        "@protobuf//:timestamp_proto",
+    ],
 )
 
 cc_proto_library(
