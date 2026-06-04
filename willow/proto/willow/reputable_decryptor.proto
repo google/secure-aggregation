@@ -1,0 +1,52 @@
+// Copyright 2026 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+syntax = "proto3";
+
+package secure_aggregation.willow;
+import "willow/proto/shell/ciphertexts.proto";
+import "willow/proto/willow/messages.proto";
+
+option java_multiple_files = true;
+option java_outer_classname = "ReputableDecryptorProto";
+
+// Request message for creating a setup contribution.
+message CreateSetupContributionRequest {}
+
+// Error status.
+message ReputableDecryptorStatus {
+  int32 code = 1;
+  string message = 2;
+}
+
+// ReputableDecryptorRequest combines individual request messages and is used
+// by the replicated/wrapped implementation of the ReputableDecryptor.
+message ReputableDecryptorRequest {
+  oneof msg {
+    CreateSetupContributionRequest create_setup_contribution = 1;
+    PartialDecryptionRequest handle_partial_decryption_request = 2;
+    VerifyKeyContributionsRequest verify_and_aggregate_key_contributions = 3;
+  }
+}
+
+// ReputableDecryptorResponse combines individual response messages and is used
+// by the replicated/wrapped implementation of the ReputableDecryptor.
+message ReputableDecryptorResponse {
+  oneof msg {
+    SetupContribution create_setup_contribution = 1;
+    PartialDecryptionResponse handle_partial_decryption_request = 2;
+    ShellAhePublicKey verify_and_aggregate_key_contributions = 3;
+    ReputableDecryptorStatus error = 4;
+  }
+}

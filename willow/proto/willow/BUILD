@@ -38,6 +38,21 @@ cc_proto_library(
 )
 
 proto_library(
+    name = "reputable_decryptor_proto",
+    srcs = ["reputable_decryptor.proto"],
+    deps = [
+        ":messages_proto",
+        
+        "//willow/proto/shell:shell_ciphertexts_proto",
+    ],
+)
+
+cc_proto_library(
+    name = "reputable_decryptor_cc_proto",
+    deps = [":reputable_decryptor_proto"],
+)
+
+proto_library(
     name = "aggregation_config_proto",
     srcs = ["aggregation_config.proto"],
     deps = [
