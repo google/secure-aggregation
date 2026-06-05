@@ -26,7 +26,7 @@ package(
 cc_library(
     name = "codec",
     srcs = [
-        "codec_factory.cc",
+        "codec.cc",
     ],
     hdrs = [
         "codec.h",
@@ -44,8 +44,8 @@ cc_library(
 )
 
 cc_test(
-    name = "explicit_codec_test",
-    srcs = ["explicit_codec_test.cc"],
+    name = "codec_test",
+    srcs = ["codec_test.cc"],
     deps = [
         ":codec",
         "@googletest//:gtest_main",

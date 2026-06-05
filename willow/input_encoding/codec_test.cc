@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include "willow/input_encoding/codec.h"
+
 #include <memory>
 #include <string>
 #include <vector>
@@ -21,8 +23,6 @@
 #include "ffi_utils/status_matchers.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
-#include "willow/input_encoding/codec.h"
-#include "willow/input_encoding/codec_factory.h"
 #include "willow/proto/willow/input_spec.pb.h"
 #include "willow/testing_utils/testing_utils.h"
 
@@ -37,7 +37,7 @@ using ::testing::HasSubstr;
 using ::testing::Pair;
 using ::testing::UnorderedElementsAre;
 
-TEST(CodecFactoryTest, ValidateInputAndSpecLengthMismatch) {
+TEST(CodecTest, ValidateInputAndSpecLengthMismatch) {
   MetricData metric_data;
   metric_data["metric1"] = {1, 2, 3};
   GroupData group_by_data;
@@ -49,14 +49,14 @@ TEST(CodecFactoryTest, ValidateInputAndSpecLengthMismatch) {
   // Missing group_by_vector_specs for "feature1"
 
   SECAGG_ASSERT_OK_AND_ASSIGN(std::unique_ptr<Codec> encoder,
-                              CodecFactory::CreateExplicitCodec(input_spec));
+                              Codec::CreateFlatHistogramCodec(input_spec));
   EXPECT_THAT(encoder->Encode(group_by_data, metric_data),
               StatusIs(absl::StatusCode::kInvalidArgument,
                        HasSubstr("Key feature1 found in group_by_data but not "
                                  "in input_spec.")));
 }
 
-TEST(CodecFactoryTest, ValidateInputAndSpecTypeMismatch) {
+TEST(CodecTest, ValidateInputAndSpecTypeMismatch) {
   MetricData metric_data;
   metric_data["metric1"] = {1, 2, 3};
   GroupData group_by_data;
@@ -66,13 +66,13 @@ TEST(CodecFactoryTest, ValidateInputAndSpecTypeMismatch) {
   metric_spec->set_data_type(InputSpec::STRING);
 
   SECAGG_ASSERT_OK_AND_ASSIGN(std::unique_ptr<Codec> encoder,
-                              CodecFactory::CreateExplicitCodec(input_spec));
+                              Codec::CreateFlatHistogramCodec(input_spec));
   EXPECT_THAT(encoder->Encode(group_by_data, metric_data),
               StatusIs(absl::StatusCode::kInvalidArgument,
                        HasSubstr("Type mismatch for key metric1")));
 }
 
-TEST(CodecFactoryTest, ValidateInputAndSpecEmptyInputData) {
+TEST(CodecTest, ValidateInputAndSpecEmptyInputData) {
   MetricData metric_data;
   GroupData group_by_data;
   InputSpec input_spec;
@@ -84,13 +84,13 @@ TEST(CodecFactoryTest, ValidateInputAndSpecEmptyInputData) {
   group_by_spec->set_data_type(InputSpec::STRING);
 
   SECAGG_ASSERT_OK_AND_ASSIGN(std::unique_ptr<Codec> encoder,
-                              CodecFactory::CreateExplicitCodec(input_spec));
+                              Codec::CreateFlatHistogramCodec(input_spec));
   EXPECT_THAT(encoder->Encode(group_by_data, metric_data),
               StatusIs(absl::StatusCode::kInvalidArgument,
                        HasSubstr("Metric data cannot be empty.")));
 }
 
-TEST(CodecFactoryTest, ValidateInputAndSpecDomainValueNotFound) {
+TEST(CodecTest, ValidateInputAndSpecDomainValueNotFound) {
   MetricData metric_data;
   metric_data["metric1"] = {1};
   GroupData group_by_data;
@@ -108,13 +108,13 @@ TEST(CodecFactoryTest, ValidateInputAndSpecDomainValueNotFound) {
       "b");
 
   SECAGG_ASSERT_OK_AND_ASSIGN(std::unique_ptr<Codec> encoder,
-                              CodecFactory::CreateExplicitCodec(input_spec));
+                              Codec::CreateFlatHistogramCodec(input_spec));
   EXPECT_THAT(encoder->Encode(group_by_data, metric_data),
               StatusIs(absl::StatusCode::kInvalidArgument,
                        HasSubstr("Domain mismatch for key feature1")));
 }
 
-TEST(CodecFactoryTest, ValidateInputAndSpecInputDataVectorLengthMismatch) {
+TEST(CodecTest, ValidateInputAndSpecInputDataVectorLengthMismatch) {
   MetricData metric_data;
   metric_data["metric1"] = {1, 2, 3};
   metric_data["metric2"] = {1, 2};
@@ -128,13 +128,13 @@ TEST(CodecFactoryTest, ValidateInputAndSpecInputDataVectorLengthMismatch) {
   metric_spec2->set_data_type(InputSpec::INT64);
 
   SECAGG_ASSERT_OK_AND_ASSIGN(std::unique_ptr<Codec> encoder,
-                              CodecFactory::CreateExplicitCodec(input_spec));
+                              Codec::CreateFlatHistogramCodec(input_spec));
   EXPECT_THAT(encoder->Encode(group_by_data, metric_data),
               StatusIs(absl::StatusCode::kInvalidArgument,
                        HasSubstr("must have the same length")));
 }
 
-TEST(CodecFactoryTest, ValidateInputAndSpecGroupByDataVectorLengthMismatch) {
+TEST(CodecTest, ValidateInputAndSpecGroupByDataVectorLengthMismatch) {
   MetricData metric_data;
   metric_data["metric1"] = {1, 2, 3};
   GroupData group_by_data;
@@ -152,13 +152,13 @@ TEST(CodecFactoryTest, ValidateInputAndSpecGroupByDataVectorLengthMismatch) {
       "b");
 
   SECAGG_ASSERT_OK_AND_ASSIGN(std::unique_ptr<Codec> encoder,
-                              CodecFactory::CreateExplicitCodec(input_spec));
+                              Codec::CreateFlatHistogramCodec(input_spec));
   EXPECT_THAT(encoder->Encode(group_by_data, metric_data),
               StatusIs(absl::StatusCode::kInvalidArgument,
                        HasSubstr("must have the same length")));
 }
 
-TEST(CodecFactoryTest, ValidateInputAndSpecDomainSizeVectorLengthMismatch) {
+TEST(CodecTest, ValidateInputAndSpecDomainSizeVectorLengthMismatch) {
   MetricData metric_data;
   metric_data["metric1"] = {1, 2, 3};
   GroupData group_by_data;
@@ -177,14 +177,14 @@ TEST(CodecFactoryTest, ValidateInputAndSpecDomainSizeVectorLengthMismatch) {
       "b");
 
   SECAGG_ASSERT_OK_AND_ASSIGN(std::unique_ptr<Codec> encoder,
-                              CodecFactory::CreateExplicitCodec(input_spec));
+                              Codec::CreateFlatHistogramCodec(input_spec));
   EXPECT_THAT(encoder->Encode(group_by_data, metric_data),
               StatusIs(absl::StatusCode::kInvalidArgument,
                        HasSubstr("Domain mismatch for key feature1: "
                                  "group_by_data value c not found in domain")));
 }
 
-TEST(CodecFactoryTest, ValidateInputAndSpecInputKeyNotInSpec) {
+TEST(CodecTest, ValidateInputAndSpecInputKeyNotInSpec) {
   MetricData metric_data;
   metric_data["metric1"] = {1};
   metric_data["metric2"] = {2};
@@ -197,14 +197,14 @@ TEST(CodecFactoryTest, ValidateInputAndSpecInputKeyNotInSpec) {
   // Missing metric_vector_specs for "metric2"
 
   SECAGG_ASSERT_OK_AND_ASSIGN(std::unique_ptr<Codec> encoder,
-                              CodecFactory::CreateExplicitCodec(input_spec));
+                              Codec::CreateFlatHistogramCodec(input_spec));
   EXPECT_THAT(encoder->Encode(group_by_data, metric_data),
               StatusIs(absl::StatusCode::kInvalidArgument,
                        HasSubstr("Key metric2 found in metric_data but not in "
                                  "input_spec.")));
 }
 
-TEST(CodecFactoryTest, ValidateInputAndSpecGroupByKeyNotInSpec) {
+TEST(CodecTest, ValidateInputAndSpecGroupByKeyNotInSpec) {
   MetricData metric_data;
   metric_data["metric1"] = {1};
   GroupData group_by_data;
@@ -217,14 +217,14 @@ TEST(CodecFactoryTest, ValidateInputAndSpecGroupByKeyNotInSpec) {
   // Missing group_by_vector_specs for "feature1"
 
   SECAGG_ASSERT_OK_AND_ASSIGN(std::unique_ptr<Codec> encoder,
-                              CodecFactory::CreateExplicitCodec(input_spec));
+                              Codec::CreateFlatHistogramCodec(input_spec));
   EXPECT_THAT(encoder->Encode(group_by_data, metric_data),
               StatusIs(absl::StatusCode::kInvalidArgument,
                        HasSubstr("Key feature1 found in group_by_data but not "
                                  "in input_spec.")));
 }
 
-TEST(CodecFactoryTest, ValidateInputAndSpecGroupByTypeMismatch) {
+TEST(CodecTest, ValidateInputAndSpecGroupByTypeMismatch) {
   MetricData metric_data;
   metric_data["metric1"] = {1};
   GroupData group_by_data;
@@ -241,13 +241,13 @@ TEST(CodecFactoryTest, ValidateInputAndSpecGroupByTypeMismatch) {
       "y");
 
   SECAGG_ASSERT_OK_AND_ASSIGN(std::unique_ptr<Codec> encoder,
-                              CodecFactory::CreateExplicitCodec(input_spec));
+                              Codec::CreateFlatHistogramCodec(input_spec));
   EXPECT_THAT(encoder->Encode(group_by_data, metric_data),
               StatusIs(absl::StatusCode::kInvalidArgument,
                        HasSubstr("Type mismatch for key feature1")));
 }
 
-TEST(CodecFactoryTest, ValidateInputAndSpecGlobalDomainSizeExceeded) {
+TEST(CodecTest, ValidateInputAndSpecMaxFlatHistogramBinsExceeded) {
   MetricData metric_data;
   metric_data["metric1"] = {1};
   GroupData group_by_data;
@@ -270,12 +270,12 @@ TEST(CodecFactoryTest, ValidateInputAndSpecGlobalDomainSizeExceeded) {
         ->add_values(std::to_string(i));
   }
 
-  EXPECT_THAT(CodecFactory::ValidateExplicitCodecInputSpec(input_spec),
+  EXPECT_THAT(Codec::ValidateInputSpec(input_spec),
               StatusIs(absl::StatusCode::kInvalidArgument,
-                       HasSubstr("Global output domain size exceeds")));
+                       HasSubstr("Flat histogram bin count exceeds")));
 }
 
-TEST(CodecFactoryTest, ValidateInputAndSpecCustomGlobalDomainSize) {
+TEST(CodecTest, ValidateInputAndSpecCustomMaxFlatHistogramBins) {
   MetricData metric_data;
   metric_data["metric1"] = {1};
   GroupData group_by_data;
@@ -292,13 +292,13 @@ TEST(CodecFactoryTest, ValidateInputAndSpecCustomGlobalDomainSize) {
   group_by_spec->mutable_domain_spec()->mutable_string_values()->add_values(
       "b");
   // Domain size is 2.
-  EXPECT_THAT(CodecFactory::ValidateExplicitCodecInputSpec(input_spec, 1),
+  EXPECT_THAT(Codec::ValidateInputSpec(input_spec, 1),
               StatusIs(absl::StatusCode::kInvalidArgument,
-                       HasSubstr("Global output domain size exceeds")));
-  SECAGG_EXPECT_OK(CodecFactory::ValidateExplicitCodecInputSpec(input_spec, 2));
+                       HasSubstr("Flat histogram bin count exceeds")));
+  SECAGG_EXPECT_OK(Codec::ValidateInputSpec(input_spec, 2));
 }
 
-TEST(CodecFactoryTest, EncodeSimpleGroupBy) {
+TEST(CodecTest, EncodeSimpleGroupBy) {
   InputSpec input_spec = CreateTestInputSpecProto();
   MetricData metric_data = CreateTestMetricData();
   GroupData group_by_data = CreateTestGroupData();
@@ -326,14 +326,14 @@ TEST(CodecFactoryTest, EncodeSimpleGroupBy) {
   // Result: [0, 20, 0, 0, 0, 0, 10, 5]
 
   SECAGG_ASSERT_OK_AND_ASSIGN(std::unique_ptr<Codec> encoder,
-                              CodecFactory::CreateExplicitCodec(input_spec));
+                              Codec::CreateFlatHistogramCodec(input_spec));
 
   EXPECT_THAT(encoder->Encode(group_by_data, metric_data),
               IsOkAndHolds(UnorderedElementsAre(
                   Pair("metric1", ElementsAre(0, 20, 0, 0, 0, 0, 10, 5)))));
 }
 
-TEST(CodecFactoryTest, EncodeTwoMetricsOneGroupBy) {
+TEST(CodecTest, EncodeTwoMetricsOneGroupBy) {
   MetricData metric_data;
   metric_data["metric1"] = {10, 20};
   metric_data["metric2"] = {100, 200};
@@ -370,7 +370,7 @@ TEST(CodecFactoryTest, EncodeTwoMetricsOneGroupBy) {
   // metric2: [200, 100]
 
   SECAGG_ASSERT_OK_AND_ASSIGN(std::unique_ptr<Codec> encoder,
-                              CodecFactory::CreateExplicitCodec(input_spec));
+                              Codec::CreateFlatHistogramCodec(input_spec));
 
   EXPECT_THAT(encoder->Encode(group_by_data, metric_data),
               IsOkAndHolds(UnorderedElementsAre(
@@ -378,13 +378,13 @@ TEST(CodecFactoryTest, EncodeTwoMetricsOneGroupBy) {
                   Pair("metric2", ElementsAre(200, 100)))));
 }
 
-TEST(CodecFactoryTest, EncodeThenDecode) {
+TEST(CodecTest, EncodeThenDecode) {
   InputSpec input_spec = CreateTestInputSpecProto();
   MetricData metric_data = CreateTestMetricData();
   GroupData group_by_data = CreateTestGroupData();
 
   SECAGG_ASSERT_OK_AND_ASSIGN(std::unique_ptr<Codec> encoder,
-                              CodecFactory::CreateExplicitCodec(input_spec));
+                              Codec::CreateFlatHistogramCodec(input_spec));
 
   SECAGG_ASSERT_OK_AND_ASSIGN(EncodedData encoded_data,
                               encoder->Encode(group_by_data, metric_data));
@@ -409,13 +409,13 @@ TEST(CodecFactoryTest, EncodeThenDecode) {
                            Pair("lang", ElementsAre("es", "en", "es"))));
 }
 
-TEST(CodecFactoryTest, EncodeThenDecodeDataOrderDoesNotMatter) {
+TEST(CodecTest, EncodeThenDecodeDataOrderDoesNotMatter) {
   InputSpec input_spec = CreateTestInputSpecProto();
   MetricData metric_data1 = CreateTestMetricData();
   GroupData group_by_data1 = CreateTestGroupData();
 
   SECAGG_ASSERT_OK_AND_ASSIGN(std::unique_ptr<Codec> encoder1,
-                              CodecFactory::CreateExplicitCodec(input_spec));
+                              Codec::CreateFlatHistogramCodec(input_spec));
 
   // Note that the order of metric_data2 and group_by_data2 is different from
   // metric_data1 and group_by_data1. The decoded result should be the same.
@@ -426,7 +426,7 @@ TEST(CodecFactoryTest, EncodeThenDecodeDataOrderDoesNotMatter) {
   group_by_data2["country"] = {"CA", "US", "US"};
 
   SECAGG_ASSERT_OK_AND_ASSIGN(std::unique_ptr<Codec> encoder2,
-                              CodecFactory::CreateExplicitCodec(input_spec));
+                              Codec::CreateFlatHistogramCodec(input_spec));
 
   SECAGG_ASSERT_OK_AND_ASSIGN(auto encoded_data,
                               encoder1->Encode(group_by_data1, metric_data1));
@@ -444,7 +444,7 @@ TEST(CodecFactoryTest, EncodeThenDecodeDataOrderDoesNotMatter) {
                            Pair("lang", ElementsAre("es", "en", "es"))));
 }
 
-TEST(CodecFactoryTest, EncodeThenDecodeNoGroupBy) {
+TEST(CodecTest, EncodeThenDecodeNoGroupBy) {
   MetricData metric_data;
   metric_data["metric1"] = {10, 20, 5};
   MetricData expected_metric_data = metric_data;
@@ -455,7 +455,7 @@ TEST(CodecFactoryTest, EncodeThenDecodeNoGroupBy) {
   metric_spec->set_data_type(InputSpec::INT64);
 
   SECAGG_ASSERT_OK_AND_ASSIGN(std::unique_ptr<Codec> encoder,
-                              CodecFactory::CreateExplicitCodec(input_spec));
+                              Codec::CreateFlatHistogramCodec(input_spec));
 
   SECAGG_ASSERT_OK_AND_ASSIGN(EncodedData encoded_data,
                               encoder->Encode(group_by_data, metric_data));
@@ -470,7 +470,7 @@ TEST(CodecFactoryTest, EncodeThenDecodeNoGroupBy) {
               UnorderedElementsAre(Pair("metric1", ElementsAre(10, 20, 5))));
 }
 
-TEST(CodecFactoryTest, EncodeWithDomainValueNotFound) {
+TEST(CodecTest, EncodeWithDomainValueNotFound) {
   MetricData metric_data;
   metric_data["metric1"] = {10};
   GroupData group_by_data;
@@ -505,7 +505,7 @@ TEST(CodecFactoryTest, EncodeWithDomainValueNotFound) {
       "b");
 
   SECAGG_ASSERT_OK_AND_ASSIGN(std::unique_ptr<Codec> encoder,
-                              CodecFactory::CreateExplicitCodec(input_spec));
+                              Codec::CreateFlatHistogramCodec(input_spec));
 
   EXPECT_THAT(encoder->Encode(group_by_data, metric_data),
               StatusIs(absl::StatusCode::kInvalidArgument,

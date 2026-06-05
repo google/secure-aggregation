@@ -15,16 +15,24 @@
 #ifndef SECURE_AGGREGATION_WILLOW_INPUT_ENCODING_CODEC_H_
 #define SECURE_AGGREGATION_WILLOW_INPUT_ENCODING_CODEC_H_
 
+#include <cstddef>
 #include <cstdint>
+#include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "absl/container/flat_hash_map.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "willow/proto/willow/input_spec.pb.h"
 
 namespace secure_aggregation {
 namespace willow {
+
+// The maximum number of bins in a flat histogram, which is the maximum size of
+// the Cartesian product of domains for string features.
+constexpr size_t kMaxFlatHistogramBins = 1000000;
 
 using MetricData = absl::flat_hash_map<std::string, std::vector<int64_t>>;
 using GroupData = absl::flat_hash_map<std::string, std::vector<std::string>>;
@@ -69,6 +77,30 @@ class Codec {
   virtual absl::Status ValidateExampleQuery(
       const absl::flat_hash_map<std::string, std::string>& query_output_specs)
       const = 0;
+
+  // Creates an instance of FlatHistogramCodec.
+  static absl::StatusOr<std::unique_ptr<Codec>> CreateFlatHistogramCodec(
+      ::secure_aggregation::willow::InputSpec input_spec);
+
+  // Check that the combined size of the string domains is less than the
+  // maximum allowed size.
+  static absl::Status ValidateInputSpec(
+      const ::secure_aggregation::willow::InputSpec& input_spec,
+      size_t max_flat_histogram_bins = kMaxFlatHistogramBins);
+
+  // Deprecated aliases for backward compatibility
+  [[deprecated("Use CreateFlatHistogramCodec instead")]]
+  static absl::StatusOr<std::unique_ptr<Codec>> CreateExplicitCodec(
+      ::secure_aggregation::willow::InputSpec input_spec) {
+    return CreateFlatHistogramCodec(std::move(input_spec));
+  }
+
+  [[deprecated("Use ValidateInputSpec instead")]]
+  static absl::Status ValidateExplicitCodecInputSpec(
+      const ::secure_aggregation::willow::InputSpec& input_spec,
+      size_t max_flattened_domain_size = kMaxFlatHistogramBins) {
+    return ValidateInputSpec(input_spec, max_flattened_domain_size);
+  }
 };
 
 }  // namespace willow

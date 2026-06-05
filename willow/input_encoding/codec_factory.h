@@ -1,4 +1,4 @@
-// Copyright 2025 Google LLC
+// Copyright 2026 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,8 +14,10 @@
 
 #ifndef SECURE_AGGREGATION_WILLOW_INPUT_ENCODING_CODEC_FACTORY_H_
 #define SECURE_AGGREGATION_WILLOW_INPUT_ENCODING_CODEC_FACTORY_H_
+
 #include <cstddef>
 #include <memory>
+#include <utility>
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
@@ -25,22 +27,18 @@
 namespace secure_aggregation {
 namespace willow {
 
-// The maximum size of the Cartesian product of domains for string features.
-constexpr size_t kMaxGlobalOutputDomainSize = 1000000;
-
-// Factory class that constructs non-copyable instances of children classes of
-// Codec.
-class CodecFactory {
+class [[deprecated("Use Codec class static methods instead")]] CodecFactory {
  public:
-  // Creates an instance of ExplicitCodec.
   static absl::StatusOr<std::unique_ptr<Codec>> CreateExplicitCodec(
-      InputSpec input_spec);
+      InputSpec input_spec) {
+    return Codec::CreateFlatHistogramCodec(std::move(input_spec));
+  }
 
-  // Check that the combined size of the string domains is less than the
-  // maximum allowed size.
   static absl::Status ValidateExplicitCodecInputSpec(
       const InputSpec& input_spec,
-      size_t max_flattened_domain_size = kMaxGlobalOutputDomainSize);
+      size_t max_flattened_domain_size = kMaxFlatHistogramBins) {
+    return Codec::ValidateInputSpec(input_spec, max_flattened_domain_size);
+  }
 };
 
 }  // namespace willow

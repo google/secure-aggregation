@@ -35,7 +35,9 @@ class CodecBindingsTest(unittest.TestCase):
             )
         ],
     )
-    self.codec = codec_bindings.CreateExplicitCodec(spec.SerializeToString())
+    self.codec = codec_bindings.CreateFlatHistogramCodec(
+        spec.SerializeToString()
+    )
 
   def test_validate_example_query_success(self):
     query_specs = {

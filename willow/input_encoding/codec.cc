@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "willow/input_encoding/codec_factory.h"
+#include "willow/input_encoding/codec.h"
 
 #include <algorithm>
 #include <cstddef>
@@ -28,7 +28,6 @@
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
-#include "willow/input_encoding/codec.h"
 #include "willow/proto/willow/input_spec.pb.h"
 
 namespace secure_aggregation {
@@ -53,13 +52,17 @@ struct GroupDomainKey {
   }
 };
 
-// WillowInputExplicitEncoder must be instantiated through the factory class
-// CodecFactory.
-class ExplicitCodecImpl : public Codec {
+// FlatHistogramCodecImpl implements a Codec that encodes data into a dense,
+// flat 1D histogram representing the Cartesian product of the group-by
+// domains.
+//
+// It must be instantiated through the factory function
+// Codec::CreateFlatHistogramCodec.
+class FlatHistogramCodecImpl : public Codec {
  public:
-  ExplicitCodecImpl(const ExplicitCodecImpl&) = delete;
-  ExplicitCodecImpl& operator=(const ExplicitCodecImpl&) = delete;
-  ~ExplicitCodecImpl() override = default;
+  FlatHistogramCodecImpl(const FlatHistogramCodecImpl&) = delete;
+  FlatHistogramCodecImpl& operator=(const FlatHistogramCodecImpl&) = delete;
+  ~FlatHistogramCodecImpl() override = default;
 
   absl::StatusOr<EncodedData> Encode(
       const GroupData& group_by_data,
@@ -94,7 +97,7 @@ class ExplicitCodecImpl : public Codec {
 
   size_t GetCombinedIndex(const std::vector<int>& indices) const;
 
-  explicit ExplicitCodecImpl(
+  explicit FlatHistogramCodecImpl(
       InputSpec input_spec,
       absl::flat_hash_map<std::string, const InputVectorSpec*>
           group_by_spec_map,
@@ -127,10 +130,10 @@ class ExplicitCodecImpl : public Codec {
       flattened_domain_size_ *= domain_size;
     }
   }
-  friend class CodecFactory;
+  friend class Codec;
 };
 
-absl::Status ExplicitCodecImpl::ValidateData(
+absl::Status FlatHistogramCodecImpl::ValidateData(
     const GroupData& group_by_data, const MetricData& metric_data) const {
   // Check that all vectors in metric_data and group_by_data are present in
   // metric_spec_map and group_by_spec_map_, respectively. This ensures that the
@@ -221,7 +224,7 @@ absl::Status ExplicitCodecImpl::ValidateData(
 // Returns the indices of elements in individual domains/vectors of size `sizes`
 // that correspond to the global index `global_index` of an element of their
 // cartesian product.
-std::vector<int> ExplicitCodecImpl::GetIndices(int global_index) const {
+std::vector<int> FlatHistogramCodecImpl::GetIndices(int global_index) const {
   if (group_by_domain_sizes_.empty()) {
     return {};
   }
@@ -241,7 +244,7 @@ std::vector<int> ExplicitCodecImpl::GetIndices(int global_index) const {
 // domains of size 2 and 3 respectively, and we want to find overall index of
 // an element that has index 1 in the first domain and index 0 in the second
 // domain. The function will return 1 * 3 + 0 = 3.
-size_t ExplicitCodecImpl::GetCombinedIndex(
+size_t FlatHistogramCodecImpl::GetCombinedIndex(
     const std::vector<int>& indices) const {
   int64_t combined_index = 0;
   for (int i = 0; i < indices.size(); ++i) {
@@ -251,7 +254,7 @@ size_t ExplicitCodecImpl::GetCombinedIndex(
   return combined_index;
 }
 
-absl::StatusOr<EncodedData> ExplicitCodecImpl::Encode(
+absl::StatusOr<EncodedData> FlatHistogramCodecImpl::Encode(
     const GroupData& group_by_data, const MetricData& metric_data) const {
   if (absl::Status status = ValidateData(group_by_data, metric_data);
       !status.ok()) {
@@ -286,7 +289,7 @@ absl::StatusOr<EncodedData> ExplicitCodecImpl::Encode(
   return result;
 }
 
-absl::StatusOr<DecodedData> ExplicitCodecImpl::Decode(
+absl::StatusOr<DecodedData> FlatHistogramCodecImpl::Decode(
     const EncodedData& encoded_data) const {
   DecodedData decoded_data;
 
@@ -348,7 +351,7 @@ absl::StatusOr<DecodedData> ExplicitCodecImpl::Decode(
   return decoded_data;
 }
 
-absl::Status ExplicitCodecImpl::ValidateExampleQuery(
+absl::Status FlatHistogramCodecImpl::ValidateExampleQuery(
     const absl::flat_hash_map<std::string, std::string>& query_output_specs)
     const {
   for (const auto& [name, type] : query_output_specs) {
@@ -373,20 +376,20 @@ absl::Status ExplicitCodecImpl::ValidateExampleQuery(
   return absl::OkStatus();
 }
 
-absl::Status CodecFactory::ValidateExplicitCodecInputSpec(
-    const InputSpec& input_spec, size_t max_flattened_domain_size) {
-  size_t flattened_domain_size = 1;
+absl::Status Codec::ValidateInputSpec(const InputSpec& input_spec,
+                                      size_t max_flat_histogram_bins) {
+  size_t flat_histogram_bins = 1;
   for (const auto& spec : input_spec.group_by_vector_specs()) {
-    flattened_domain_size *= spec.domain_spec().string_values().values_size();
-    if (max_flattened_domain_size < flattened_domain_size) {
+    flat_histogram_bins *= spec.domain_spec().string_values().values_size();
+    if (max_flat_histogram_bins < flat_histogram_bins) {
       return absl::InvalidArgumentError(
-          "Global output domain size exceeds maximum threshold.");
+          "Flat histogram bin count exceeds maximum threshold.");
     }
   }
   return absl::OkStatus();
 }
 
-absl::StatusOr<std::unique_ptr<Codec>> CodecFactory::CreateExplicitCodec(
+absl::StatusOr<std::unique_ptr<Codec>> Codec::CreateFlatHistogramCodec(
     InputSpec input_spec) {
   // Check that specs include at least one metric vector.
   if (input_spec.metric_vector_specs().empty()) {
@@ -408,9 +411,9 @@ absl::StatusOr<std::unique_ptr<Codec>> CodecFactory::CreateExplicitCodec(
           absl::StrCat("Duplicate vector name: ", spec.vector_name()));
     }
   }
-  return absl::WrapUnique(new ExplicitCodecImpl(std::move(input_spec),
-                                                std::move(group_by_spec_map),
-                                                std::move(metric_spec_map)));
+  return absl::WrapUnique(new FlatHistogramCodecImpl(
+      std::move(input_spec), std::move(group_by_spec_map),
+      std::move(metric_spec_map)));
 }
 
 }  // namespace willow
