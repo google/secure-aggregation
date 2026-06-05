@@ -24,6 +24,7 @@
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
+#include "absl/time/time.h"
 #include "ffi_utils/cxx_utils.h"
 #include "ffi_utils/status_macros.h"
 #include "include/cxx.h"
@@ -47,8 +48,8 @@ absl::StatusOr<willow::AggregationConfigProto> CreateAggregationConfig(
   config_proto.set_key_id(std::string(key_id));
 
   // Validate the input spec and create the codec (for vector length).
-  SECAGG_ASSIGN_OR_RETURN(
-      auto codec, willow::Codec::CreateFlatHistogramCodec(input_spec_proto));
+  SECAGG_ASSIGN_OR_RETURN(auto codec, willow::Codec::CreateFlatHistogramCodec(
+                                          input_spec_proto, absl::UnixEpoch()));
 
   // Build VectorConfig (length and bound) for each metric.
   for (const auto& metric_spec : input_spec_proto.metric_vector_specs()) {

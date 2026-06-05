@@ -16,6 +16,9 @@ syntax = "proto3";
 
 package secure_aggregation.willow;
 
+import "google/protobuf/duration.proto";
+import "google/protobuf/timestamp.proto";
+
 option java_multiple_files = true;
 option java_outer_classname = "InputSpecProto";
 
@@ -89,6 +92,70 @@ message InputSpec {
     repeated string values = 1;
   }
 
+  // A domain for timestamps represented in a modular way, yielding a small
+  // closed domain instead of an unbounded number of timestamps.
+  //
+  // Input timestamps t (as strings) are parsed and mapped to a period index in
+  // [0, num_periods) using:
+  //    period_index = ((t - origin_time) / period_duration) mod num_periods
+  //  Stale events (older than lookback_window relative to Now()) or future
+  //  events are mapped to a special invalid bucket (index num_periods). During
+  //  decoding, timestamps are reconstructed relative to a dynamic anchor_time.
+  //
+  //  Inputs encoded more than (num_periods * period_duration - lookback_window)
+  //  apart might collide, i.e. contain different timestamps mapping to the same
+  //  bucket. Shorter lookback windows allow for longer retention before
+  //  aggregation and decoding.
+  //
+  //  Example: inputs from Device 1 and Device 3 should not be decoded together.
+  //
+  //    <----- num_periods * period_duration ----->
+  //  --+------|------|------|------|------|------|------|------|------|--> Time
+  //    |  B3  |  B4  |  B5  |  B0  |  B1  |  B2  |  B3  |  B4  |  B5  | Bucket
+  //    | Day 1| Day 2| Day 3| Day 4| Day 5| Day 6| Day 7| Day 8| Day 9|  Day
+  //    +------+------+------+------+------+------+------+------+------+
+  //    ^                                         ^
+  //    anchor_time                anchor_time + num_periods * period_duration
+  //
+  //  Device 1:
+  //                 t_1
+  //                  v
+  //    [=============] (lookback_window = 2 days)
+  //
+  //  Device 2:
+  //                                              t_2
+  //                                              v
+  //                                [=============]
+  //  Device 3:
+  //                                                            t_3
+  //                                                            v
+  //                                              [=============]
+  //
+
+  message TimeDomain {
+    // The duration of each period.
+    google.protobuf.Duration period_duration = 1;
+    // The number of periods.
+    int32 num_periods = 2;
+    // The format string used for parsing and formatting (absl::ParseTime
+    // compatible). If empty, RFC 3339 is used.
+    string format = 3;
+    // The timezone to use if the timestamp string does not contain timezone
+    // info (e.g., "America/Los_Angeles", "UTC"). Must be absl::LoadTimeZone
+    // compatible, i.e. a valid IANA timezone name. If not set, "UTC" is used.
+    // If the timestamp string contains a UTC offset specification (e.g., %z),
+    // the timezone offset in the string takes precedence.
+    string timezone = 4;
+    // The origin time from which the periods are calculated.
+    // If not set, the Unix Epoch (1970-01-01T00:00:00Z) is used.
+    google.protobuf.Timestamp origin_time = 5;
+    // The lookback window defining how far back in time from the encoding
+    // time we accept events. Events older than this duration, or
+    // events in the future, will be mapped to the invalid bucket.
+    // If not set, defaults to `num_periods * period_duration / 2`.
+    google.protobuf.Duration lookback_window = 6;
+  }
+
   // A new message type to represent the domain specification.
   message DomainSpec {
     oneof domain_type {
@@ -97,6 +164,9 @@ message InputSpec {
 
       // Defines a domain as an interval of values.
       Interval interval = 2;
+
+      // Defines a domain for timestamps.
+      TimeDomain time = 3;
     }
   }
 

@@ -18,6 +18,7 @@
 #include <cstdint>
 #include <limits>
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -30,7 +31,9 @@
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
+#include "absl/time/time.h"
 #include "ffi_utils/status_macros.h"
+#include "willow/input_encoding/time_utils.h"
 #include "willow/proto/willow/input_spec.pb.h"
 
 namespace secure_aggregation {
@@ -44,7 +47,19 @@ using InputVectorSpec =
 struct GroupByVectorContext {
   const InputVectorSpec* input_spec;
   absl::flat_hash_map<std::string, int> domain_indices;
+  TimeDomainInfo time_domain_info;
 };
+
+// Number of possible values in the domain of the group-by vector.
+int GetDomainSize(const GroupByVectorContext& context) {
+  const auto& domain_spec = context.input_spec->domain_spec();
+  if (domain_spec.has_string_values()) {
+    return domain_spec.string_values().values_size();
+  } else if (domain_spec.has_time()) {
+    return context.time_domain_info.num_periods + 1;
+  }
+  return 0;
+}
 
 // FlatHistogramCodecImpl implements a Codec that encodes data into a dense,
 // flat 1D histogram representing the Cartesian product of the group-by
@@ -81,6 +96,8 @@ class FlatHistogramCodecImpl : public Codec {
   absl::flat_hash_map<std::string, const InputVectorSpec*> metric_spec_map_;
   // The size of the Cartesian product of all group-by domains.
   std::int64_t flat_histogram_bin_count_;
+  // Reference time used for encoding/decoding time domains.
+  std::optional<absl::Time> reference_time_;
 
   absl::Status ValidateData(const GroupData& group_by_data,
                             const MetricData& metric_data) const;
@@ -100,12 +117,13 @@ class FlatHistogramCodecImpl : public Codec {
       absl::btree_map<std::string, GroupByVectorContext>
           group_by_vector_contexts,
       absl::flat_hash_map<std::string, const InputVectorSpec*> metric_spec_map,
-      size_t flat_histogram_bin_count)
+      std::optional<absl::Time> reference_time, size_t flat_histogram_bin_count)
       : input_spec_(std::move(input_spec)),
         group_by_vector_contexts_(std::move(group_by_vector_contexts)),
         metric_spec_map_(std::move(metric_spec_map)),
         flat_histogram_bin_count_(
-            static_cast<std::int64_t>(flat_histogram_bin_count)) {}
+            static_cast<std::int64_t>(flat_histogram_bin_count)),
+        reference_time_(reference_time) {}
   friend class Codec;
 };
 
@@ -187,13 +205,28 @@ absl::Status FlatHistogramCodecImpl::ValidateData(
           " but input_spec type is ",
           InputSpec::DataType_Name(context.input_spec->data_type())));
     }
+    const auto& domain_spec = context.input_spec->domain_spec();
     // Check that all values in group_by_data are in the domain provided in the
     // input_spec.
     for (const auto& d : data) {
-      if (!context.domain_indices.contains(d)) {
+      if (domain_spec.has_string_values()) {
+        if (!context.domain_indices.contains(d)) {
+          return absl::InvalidArgumentError(absl::StrCat(
+              "Domain mismatch for key ", name, ": group_by_data value ", d,
+              " not found in domain."));
+        }
+      } else if (domain_spec.has_time()) {
+        absl::Time t;
+        std::string err;
+        if (!absl::ParseTime(context.time_domain_info.format, d,
+                             context.time_domain_info.timezone, &t, &err)) {
+          return absl::InvalidArgumentError(
+              absl::StrCat("Failed to parse timestamp value '", d, "' for key ",
+                           name, ": ", err));
+        }
+      } else {
         return absl::InvalidArgumentError(
-            absl::StrCat("Domain mismatch for key ", name,
-                         ": group_by_data value ", d, " not found in domain."));
+            absl::StrCat("Unsupported domain type for key ", name));
       }
     }
   }
@@ -213,7 +246,7 @@ std::vector<int> FlatHistogramCodecImpl::GetIndices(int global_index) const {
   int i = group_by_vector_contexts_.size() - 1;
   for (auto it = group_by_vector_contexts_.rbegin();
        it != group_by_vector_contexts_.rend(); ++it) {
-    int domain_size = it->second.domain_indices.size();
+    int domain_size = GetDomainSize(it->second);
     indices[i] = current_index % domain_size;
     current_index /= domain_size;
     i--;
@@ -233,7 +266,7 @@ size_t FlatHistogramCodecImpl::GetCombinedIndex(
   int64_t combined_index = 0;
   int i = 0;
   for (const auto& [_, context] : group_by_vector_contexts_) {
-    combined_index *= context.domain_indices.size();
+    combined_index *= GetDomainSize(context);
     combined_index += indices[i];
     i++;
   }
@@ -247,10 +280,20 @@ int FlatHistogramCodecImpl::EncodeGroupValue(const std::string& group_name,
   auto context_it = group_by_vector_contexts_.find(group_name);
   CHECK(context_it != group_by_vector_contexts_.end());
   const auto& context = context_it->second;
-
-  auto it = context.domain_indices.find(value);
-  CHECK(it != context.domain_indices.end());
-  return it->second;
+  if (context.input_spec->domain_spec().has_string_values()) {
+    auto it = context.domain_indices.find(value);
+    CHECK(it != context.domain_indices.end());
+    return it->second;
+  } else if (context.input_spec->domain_spec().has_time()) {
+    absl::Time t;
+    CHECK(absl::ParseTime(context.time_domain_info.format, value,
+                          context.time_domain_info.timezone, &t, nullptr));
+    CHECK(reference_time_.has_value());
+    return EncodeTime(t, context.time_domain_info, *reference_time_);
+  } else {
+    CHECK(false) << "Unsupported domain type for group-by vector: "
+                 << group_name;
+  }
 }
 
 // Decodes a group-by domain index to its original value within the group-by
@@ -260,14 +303,32 @@ absl::StatusOr<std::string> FlatHistogramCodecImpl::DecodeGroupValue(
   auto context_it = group_by_vector_contexts_.find(group_name);
   CHECK(context_it != group_by_vector_contexts_.end());
   const auto& context = context_it->second;
-
-  const auto& domain = context.input_spec->domain_spec().string_values();
-  if (group_domain_index < 0 || group_domain_index >= domain.values_size()) {
+  const auto& domain_spec = context.input_spec->domain_spec();
+  if (domain_spec.has_string_values()) {
+    const auto& domain = domain_spec.string_values();
+    if (group_domain_index < 0 || group_domain_index >= domain.values_size()) {
+      return absl::InvalidArgumentError(
+          absl::StrCat("Index ", group_domain_index, " for key ", group_name,
+                       " is out of bounds [0, ", domain.values_size(), ")."));
+    }
+    return domain.values(group_domain_index);
+  } else if (domain_spec.has_time()) {
+    const auto& ts_info = context.time_domain_info;
+    absl::Time reconstructed_time;
+    if (group_domain_index == ts_info.num_periods) {
+      reconstructed_time = DefaultTimestamp();
+    } else {
+      CHECK(reference_time_.has_value());
+      SECAGG_ASSIGN_OR_RETURN(
+          reconstructed_time,
+          DecodeTime(group_domain_index, ts_info, *reference_time_));
+    }
+    return absl::FormatTime(ts_info.format, reconstructed_time,
+                            ts_info.timezone);
+  } else {
     return absl::InvalidArgumentError(
-        absl::StrCat("Index ", group_domain_index, " for key ", group_name,
-                     " is out of bounds [0, ", domain.values_size(), ")."));
+        absl::StrCat("Unsupported domain type for key ", group_name));
   }
-  return domain.values(group_domain_index);
 }
 
 absl::StatusOr<EncodedData> FlatHistogramCodecImpl::Encode(
@@ -307,8 +368,8 @@ absl::StatusOr<DecodedData> FlatHistogramCodecImpl::Decode(
   if (group_by_vector_contexts_.empty()) {
     // No group-by, so decoded metrics are just the encoded data.
     decoded_data.metric_data = encoded_data;
-    // Check if all encoded vectors have the same size.
     if (encoded_data.empty()) return decoded_data;
+    // Check if all encoded vectors have the same size.
     size_t expected_size = encoded_data.begin()->second.size();
     for (const auto& [name, values] : encoded_data) {
       if (values.size() != expected_size) {
@@ -382,19 +443,30 @@ absl::Status FlatHistogramCodecImpl::ValidateExampleQuery(
 }
 
 absl::StatusOr<std::unique_ptr<Codec>> Codec::CreateFlatHistogramCodec(
-    InputSpec input_spec) {
+    InputSpec input_spec, std::optional<absl::Time> reference_time) {
   // Check that specs include at least one metric vector.
   if (input_spec.metric_vector_specs().empty()) {
     return absl::InvalidArgumentError(
         "input_spec must include at least one metric vector.");
   }
   for (const auto& spec : input_spec.group_by_vector_specs()) {
-    if (!spec.domain_spec().has_string_values()) {
+    const auto& domain_spec = spec.domain_spec();
+    if (domain_spec.has_string_values()) {
+      if (domain_spec.string_values().values_size() == 0) {
+        return absl::InvalidArgumentError("String domain cannot be empty.");
+      }
+    } else if (domain_spec.has_time()) {
+      if (spec.data_type() != InputSpec::STRING) {
+        return absl::InvalidArgumentError(
+            "Time domain can only be used with STRING data type.");
+      }
+      if (!reference_time.has_value()) {
+        return absl::InvalidArgumentError(
+            "reference_time is required when time domains are present");
+      }
+    } else {
       return absl::InvalidArgumentError(
           "Unsupported domain type for group-by vector");
-    }
-    if (spec.domain_spec().string_values().values_size() == 0) {
-      return absl::InvalidArgumentError("String domain cannot be empty.");
     }
   }
 
@@ -403,10 +475,17 @@ absl::StatusOr<std::unique_ptr<Codec>> Codec::CreateFlatHistogramCodec(
   for (const auto& spec : input_spec.group_by_vector_specs()) {
     GroupByVectorContext context;
     context.input_spec = &spec;
-    const auto& domain = spec.domain_spec().string_values();
-    for (int i = 0; i < domain.values_size(); ++i) {
-      context.domain_indices[domain.values(i)] = i;
+
+    if (spec.domain_spec().has_string_values()) {
+      const auto& domain = spec.domain_spec().string_values();
+      for (int i = 0; i < domain.values_size(); ++i) {
+        context.domain_indices[domain.values(i)] = i;
+      }
+    } else if (spec.domain_spec().has_time()) {
+      SECAGG_ASSIGN_OR_RETURN(context.time_domain_info,
+                              ParseTimeDomain(spec.domain_spec().time()));
     }
+
     if (!group_by_vector_contexts
              .insert({spec.vector_name(), std::move(context)})
              .second) {
@@ -426,7 +505,7 @@ absl::StatusOr<std::unique_ptr<Codec>> Codec::CreateFlatHistogramCodec(
   int64_t flattened_domain_size = 1;
 
   for (const auto& [_, context] : group_by_vector_contexts) {
-    int domain_size = context.domain_indices.size();
+    int domain_size = GetDomainSize(context);
     if (flattened_domain_size >
         std::numeric_limits<int64_t>::max() / domain_size) {
       return absl::InvalidArgumentError("Flat histogram bin count overflow.");
@@ -436,7 +515,7 @@ absl::StatusOr<std::unique_ptr<Codec>> Codec::CreateFlatHistogramCodec(
 
   return absl::WrapUnique(new FlatHistogramCodecImpl(
       std::move(input_spec), std::move(group_by_vector_contexts),
-      std::move(metric_spec_map), flattened_domain_size));
+      std::move(metric_spec_map), reference_time, flattened_domain_size));
 }
 
 absl::StatusOr<size_t> FlatHistogramCodecImpl::GetEncodedVectorLength(

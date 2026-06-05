@@ -18,6 +18,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -26,6 +27,7 @@
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
+#include "absl/time/time.h"
 #include "ffi_utils/status_macros.h"
 #include "willow/proto/willow/input_spec.pb.h"
 
@@ -86,8 +88,16 @@ class Codec {
       absl::string_view metric_name) const = 0;
 
   // Creates an instance of FlatHistogramCodec.
+  //
+  // `reference_time` must be set if the input spec contains any TimeDomain:
+  // - If the codec is used for encoding, `reference_time` represents the client
+  //   encoding time used to evaluate staleness.
+  // - If the codec is used for decoding, `reference_time` represents the
+  //   decoding anchor time (e.g., start of the current aggregation window)
+  //   used to align the modular periods back to absolute timestamps.
   static absl::StatusOr<std::unique_ptr<Codec>> CreateFlatHistogramCodec(
-      ::secure_aggregation::willow::InputSpec input_spec);
+      ::secure_aggregation::willow::InputSpec input_spec,
+      std::optional<absl::Time> reference_time = std::nullopt);
 
   // Deprecated aliases for backward compatibility
   [[deprecated("Use CreateFlatHistogramCodec instead")]]
@@ -104,8 +114,9 @@ class Codec {
     // Creating a codec allocates memory, compared to just validating the input
     // spec, but the memory allocation is just proportional to the
     // size of the input spec.
-    SECAGG_ASSIGN_OR_RETURN(std::unique_ptr<Codec> codec,
-                            CreateFlatHistogramCodec(input_spec));
+    SECAGG_ASSIGN_OR_RETURN(
+        std::unique_ptr<Codec> codec,
+        CreateFlatHistogramCodec(input_spec, absl::UnixEpoch()));
     if (!input_spec.metric_vector_specs().empty()) {
       std::string first_metric =
           input_spec.metric_vector_specs(0).vector_name();

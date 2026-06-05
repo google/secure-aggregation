@@ -19,6 +19,7 @@
 #include "absl/container/flat_hash_map.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/time/time.h"
 #include "pybind11/pybind11.h"
 #include "pybind11/stl.h"
 #include "pybind11_abseil/status_casters.h"
@@ -47,6 +48,10 @@ PYBIND11_MODULE(codec_bindings, m) {
       .def("GetEncodedVectorLength", &Codec::GetEncodedVectorLength,
            py::arg("metric_name"));
 
+  // Creates a FlatHistogramCodec from a serialized InputSpec.
+  //
+  // Remark: 'reference_time' is not exposed to Python because these bindings
+  // are only used for validation, and not for encoding or decoding.
   m.def(
       "CreateFlatHistogramCodec",
       [](const std::string& serialized_input_spec)
@@ -55,7 +60,7 @@ PYBIND11_MODULE(codec_bindings, m) {
         if (!input_spec.ParseFromString(serialized_input_spec)) {
           return absl::InvalidArgumentError("Failed to parse InputSpec");
         }
-        return Codec::CreateFlatHistogramCodec(input_spec);
+        return Codec::CreateFlatHistogramCodec(input_spec, absl::UnixEpoch());
       },
       py::arg("serialized_input_spec"));
 
@@ -68,7 +73,7 @@ PYBIND11_MODULE(codec_bindings, m) {
         if (!input_spec.ParseFromString(serialized_input_spec)) {
           return absl::InvalidArgumentError("Failed to parse InputSpec");
         }
-        return Codec::CreateFlatHistogramCodec(input_spec);
+        return Codec::CreateFlatHistogramCodec(input_spec, absl::UnixEpoch());
       },
       py::arg("serialized_input_spec"));
 
