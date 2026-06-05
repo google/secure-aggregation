@@ -43,7 +43,9 @@ PYBIND11_MODULE(codec_bindings, m) {
                    item.second.cast<std::string>();
              }
              return self.ValidateExampleQuery(cpp_map);
-           });
+           })
+      .def("GetEncodedVectorLength", &Codec::GetEncodedVectorLength,
+           py::arg("metric_name"));
 
   m.def(
       "CreateFlatHistogramCodec",
@@ -70,23 +72,8 @@ PYBIND11_MODULE(codec_bindings, m) {
       },
       py::arg("serialized_input_spec"));
 
-  m.def(
-      "ValidateInputSpec",
-      [](const std::string& serialized_input_spec,
-         size_t max_flat_histogram_bins) -> absl::Status {
-        InputSpec input_spec;
-        if (!input_spec.ParseFromString(serialized_input_spec)) {
-          return absl::InvalidArgumentError("Failed to parse InputSpec");
-        }
-        if (max_flat_histogram_bins == 0) {
-          return Codec::ValidateInputSpec(input_spec);
-        } else {
-          return Codec::ValidateInputSpec(input_spec, max_flat_histogram_bins);
-        }
-      },
-      py::arg("serialized_input_spec"), py::arg("max_flat_histogram_bins") = 0);
-
-  // DEPRECATED: Use ValidateInputSpec instead.
+  // DEPRECATED: Use CreateFlatHistogramCodec and Codec.GetEncodedVectorLength
+  // instead.
   m.def(
       "ValidateExplicitCodecInputSpec",
       [](const std::string& serialized_input_spec,
@@ -96,10 +83,10 @@ PYBIND11_MODULE(codec_bindings, m) {
           return absl::InvalidArgumentError("Failed to parse InputSpec");
         }
         if (max_flattened_domain_size == 0) {
-          return Codec::ValidateInputSpec(input_spec);
+          return Codec::ValidateExplicitCodecInputSpec(input_spec);
         } else {
-          return Codec::ValidateInputSpec(input_spec,
-                                          max_flattened_domain_size);
+          return Codec::ValidateExplicitCodecInputSpec(
+              input_spec, max_flattened_domain_size);
         }
       },
       py::arg("serialized_input_spec"),

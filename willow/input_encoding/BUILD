@@ -33,12 +33,14 @@ cc_library(
         "codec_factory.h",
     ],
     deps = [
+        "@abseil-cpp//absl/container:btree",
         "@abseil-cpp//absl/container:flat_hash_map",
         "@abseil-cpp//absl/log:check",
         "@abseil-cpp//absl/memory",
         "@abseil-cpp//absl/status",
         "@abseil-cpp//absl/status:statusor",
         "@abseil-cpp//absl/strings",
+        "//ffi_utils:status_macros",
         "//willow/proto/willow:input_spec_cc_proto",
     ],
 )

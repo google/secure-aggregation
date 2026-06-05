@@ -14,6 +14,7 @@
 
 #include "willow/api/client.h"
 
+#include <cstddef>
 #include <cstdint>
 #include <memory>
 #include <string>
@@ -22,7 +23,6 @@
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
-#include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
 #include "ffi_utils/cxx_utils.h"
 #include "ffi_utils/status_macros.h"
@@ -45,24 +45,18 @@ absl::StatusOr<willow::AggregationConfigProto> CreateAggregationConfig(
   config_proto.set_max_number_of_decryptors(max_number_of_decryptors);
   config_proto.set_max_decryptor_dropouts(max_decryptor_dropouts);
   config_proto.set_key_id(std::string(key_id));
-  // All metrics have same vector length, corresponding to the Cartesian product
-  // of group-by domains.
-  int64_t flattened_domain_size = 1;
-  for (const auto& group_by_spec : input_spec_proto.group_by_vector_specs()) {
-    if (group_by_spec.domain_spec().string_values().values_size() == 0) {
-      return absl::InvalidArgumentError(absl::StrCat(
-          "Missing domain, invalid domain type (must be StringValues), or "
-          "empty string_values for group by vector: ",
-          group_by_spec.vector_name()));
-    }
-    flattened_domain_size *=
-        group_by_spec.domain_spec().string_values().values_size();
-  }
+
+  // Validate the input spec and create the codec (for vector length).
+  SECAGG_ASSIGN_OR_RETURN(
+      auto codec, willow::Codec::CreateFlatHistogramCodec(input_spec_proto));
+
   // Build VectorConfig (length and bound) for each metric.
   for (const auto& metric_spec : input_spec_proto.metric_vector_specs()) {
     auto& vector_config =
         (*config_proto.mutable_vector_configs())[metric_spec.vector_name()];
-    vector_config.set_length(flattened_domain_size);
+    SECAGG_ASSIGN_OR_RETURN(size_t length, codec->GetEncodedVectorLength(
+                                               metric_spec.vector_name()));
+    vector_config.set_length(length);
     if (metric_spec.has_domain_spec() &&
         metric_spec.domain_spec().has_interval()) {
       vector_config.set_bound(

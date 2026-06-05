@@ -82,6 +82,8 @@ TEST(CodecTest, ValidateInputAndSpecEmptyInputData) {
   auto* group_by_spec = input_spec.add_group_by_vector_specs();
   group_by_spec->set_vector_name("feature1");
   group_by_spec->set_data_type(InputSpec::STRING);
+  group_by_spec->mutable_domain_spec()->mutable_string_values()->add_values(
+      "a");
 
   SECAGG_ASSERT_OK_AND_ASSIGN(std::unique_ptr<Codec> encoder,
                               Codec::CreateFlatHistogramCodec(input_spec));
@@ -270,7 +272,7 @@ TEST(CodecTest, ValidateInputAndSpecMaxFlatHistogramBinsExceeded) {
         ->add_values(std::to_string(i));
   }
 
-  EXPECT_THAT(Codec::ValidateInputSpec(input_spec),
+  EXPECT_THAT(Codec::ValidateExplicitCodecInputSpec(input_spec),
               StatusIs(absl::StatusCode::kInvalidArgument,
                        HasSubstr("Flat histogram bin count exceeds")));
 }
@@ -292,10 +294,10 @@ TEST(CodecTest, ValidateInputAndSpecCustomMaxFlatHistogramBins) {
   group_by_spec->mutable_domain_spec()->mutable_string_values()->add_values(
       "b");
   // Domain size is 2.
-  EXPECT_THAT(Codec::ValidateInputSpec(input_spec, 1),
+  EXPECT_THAT(Codec::ValidateExplicitCodecInputSpec(input_spec, 1),
               StatusIs(absl::StatusCode::kInvalidArgument,
                        HasSubstr("Flat histogram bin count exceeds")));
-  SECAGG_EXPECT_OK(Codec::ValidateInputSpec(input_spec, 2));
+  SECAGG_EXPECT_OK(Codec::ValidateExplicitCodecInputSpec(input_spec, 2));
 }
 
 TEST(CodecTest, EncodeSimpleGroupBy) {
@@ -511,6 +513,58 @@ TEST(CodecTest, EncodeWithDomainValueNotFound) {
               StatusIs(absl::StatusCode::kInvalidArgument,
                        HasSubstr("Domain mismatch for key feature1: "
                                  "group_by_data value c not found in domain")));
+}
+
+TEST(CodecTest, CreateCodecUnsupportedDomain) {
+  InputSpec input_spec;
+  auto* metric_spec = input_spec.add_metric_vector_specs();
+  metric_spec->set_vector_name("metric1");
+  metric_spec->set_data_type(InputSpec::INT64);
+
+  auto* group_by_spec = input_spec.add_group_by_vector_specs();
+  group_by_spec->set_vector_name("group1");
+  group_by_spec->set_data_type(InputSpec::STRING);
+
+  // Set unsupported interval domain on a group-by vector
+  group_by_spec->mutable_domain_spec()->mutable_interval()->set_min(0);
+  group_by_spec->mutable_domain_spec()->mutable_interval()->set_max(10);
+
+  EXPECT_THAT(Codec::CreateFlatHistogramCodec(input_spec),
+              StatusIs(absl::StatusCode::kInvalidArgument,
+                       HasSubstr("Unsupported domain type")));
+}
+
+TEST(CodecTest, GetEncodedVectorLengthSuccess) {
+  InputSpec input_spec = CreateTestInputSpecProto();
+  SECAGG_ASSERT_OK_AND_ASSIGN(std::unique_ptr<Codec> codec,
+                              Codec::CreateFlatHistogramCodec(input_spec));
+  EXPECT_THAT(codec->GetEncodedVectorLength("metric1"), IsOkAndHolds(8));
+  EXPECT_THAT(codec->GetEncodedVectorLength("unknown_metric"),
+              StatusIs(absl::StatusCode::kInvalidArgument,
+                       HasSubstr("not found in input spec")));
+}
+
+TEST(CodecTest, CreateCodecOverflow) {
+  InputSpec input_spec;
+  auto* metric_spec = input_spec.add_metric_vector_specs();
+  metric_spec->set_vector_name("metric1");
+  metric_spec->set_data_type(InputSpec::INT64);
+
+  // Add 8 domains of size 2^10. (2^10)^8 = 2^80 > 2^64, which overflows
+  // int64_t.
+  for (int j = 0; j < 8; ++j) {
+    auto* spec = input_spec.add_group_by_vector_specs();
+    spec->set_vector_name("group" + std::to_string(j));
+    spec->set_data_type(InputSpec::STRING);
+    for (int i = 0; i < 1024; ++i) {
+      spec->mutable_domain_spec()->mutable_string_values()->add_values(
+          std::to_string(i));
+    }
+  }
+
+  EXPECT_THAT(
+      Codec::CreateFlatHistogramCodec(input_spec),
+      StatusIs(absl::StatusCode::kInvalidArgument, HasSubstr("overflow")));
 }
 
 }  // namespace

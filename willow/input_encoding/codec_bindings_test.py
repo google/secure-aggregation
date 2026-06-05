@@ -31,7 +31,13 @@ class CodecBindingsTest(unittest.TestCase):
         ],
         group_by_vector_specs=[
             input_spec_pb2.InputSpec.InputVectorSpec(
-                vector_name="group1", data_type=input_spec_pb2.InputSpec.STRING
+                vector_name="group1",
+                data_type=input_spec_pb2.InputSpec.STRING,
+                domain_spec=input_spec_pb2.InputSpec.DomainSpec(
+                    string_values=input_spec_pb2.InputSpec.StringValues(
+                        values=["a"]
+                    )
+                ),
             )
         ],
     )
@@ -65,6 +71,15 @@ class CodecBindingsTest(unittest.TestCase):
         py_status.StatusNotOk, "not found in input spec"
     ):
       self.codec.ValidateExampleQuery(query_specs)
+
+  def test_get_encoded_vector_length_success(self):
+    self.assertEqual(self.codec.GetEncodedVectorLength("metric1"), 1)
+
+  def test_get_encoded_vector_length_metric_not_found(self):
+    with self.assertRaisesRegex(
+        py_status.StatusNotOk, "not found in input spec"
+    ):
+      self.codec.GetEncodedVectorLength("unknown_metric")
 
 
 if __name__ == "__main__":

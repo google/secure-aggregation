@@ -25,6 +25,8 @@
 #include "absl/container/flat_hash_map.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/string_view.h"
+#include "ffi_utils/status_macros.h"
 #include "willow/proto/willow/input_spec.pb.h"
 
 namespace secure_aggregation {
@@ -78,15 +80,14 @@ class Codec {
       const absl::flat_hash_map<std::string, std::string>& query_output_specs)
       const = 0;
 
+  // Returns the length of the encoded vector for the given metric.
+  // Returns an InvalidArgument error if the metric is not found in the spec.
+  virtual absl::StatusOr<size_t> GetEncodedVectorLength(
+      absl::string_view metric_name) const = 0;
+
   // Creates an instance of FlatHistogramCodec.
   static absl::StatusOr<std::unique_ptr<Codec>> CreateFlatHistogramCodec(
       ::secure_aggregation::willow::InputSpec input_spec);
-
-  // Check that the combined size of the string domains is less than the
-  // maximum allowed size.
-  static absl::Status ValidateInputSpec(
-      const ::secure_aggregation::willow::InputSpec& input_spec,
-      size_t max_flat_histogram_bins = kMaxFlatHistogramBins);
 
   // Deprecated aliases for backward compatibility
   [[deprecated("Use CreateFlatHistogramCodec instead")]]
@@ -95,11 +96,27 @@ class Codec {
     return CreateFlatHistogramCodec(std::move(input_spec));
   }
 
-  [[deprecated("Use ValidateInputSpec instead")]]
+  [[deprecated(
+      "Use CreateFlatHistogramCodec and GetEncodedVectorLength instead")]]
   static absl::Status ValidateExplicitCodecInputSpec(
       const ::secure_aggregation::willow::InputSpec& input_spec,
       size_t max_flattened_domain_size = kMaxFlatHistogramBins) {
-    return ValidateInputSpec(input_spec, max_flattened_domain_size);
+    // Creating a codec allocates memory, compared to just validating the input
+    // spec, but the memory allocation is just proportional to the
+    // size of the input spec.
+    SECAGG_ASSIGN_OR_RETURN(std::unique_ptr<Codec> codec,
+                            CreateFlatHistogramCodec(input_spec));
+    if (!input_spec.metric_vector_specs().empty()) {
+      std::string first_metric =
+          input_spec.metric_vector_specs(0).vector_name();
+      SECAGG_ASSIGN_OR_RETURN(size_t length,
+                              codec->GetEncodedVectorLength(first_metric));
+      if (length > max_flattened_domain_size) {
+        return absl::InvalidArgumentError(
+            "Flat histogram bin count exceeds maximum threshold.");
+      }
+    }
+    return absl::OkStatus();
   }
 };
 

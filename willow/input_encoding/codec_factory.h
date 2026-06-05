@@ -37,7 +37,8 @@ class [[deprecated("Use Codec class static methods instead")]] CodecFactory {
   static absl::Status ValidateExplicitCodecInputSpec(
       const InputSpec& input_spec,
       size_t max_flattened_domain_size = kMaxFlatHistogramBins) {
-    return Codec::ValidateInputSpec(input_spec, max_flattened_domain_size);
+    return Codec::ValidateExplicitCodecInputSpec(input_spec,
+                                                 max_flattened_domain_size);
   }
 };
 
