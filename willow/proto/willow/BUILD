@@ -74,6 +74,9 @@ rust_proto_library(
 proto_library(
     name = "decryptor_proto",
     srcs = ["decryptor.proto"],
+    deps = [
+        "@protobuf//:timestamp_proto",
+    ],
 )
 
 cc_proto_library(

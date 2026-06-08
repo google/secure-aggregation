@@ -16,6 +16,8 @@ syntax = "proto3";
 
 package secure_aggregation.willow;
 
+import "google/protobuf/timestamp.proto";
+
 option java_multiple_files = true;
 option java_outer_classname = "DecryptorProto";
 
@@ -23,20 +25,49 @@ message GenerateKeyRequest {
   // The key ID to use for the generated key. If the key with the given ID
   // already exists, it will be returned instead.
   bytes key_id = 1;
+
+  // A permanent session_tag that is shared across all keys mapped to the same
+  // logical recurring task. To avoid race condition in a potentially costly,
+  // key generation operation, only one key per session tag can be generated at
+  // a time.
+  string session_tag = 2;
+
+  // The timestamp (without timezone information) that indicates when the key
+  // server innitiated the key generation. This is used to distinguish keys in
+  // the same series and it is verified to be monotonically increasing. Rolling
+  // back the clock will be rejected.
+  google.protobuf.Timestamp created_timestamp = 3;
+
+  // The timestamp (without timezone information) that indicates when the key
+  // expires. Keys that have expired will not be returned by ListKeys or be
+  // usable for decryption.
+  google.protobuf.Timestamp expiration_timestamp = 4;
 }
 
 message GenerateKeyResponse {
   // The serialized bytes of the public key.
   bytes public_key = 1;
+
+  // The key_id of the generated key.
+  bytes key_id = 2;
 }
 
 message DecryptRequest {
   // The serialized bytes of the message to decrypt.
   bytes decryption_request = 1;
+
   // The serialized bytes of the public key as returned by GenerateKey.
   bytes public_key = 2 [deprecated = true];
-  // The key ID of the public key that was used in the GenerateKey call.
+
+  // The key ID of the public key that was used in the GenerateKey call. Each
+  // key can only be used once and will be marked as consumed after successful
+  // decryption use.
   bytes key_id = 3;
+
+  // Session tag associated with the key. It is used for diagnostic purposes
+  // and must match the session tag associated with the key on the Decryptor
+  // side.
+  string session_tag = 4;
 }
 
 message DecryptResponse {
@@ -46,7 +77,10 @@ message DecryptResponse {
 
 // Error status.
 message Status {
+  // The error code.
   int32 code = 1;
+
+  // The error message.
   string message = 2;
 }
 
@@ -58,6 +92,7 @@ message DecryptorRequest {
     // Creates a new key pair for encrypting messages with asymmetric
     // encryption.
     GenerateKeyRequest generate_key = 1;
+
     // Decrypts a message encrypted with a generated public key.
     DecryptRequest decrypt = 2;
   }
@@ -67,8 +102,10 @@ message DecryptorResponse {
   oneof msg {
     // Response for GenerateKeyRequest.
     GenerateKeyResponse generate_key = 1;
+
     // Response for DecryptRequest.
     DecryptResponse decrypt = 2;
+
     // Error status shared among requests.
     Status error = 3;
   }
