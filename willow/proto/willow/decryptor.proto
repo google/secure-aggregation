@@ -75,6 +75,19 @@ message DecryptResponse {
   bytes decryption_response = 1 [ctype = CORD];
 }
 
+message ListKeysRequest {
+  // Session tag (i.e. the fully qualified name of the customer Brella upload
+  // task) associated with the keys that will be returned in the response.
+  // If empty or if no keys match the session tag, the response will be empty.
+  string session_tag = 1;
+}
+
+message ListKeysResponse {
+  // All keys matching the session tag that haven't been consumed and
+  // haven't expired.
+  repeated bytes public_keys = 1;
+}
+
 // Error status.
 message Status {
   // The error code.
@@ -95,6 +108,10 @@ message DecryptorRequest {
 
     // Decrypts a message encrypted with a generated public key.
     DecryptRequest decrypt = 2;
+
+    // Lists all keys matching the given tag that haven't been consumed and
+    // haven't expired.
+    ListKeysRequest list_keys = 3;
   }
 }
 
@@ -105,6 +122,9 @@ message DecryptorResponse {
 
     // Response for DecryptRequest.
     DecryptResponse decrypt = 2;
+
+    // Response for ListKeysRequest.
+    ListKeysResponse list_keys = 4;
 
     // Error status shared among requests.
     Status error = 3;
