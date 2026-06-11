@@ -263,8 +263,19 @@ impl ServerAccumulator {
         // Insert client messages into a new server and verifier state.
         let mut new_verifier_state = VerifierState::default();
         let mut new_server_state = ServerState::default();
+        // The nonce range boundaries are derived from the random suffix of the
+        // nonce (i.e., without the 4-byte timestamp prefix). To compare message
+        // nonces against these boundaries, we strip the same prefix.
+        const TIMESTAMP_PREFIX_SIZE: usize = 4;
         for message in client_messages {
-            if message.nonce < nonce_range.start || message.nonce >= nonce_range.end {
+            let nonce_suffix = if message.nonce.len() > TIMESTAMP_PREFIX_SIZE {
+                &message.nonce[TIMESTAMP_PREFIX_SIZE..]
+            } else {
+                &message.nonce[..]
+            };
+            if nonce_suffix < nonce_range.start.as_slice()
+                || nonce_suffix >= nonce_range.end.as_slice()
+            {
                 // Return immediately in case a message is out of range.
                 return Err(status::invalid_argument(&format!(
                     "Invalid nonce: {:?} outside of range [{:?}, {:?})",

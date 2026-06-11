@@ -37,6 +37,16 @@ namespace {
 using ::secure_aggregation::secagg_internal::StatusIs;
 using ::testing::HasSubstr;
 
+// Fixed 4-byte timestamp prefix used for all test nonces. The value is
+// arbitrary since the accumulator ignores the prefix when checking ranges.
+constexpr char kTimestampPrefix[] = "\x00\x00\x00\x01";
+constexpr int kTimestampPrefixSize = 4;
+
+// Creates a nonce with the 4-byte timestamp prefix followed by the suffix.
+std::string PrefixedNonce(const std::string& suffix) {
+  return std::string(kTimestampPrefix, kTimestampPrefixSize) + suffix;
+}
+
 AggregationConfigProto CreateValidConfig() {
   AggregationConfigProto config;
   VectorConfig vector_config;
@@ -130,7 +140,7 @@ class ServerAccumulatorTest : public ::testing::Test {
 TEST_F(ServerAccumulatorTest, ProcessSingleMessageSucceeds) {
   willow::EncodedData encoded_data = {
       {"test_vector", {0, 1, 2, 3, 4, 5, 6, 7, 8, 9}}};
-  std::string nonce = "nonce1";
+  std::string nonce = PrefixedNonce("nonce1");
   SECAGG_ASSERT_OK_AND_ASSIGN(
       auto client_message,
       GenerateClientContribution(config_, encoded_data, public_key_, nonce));
@@ -153,7 +163,7 @@ TEST_F(ServerAccumulatorTest, ProcessSingleMessageSucceeds) {
 TEST_F(ServerAccumulatorTest, ProcessMessageOutOfRangeFails) {
   willow::EncodedData encoded_data = {
       {"test_vector", {0, 1, 2, 3, 4, 5, 6, 7, 8, 9}}};
-  std::string nonce = "nonce1";
+  std::string nonce = PrefixedNonce("nonce1");
   SECAGG_ASSERT_OK_AND_ASSIGN(
       auto client_message,
       GenerateClientContribution(config_, encoded_data, public_key_, nonce));
@@ -170,7 +180,7 @@ TEST_F(ServerAccumulatorTest, ProcessMessageOutOfRangeFails) {
 TEST_F(ServerAccumulatorTest, ProcessRangeTwiceFails) {
   willow::EncodedData encoded_data = {
       {"test_vector", {0, 1, 2, 3, 4, 5, 6, 7, 8, 9}}};
-  std::string nonce = "nonce1";
+  std::string nonce = PrefixedNonce("nonce1");
   SECAGG_ASSERT_OK_AND_ASSIGN(
       auto client_message,
       GenerateClientContribution(config_, encoded_data, public_key_, nonce));
@@ -190,10 +200,12 @@ TEST_F(ServerAccumulatorTest, ProcessMultipleMessagesSucceeds) {
       {"test_vector", {0, 1, 2, 3, 4, 5, 6, 7, 8, 9}}};
   SECAGG_ASSERT_OK_AND_ASSIGN(
       auto client_message1,
-      GenerateClientContribution(config_, encoded_data, public_key_, "nonce1"));
+      GenerateClientContribution(config_, encoded_data, public_key_,
+                                 PrefixedNonce("nonce1")));
   SECAGG_ASSERT_OK_AND_ASSIGN(
       auto client_message2,
-      GenerateClientContribution(config_, encoded_data, public_key_, "nonce2"));
+      GenerateClientContribution(config_, encoded_data, public_key_,
+                                 PrefixedNonce("nonce2")));
 
   ClientMessageRange messages;
   *messages.add_client_messages() = client_message1;
@@ -218,12 +230,13 @@ TEST_F(ServerAccumulatorTest, ProcessClientMessagesIgnoresInvalidMessage) {
       {"test_vector", {0, 1, 2, 3, 4, 5, 6, 7, 8, 9}}};
   SECAGG_ASSERT_OK_AND_ASSIGN(
       auto client_message1,
-      GenerateClientContribution(config_, encoded_data, public_key_, "nonce1"));
+      GenerateClientContribution(config_, encoded_data, public_key_,
+                                 PrefixedNonce("nonce1")));
 
   // Use a valid message for nonce1, but change nonce to nonce2.
   // This invalidates the proof which is bound to the nonce.
   auto client_message2 = client_message1;
-  client_message2.set_nonce("nonce2");
+  client_message2.set_nonce(PrefixedNonce("nonce2"));
 
   ClientMessageRange messages;
   *messages.add_client_messages() = client_message1;
@@ -250,7 +263,8 @@ TEST_F(ServerAccumulatorTest, ProcessClientMessagesMergesAdjacentRanges) {
 
   SECAGG_ASSERT_OK_AND_ASSIGN(
       auto client_message1,
-      GenerateClientContribution(config_, encoded_data, public_key_, "nonce1"));
+      GenerateClientContribution(config_, encoded_data, public_key_,
+                                 PrefixedNonce("nonce1")));
   ClientMessageRange messages1;
   *messages1.add_client_messages() = client_message1;
   messages1.mutable_nonce_range()->set_start("nonce1");
@@ -259,7 +273,8 @@ TEST_F(ServerAccumulatorTest, ProcessClientMessagesMergesAdjacentRanges) {
 
   SECAGG_ASSERT_OK_AND_ASSIGN(
       auto client_message2,
-      GenerateClientContribution(config_, encoded_data, public_key_, "nonce2"));
+      GenerateClientContribution(config_, encoded_data, public_key_,
+                                 PrefixedNonce("nonce2")));
   ClientMessageRange messages2;
   *messages2.add_client_messages() = client_message2;
   messages2.mutable_nonce_range()->set_start("nonce2");
@@ -284,7 +299,8 @@ TEST_F(ServerAccumulatorTest, MergeSucceedsWithNonEmptyAccumulators) {
 
   SECAGG_ASSERT_OK_AND_ASSIGN(
       auto client_message1,
-      GenerateClientContribution(config_, encoded_data, public_key_, "nonce1"));
+      GenerateClientContribution(config_, encoded_data, public_key_,
+                                 PrefixedNonce("nonce1")));
   ClientMessageRange messages1;
   *messages1.add_client_messages() = client_message1;
   messages1.mutable_nonce_range()->set_start("nonce1");
@@ -293,7 +309,8 @@ TEST_F(ServerAccumulatorTest, MergeSucceedsWithNonEmptyAccumulators) {
 
   SECAGG_ASSERT_OK_AND_ASSIGN(
       auto client_message2,
-      GenerateClientContribution(config_, encoded_data, public_key_, "nonce3"));
+      GenerateClientContribution(config_, encoded_data, public_key_,
+                                 PrefixedNonce("nonce3")));
   ClientMessageRange messages2;
   *messages2.add_client_messages() = client_message2;
   messages2.mutable_nonce_range()->set_start("nonce3");
@@ -323,7 +340,8 @@ TEST_F(ServerAccumulatorTest, MergeSucceedsAndMergesAdjacentRanges) {
 
   SECAGG_ASSERT_OK_AND_ASSIGN(
       auto client_message1,
-      GenerateClientContribution(config_, encoded_data, public_key_, "nonce1"));
+      GenerateClientContribution(config_, encoded_data, public_key_,
+                                 PrefixedNonce("nonce1")));
   ClientMessageRange messages1;
   *messages1.add_client_messages() = client_message1;
   messages1.mutable_nonce_range()->set_start("nonce1");
@@ -332,7 +350,8 @@ TEST_F(ServerAccumulatorTest, MergeSucceedsAndMergesAdjacentRanges) {
 
   SECAGG_ASSERT_OK_AND_ASSIGN(
       auto client_message2,
-      GenerateClientContribution(config_, encoded_data, public_key_, "nonce2"));
+      GenerateClientContribution(config_, encoded_data, public_key_,
+                                 PrefixedNonce("nonce2")));
   ClientMessageRange messages2;
   *messages2.add_client_messages() = client_message2;
   messages2.mutable_nonce_range()->set_start("nonce2");
@@ -359,7 +378,8 @@ TEST_F(ServerAccumulatorTest, MergeFailsWithOverlappingRanges) {
 
   SECAGG_ASSERT_OK_AND_ASSIGN(
       auto client_message1,
-      GenerateClientContribution(config_, encoded_data, public_key_, "nonce1"));
+      GenerateClientContribution(config_, encoded_data, public_key_,
+                                 PrefixedNonce("nonce1")));
   ClientMessageRange messages1;
   *messages1.add_client_messages() = client_message1;
   messages1.mutable_nonce_range()->set_start("nonce1");
@@ -368,7 +388,8 @@ TEST_F(ServerAccumulatorTest, MergeFailsWithOverlappingRanges) {
 
   SECAGG_ASSERT_OK_AND_ASSIGN(
       auto client_message2,
-      GenerateClientContribution(config_, encoded_data, public_key_, "nonce2"));
+      GenerateClientContribution(config_, encoded_data, public_key_,
+                                 PrefixedNonce("nonce2")));
   ClientMessageRange messages2;
   *messages2.add_client_messages() = client_message2;
   messages2.mutable_nonce_range()->set_start("nonce2");
@@ -398,7 +419,8 @@ TEST_F(ServerAccumulatorTest, ProcessClientMessagesMergesThreeRanges) {
   // Create messages for 3 ranges.
   SECAGG_ASSERT_OK_AND_ASSIGN(
       auto client_message1,
-      GenerateClientContribution(config_, encoded_data, public_key_, "nonce1"));
+      GenerateClientContribution(config_, encoded_data, public_key_,
+                                 PrefixedNonce("nonce1")));
   ClientMessageRange messages1;
   *messages1.add_client_messages() = client_message1;
   messages1.mutable_nonce_range()->set_start("nonce1");
@@ -406,7 +428,8 @@ TEST_F(ServerAccumulatorTest, ProcessClientMessagesMergesThreeRanges) {
 
   SECAGG_ASSERT_OK_AND_ASSIGN(
       auto client_message2,
-      GenerateClientContribution(config_, encoded_data, public_key_, "nonce2"));
+      GenerateClientContribution(config_, encoded_data, public_key_,
+                                 PrefixedNonce("nonce2")));
   ClientMessageRange messages2;
   *messages2.add_client_messages() = client_message2;
   messages2.mutable_nonce_range()->set_start("nonce2");
@@ -414,7 +437,8 @@ TEST_F(ServerAccumulatorTest, ProcessClientMessagesMergesThreeRanges) {
 
   SECAGG_ASSERT_OK_AND_ASSIGN(
       auto client_message3,
-      GenerateClientContribution(config_, encoded_data, public_key_, "nonce3"));
+      GenerateClientContribution(config_, encoded_data, public_key_,
+                                 PrefixedNonce("nonce3")));
   ClientMessageRange messages3;
   *messages3.add_client_messages() = client_message3;
   messages3.mutable_nonce_range()->set_start("nonce3");
@@ -459,7 +483,7 @@ TEST_F(ServerAccumulatorTest, ProcessClientMessagesMergesThreeRanges) {
 TEST_F(ServerAccumulatorTest, VerifiesCorrectly) {
   willow::EncodedData encoded_data = {
       {"test_vector", {0, 1, 2, 3, 4, 5, 6, 7, 8, 9}}};
-  std::string nonce = "nonce1";
+  std::string nonce = PrefixedNonce("nonce1");
   SECAGG_ASSERT_OK_AND_ASSIGN(
       auto client_message,
       GenerateClientContribution(config_, encoded_data, public_key_, nonce));
@@ -485,7 +509,7 @@ TEST_F(ServerAccumulatorTest, VerifiesCorrectly) {
 TEST_F(ServerAccumulatorTest, FinalizeSucceeds) {
   willow::EncodedData encoded_data = {
       {"test_vector", {0, 1, 2, 3, 4, 5, 6, 7, 8, 9}}};
-  std::string nonce = "nonce1";
+  std::string nonce = PrefixedNonce("nonce1");
   SECAGG_ASSERT_OK_AND_ASSIGN(
       auto client_message,
       GenerateClientContribution(config_, encoded_data, public_key_, nonce));
@@ -509,7 +533,7 @@ TEST_F(ServerAccumulatorTest, FinalizeFailsWithEmptyAccumulator) {
 TEST_F(ServerAccumulatorTest, FinalizesAndDecryptsCorrectly) {
   willow::EncodedData encoded_data = {
       {"test_vector", {0, 1, 2, 3, 4, 5, 6, 7, 8, 9}}};
-  std::string nonce = "nonce1";
+  std::string nonce = PrefixedNonce("nonce1");
   SECAGG_ASSERT_OK_AND_ASSIGN(
       auto client_message,
       GenerateClientContribution(config_, encoded_data, public_key_, nonce));
