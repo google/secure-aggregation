@@ -77,6 +77,13 @@ pub trait SecureAggregationReputableDecryptor: SecureAggregationBaseMultiDecrypt
     /// Verifies the ZK proofs of knowledge of the secret key for all public key
     /// shares, and returns the aggregated public key. Calling code should sign
     /// the aggregated public key for the aggregation.
+    ///
+    /// Note: This method fails if any single contribution has an invalid proof,
+    /// aborting the entire key generation. This is acceptable because the
+    /// protocol does not guarantee output delivery against malicious decryptors
+    /// or a malicious coordinator — a malicious participant could equally cause
+    /// failure by refusing to provide partial decryptions and secret-sharing an
+    /// invalid state in the setup contribution.
     fn verify_and_aggregate_key_contributions(
         &self,
         request: VerifyKeyContributionsRequest<<Self as HasVahe>::Vahe>,
@@ -153,10 +160,4 @@ pub trait SecureAggregationCoordinator: HasVahe {
         recovery_responses: Vec<RecoveryResponse>,
         coordinator_state: &mut Self::CoordinatorState,
     ) -> Result<(), StatusError>;
-
-    /// Returns the resulting plaintext from the final decryption, if available.
-    fn get_plaintext(
-        &self,
-        coordinator_state: &mut Self::CoordinatorState,
-    ) -> Result<<Self::Vahe as AheBase>::Plaintext, StatusError>;
 }

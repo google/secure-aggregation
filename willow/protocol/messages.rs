@@ -763,6 +763,9 @@ pub struct CoordinatorState<Vahe: VaheBase> {
     /// The public key shares and proofs from all contributions, for sending back to decryptors for
     ///  signing requests. Only applicable in multiple reputable decryptor case and until used.
     pub setup_contributions: Option<Vec<SetupContribution<Vahe>>>,
+    /// Sum of partial decryptions received from decryptors, set by
+    /// `aggregate_partial_decryptions`.
+    pub partial_decryption_sum: Option<Vahe::PartialDecryption>,
 }
 
 impl<Vahe: VaheBase> Default for CoordinatorState<Vahe> {
@@ -772,6 +775,7 @@ impl<Vahe: VaheBase> Default for CoordinatorState<Vahe> {
             encrypted_randomness_shares: Vec::new(),
             dp_noise_component_sum: None,
             setup_contributions: None,
+            partial_decryption_sum: None,
         }
     }
 }

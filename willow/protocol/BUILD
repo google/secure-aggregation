@@ -131,12 +131,17 @@ rust_test(
     crate = ":willow_v1_decryptor",
     deps = [
         ":decryptor_traits",
+        ":messages",
         "@crate_index//:googletest",
         "//willow/api:proto_serialization_traits",
         "//willow/crypto:ahe_traits",
+        "//willow/crypto:kahe_traits",
+        "//willow/crypto:prng_traits",
         "//willow/crypto:shell_kahe",
         "//willow/crypto:shell_parameters",
         "//willow/crypto:shell_vahe",
+        "//willow/crypto:single_thread_hkdf",
+        "//willow/crypto:vahe_traits",
         "//willow/testing_utils",
     ],
 )
@@ -249,5 +254,39 @@ rust_test(
         "//willow/crypto:vahe_traits",
         "//willow/testing_utils",
         "//willow/testing_utils:shell_testing_parameters",
+    ],
+)
+
+# Multi-decryptor coordinator implementation.
+rust_library(
+    name = "willow_v1_coordinator",
+    srcs = [
+        "willow_v1_coordinator.rs",
+    ],
+    deps = [
+        ":decryptor_traits",
+        ":messages",
+        "//ffi_utils:status",
+        "//willow/crypto:ahe_traits",
+        "//willow/crypto:kahe_traits",
+        "//willow/crypto:vahe_traits",
+    ],
+)
+
+rust_test(
+    name = "willow_v1_coordinator_test",
+    crate = ":willow_v1_coordinator",
+    deps = [
+        ":decryptor_traits",
+        ":messages",
+        ":willow_v1_decryptor",
+        "@crate_index//:googletest",
+        "//willow/crypto:ahe_traits",
+        "//willow/crypto:prng_traits",
+        "//willow/crypto:shell_kahe",
+        "//willow/crypto:shell_parameters",
+        "//willow/crypto:shell_vahe",
+        "//willow/crypto:single_thread_hkdf",
+        "//willow/crypto:vahe_traits",
     ],
 )
