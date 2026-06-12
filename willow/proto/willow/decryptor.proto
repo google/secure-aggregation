@@ -68,6 +68,12 @@ message DecryptRequest {
   // and must match the session tag associated with the key on the Decryptor
   // side.
   string session_tag = 4;
+
+  // The current timestamp (without timezone information). Rolling back the
+  // clock will be rejected. The timestamp will also be used for key expiration.
+  // NOTE: not enforced yet until all upstream callers are updated. A blank
+  // timestamp will be allowed for now.
+  google.protobuf.Timestamp current_timestamp = 5;
 }
 
 message DecryptResponse {
@@ -80,11 +86,17 @@ message ListKeysRequest {
   // task) associated with the keys that will be returned in the response.
   // If empty or if no keys match the session tag, the response will be empty.
   string session_tag = 1;
+
+  // The current timestamp (without timezone information). Rolling back the
+  // clock will be rejected and used for key expiration. NOTE: not enforced yet
+  // until all upstream callers are updated. A blank timestamp will be allowed
+  // for now.
+  google.protobuf.Timestamp current_timestamp = 2;
 }
 
 message ListKeysResponse {
   // All keys matching the session tag that haven't been consumed and
-  // haven't expired.
+  // haven't expired. Sorted from oldest to newest.
   repeated bytes public_keys = 1;
 }
 
