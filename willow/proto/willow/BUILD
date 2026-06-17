@@ -102,6 +102,14 @@ rust_proto_library(
     deps = [":key_proto"],
 )
 
+java_proto_library(
+    name = "key_java_proto",
+    visibility = [
+        "//visibility:public",
+    ],
+    deps = [":key_proto"],
+)
+
 proto_library(
     name = "input_spec_proto",
     srcs = ["input_spec.proto"],
