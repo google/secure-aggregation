@@ -34,7 +34,8 @@ message CreateCommitteeResponse {}
 // A message sent from client to untrusted frontend signaling intent to
 // volunteer for the committee. Returns VolunteerForCommitteeResponse.
 message VolunteerForCommitteeRequest {
-  // Member's ephemeral public key, which rotates roughly every 30 days.
+  // Volunteer's ephemeral public key, which rotates frequently and is
+  // not linkable over time.
   bytes member_public_key = 1 ;
 
   // An endorsement of the client's public key, for example:
@@ -51,8 +52,7 @@ message VolunteerForCommitteeRequest {
 
 // A record of a client who volunteered for a committee.
 message VolunteerRecord {
-  // A short digest of an ephemeral public key of the user that rotates every
-  // day and is not linkable between days.
+  // A short digest of a volunteer's ephemeral public key.
   int64 member_public_key_digest = 1
       ;
 
@@ -151,7 +151,7 @@ message CommitteeStatusResponse {
 // Request from a client to untrusted frontend to check their committee
 // selection status. Returns CheckVolunteerStatusResponse.
 message CheckVolunteerStatusRequest {
-  // Member's ephemeral public key, which rotates every day.
+  // Member's ephemeral public key.
   bytes member_public_key = 1 ;
 
   // The committee ID the member volunteered for and is checking the status of.
