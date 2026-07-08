@@ -165,7 +165,6 @@ proto_library(
         ":session_enums_proto",
         "@protobuf//:any_proto",
         "@protobuf//:timestamp_proto",
-        "//privacy/blinders/confidentialmatch/executor/committee_executor/proto:protocol_message_proto",
     ],
 )
 
