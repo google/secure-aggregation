@@ -15,9 +15,9 @@
 use ahe_traits::AheBase;
 use kahe_traits::KaheBase;
 use messages::{
-    DecryptorPublicKey, DecryptorPublicKeyShare, PartialDecryptionRequest,
-    PartialDecryptionResponse, RecoveryRequest, RecoveryResponse, SetupContribution,
-    VerifyKeyContributionsRequest,
+    DecryptorPublicKey, DecryptorPublicKeyShare, FinalizedPartialDecryption,
+    PartialDecryptionRequest, PartialDecryptionResponse, RecoveryRequest, RecoveryResponse,
+    SetupContribution, VerifyKeyContributionsRequest,
 };
 use status::StatusError;
 use vahe_traits::HasVahe;
@@ -152,7 +152,7 @@ pub trait SecureAggregationCoordinator: HasVahe {
         coordinator_state: &mut Self::CoordinatorState,
     ) -> Result<Vec<RecoveryRequest>, StatusError>;
 
-    /// Finalizes the decryption by recovering randomness from dropped decryptors.
+    /// Recovers randomness from dropped decryptors.
     ///
     /// Uses decrypted shares from survivors to simulate missing partial decryptions.
     fn recover_dropped_decryptors(
@@ -160,4 +160,14 @@ pub trait SecureAggregationCoordinator: HasVahe {
         recovery_responses: Vec<RecoveryResponse>,
         coordinator_state: &mut Self::CoordinatorState,
     ) -> Result<(), StatusError>;
+
+    /// Returns the finalized partial decryption.
+    ///
+    /// This can be combined with the aggregated client
+    /// CiphertextContributions (KAHE ciphertext and AHE recover_plaintext ct_0) to
+    /// obtain the final noisy KAHE plaintext.
+    fn finalize_partial_decryption(
+        &self,
+        coordinator_state: &mut Self::CoordinatorState,
+    ) -> Result<FinalizedPartialDecryption<Self::Vahe>, StatusError>;
 }

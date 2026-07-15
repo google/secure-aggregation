@@ -108,7 +108,7 @@ impl<Kahe: KaheBase, Vahe: VaheBase> Clone for ClientMessage<Kahe, Vahe> {
     }
 }
 
-// Partial decryption request is an aggregated AHE ciphertext.
+// Partial decryption request is an aggregated AHE partial decryption ciphertext (ct_1).
 pub struct PartialDecryptionRequest<Vahe: VaheBase> {
     pub partial_dec_ciphertext: Vahe::PartialDecCiphertext,
     // Only set if the decryptor is adding DP noise.
@@ -423,6 +423,11 @@ pub struct RecoveryResponse {
 /// and construct the aggregated public key.
 pub struct VerifyKeyContributionsRequest<Vahe: VaheBase> {
     pub key_contributions: Vec<KeyContribution<Vahe>>,
+}
+
+/// Finalized partial decryption. Without DP, this is just the partial decryption sum.
+pub struct FinalizedPartialDecryption<Vahe: VaheBase> {
+    pub partial_decryption_sum: Vahe::PartialDecryption,
 }
 
 // --- ToProto / FromProto implementations for wire messages ---

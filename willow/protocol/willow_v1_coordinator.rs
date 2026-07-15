@@ -16,8 +16,9 @@ use ahe_traits::{AheBase, PartialDec};
 use decryptor_traits::SecureAggregationCoordinator;
 use kahe_traits::KaheBase;
 use messages::{
-    CoordinatorState, CoordinatorStatus, PartialDecryptionRequest, PartialDecryptionResponse,
-    RecoveryRequest, RecoveryResponse, SetupContribution, VerifyKeyContributionsRequest,
+    CoordinatorState, CoordinatorStatus, FinalizedPartialDecryption, PartialDecryptionRequest,
+    PartialDecryptionResponse, RecoveryRequest, RecoveryResponse, SetupContribution,
+    VerifyKeyContributionsRequest,
 };
 use status::StatusError;
 use std::rc::Rc;
@@ -135,6 +136,21 @@ where
     ) -> Result<(), StatusError> {
         // Dropout recovery is not yet implemented.
         Err(status::unimplemented("Dropout recovery is not yet implemented"))
+    }
+
+    fn finalize_partial_decryption(
+        &self,
+        coordinator_state: &mut Self::CoordinatorState,
+    ) -> Result<FinalizedPartialDecryption<Self::Vahe>, StatusError> {
+        if coordinator_state.status != CoordinatorStatus::OutputReady {
+            return Err(status::failed_precondition("Coordinator is not in OutputReady state"));
+        }
+        Ok(FinalizedPartialDecryption {
+            partial_decryption_sum: coordinator_state
+                .partial_decryption_sum
+                .clone()
+                .expect("partial_decryption_sum should be set"),
+        })
     }
 }
 
@@ -281,12 +297,13 @@ mod tests {
 
         verify_true!(coord_state.status == CoordinatorStatus::OutputReady)?;
 
-        // Recover the plaintext using the accumulated partial decryptions.
-        let pd_sum = coord_state
-            .partial_decryption_sum
-            .as_ref()
-            .expect("partial_decryption_sum should be set");
-        let recovered = vahe.recover(pd_sum, &recover_ciphertext, Some(plaintext.len()))?;
+        // Recover the plaintext using the finalized state.
+        let finalized_state = coordinator.finalize_partial_decryption(&mut coord_state)?;
+        let recovered = vahe.recover(
+            &finalized_state.partial_decryption_sum,
+            &recover_ciphertext,
+            Some(plaintext.len()),
+        )?;
 
         verify_that!(&recovered[..], eq(&plaintext[..]))?;
 
