@@ -19,6 +19,7 @@ use messages_rust_proto::{
     CiphertextContribution as CiphertextContributionProto, ClientMessage as ClientMessageProto,
     DPSetupContribution as DPSetupContributionProto,
     DecryptionRequestContribution as DecryptionRequestContributionProto,
+    FinalizedPartialDecryption as FinalizedPartialDecryptionProto,
     KeyContribution as KeyContributionProto,
     PartialDecryptionRequest as PartialDecryptionRequestProto,
     PartialDecryptionResponse as PartialDecryptionResponseProto,
@@ -710,6 +711,44 @@ where
             .map(|kc| KeyContribution::from_proto(kc, context))
             .collect();
         Ok(VerifyKeyContributionsRequest { key_contributions: key_contributions? })
+    }
+}
+
+impl<'a, C, Vahe> ToProto<&'a C> for FinalizedPartialDecryption<Vahe>
+where
+    C: HasVahe<Vahe = Vahe>,
+    Vahe: VaheBase + 'a,
+    Vahe::PartialDecryption: ToProto<&'a Vahe, Proto = ShellAhePartialDecryption>,
+{
+    type Proto = FinalizedPartialDecryptionProto;
+
+    fn to_proto(&self, context: &'a C) -> Result<Self::Proto, StatusError> {
+        let vahe = context.vahe();
+        Ok(proto!(FinalizedPartialDecryptionProto {
+            partial_decryption_sum: self.partial_decryption_sum.to_proto(vahe)?,
+        }))
+    }
+}
+
+impl<'a, C, Vahe> FromProto<&'a C> for FinalizedPartialDecryption<Vahe>
+where
+    C: HasVahe<Vahe = Vahe>,
+    Vahe: VaheBase + 'a,
+    Vahe::PartialDecryption: FromProto<&'a Vahe, Proto = ShellAhePartialDecryption>,
+{
+    type Proto = FinalizedPartialDecryptionProto;
+
+    fn from_proto(
+        proto: impl AsView<Proxied = Self::Proto>,
+        context: &'a C,
+    ) -> Result<Self, StatusError> {
+        let proto = proto.as_view();
+        Ok(FinalizedPartialDecryption {
+            partial_decryption_sum: Vahe::PartialDecryption::from_proto(
+                proto.partial_decryption_sum(),
+                context.vahe(),
+            )?,
+        })
     }
 }
 

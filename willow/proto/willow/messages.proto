@@ -127,3 +127,8 @@ message RecoveryResponse {
 message VerifyKeyContributionsRequest {
   repeated KeyContribution key_contributions = 1;
 }
+
+// Finalized partial decryption after aggregating responses from decryptors.
+message FinalizedPartialDecryption {
+  ShellAhePartialDecryption partial_decryption_sum = 1;
+}
