@@ -36,5 +36,8 @@ package_group(
 licenses(["notice"])
 
 exports_files(
-    ["LICENSE"],
+    [
+        "LICENSE",
+        "protobuf_syn.patch",
+    ],
 )

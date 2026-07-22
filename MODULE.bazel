@@ -16,6 +16,8 @@ archive_override(
     # https://github.com/protocolbuffers/protobuf/issues/23866.
     module_name = "protobuf",
     integrity = "sha256-F4n12LZfTcM249HtTdCAw3iK35iU7Ei61GTtjK3cS4Y=",
+    patch_strip = 1,
+    patches = ["//:protobuf_syn.patch"],
     strip_prefix = "protobuf-9151e03956a34b795ca0d58e19d8a9991904b459",
     urls = ["https://github.com/google/protobuf/archive/9151e03956a34b795ca0d58e19d8a9991904b459.zip"],
 )

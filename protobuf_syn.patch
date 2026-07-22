@@ -1,0 +1,9 @@
+--- a/MODULE.bazel
++++ b/MODULE.bazel
+@@ -204,4 +204,5 @@
+ crate.spec(
++    features = ["full"],
+     package = "syn",
+-    version = ">=2",
++    version = ">=2, <3",
+ )
