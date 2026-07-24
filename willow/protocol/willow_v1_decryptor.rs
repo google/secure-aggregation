@@ -292,8 +292,7 @@ mod tests {
 
     #[gtest]
     fn decryptor_state_serialization_roundtrip() -> googletest::Result<()> {
-        let vahe =
-            Rc::new(ShellVahe::new(create_shell_ahe_config(1).unwrap(), CONTEXT_STRING).unwrap());
+        let vahe = Rc::new(ShellVahe::new(create_shell_ahe_config(1)?, CONTEXT_STRING)?);
         let decryptor = WillowV1Decryptor::new_with_randomly_generated_seed(vahe)?;
         let mut decryptor_state = DecryptorState::default();
 
@@ -321,13 +320,12 @@ mod tests {
         use shell_parameters::create_shell_kahe_config;
         use testing_utils::generate_aggregation_config;
 
-        let vahe =
-            Rc::new(ShellVahe::new(create_shell_ahe_config(1).unwrap(), CONTEXT_STRING).unwrap());
+        let vahe = Rc::new(ShellVahe::new(create_shell_ahe_config(1)?, CONTEXT_STRING)?);
         let decryptor = WillowV1Decryptor::new_with_randomly_generated_seed(vahe)?;
 
         let config = generate_aggregation_config("default".to_string(), 16, 10, 1, 1);
-        let kahe_config = create_shell_kahe_config(&config).unwrap();
-        let kahe = Rc::new(ShellKahe::new(kahe_config, &config.key_id).unwrap());
+        let kahe_config = create_shell_kahe_config(&config)?;
+        let kahe = Rc::new(ShellKahe::new(kahe_config, &config.key_id)?);
 
         let mut decryptor_state = DecryptorState::default();
         decryptor.create_public_key_share(&mut decryptor_state)?;
@@ -354,8 +352,7 @@ mod tests {
     fn create_setup_contribution_generates_key_share_and_proof() -> googletest::Result<()> {
         use decryptor_traits::SecureAggregationBaseMultiDecryptor;
 
-        let vahe =
-            Rc::new(ShellVahe::new(create_shell_ahe_config(1).unwrap(), CONTEXT_STRING).unwrap());
+        let vahe = Rc::new(ShellVahe::new(create_shell_ahe_config(1)?, CONTEXT_STRING)?);
         let decryptor = WillowV1Decryptor::new_with_randomly_generated_seed(vahe)?;
         let mut state = DecryptorState::default();
 
@@ -376,8 +373,7 @@ mod tests {
         };
         use messages::VerifyKeyContributionsRequest;
 
-        let vahe =
-            Rc::new(ShellVahe::new(create_shell_ahe_config(1).unwrap(), CONTEXT_STRING).unwrap());
+        let vahe = Rc::new(ShellVahe::new(create_shell_ahe_config(1)?, CONTEXT_STRING)?);
         let decryptor1 = WillowV1Decryptor::new_with_randomly_generated_seed(vahe.clone())?;
         let decryptor2 = WillowV1Decryptor::new_with_randomly_generated_seed(vahe.clone())?;
 
@@ -402,8 +398,7 @@ mod tests {
         };
         use messages::VerifyKeyContributionsRequest;
 
-        let vahe =
-            Rc::new(ShellVahe::new(create_shell_ahe_config(1).unwrap(), CONTEXT_STRING).unwrap());
+        let vahe = Rc::new(ShellVahe::new(create_shell_ahe_config(1)?, CONTEXT_STRING)?);
         let decryptor = WillowV1Decryptor::new_with_randomly_generated_seed(vahe.clone())?;
 
         let mut state = DecryptorState::default();
@@ -424,8 +419,7 @@ mod tests {
         use decryptor_traits::SecureAggregationReputableDecryptor;
         use messages::VerifyKeyContributionsRequest;
 
-        let vahe =
-            Rc::new(ShellVahe::new(create_shell_ahe_config(1).unwrap(), CONTEXT_STRING).unwrap());
+        let vahe = Rc::new(ShellVahe::new(create_shell_ahe_config(1)?, CONTEXT_STRING)?);
         let decryptor = WillowV1Decryptor::new_with_randomly_generated_seed(vahe)?;
 
         let request = VerifyKeyContributionsRequest { key_contributions: vec![] };
@@ -444,8 +438,7 @@ mod tests {
         use single_thread_hkdf::SingleThreadHkdfPrng;
         use vahe_traits::{Recover, VerifiableEncrypt};
 
-        let vahe =
-            Rc::new(ShellVahe::new(create_shell_ahe_config(1).unwrap(), CONTEXT_STRING).unwrap());
+        let vahe = Rc::new(ShellVahe::new(create_shell_ahe_config(1)?, CONTEXT_STRING)?);
 
         let decryptor = WillowV1Decryptor::new_with_randomly_generated_seed(vahe.clone())?;
         let mut state = DecryptorState::default();

@@ -50,9 +50,9 @@ pub fn ahe_decrypt_with_single_sk_share(
     vahe: &ShellVahe,
     prng: &mut <ShellKahe as KaheBase>::Rng,
 ) -> Result<<ShellVahe as AheBase>::Plaintext, status::StatusError> {
-    let decryption_request = vahe.get_partial_dec_ciphertext(&ahe_ciphertext).unwrap();
-    let rest_of_ciphertext = vahe.get_recover_ciphertext(&ahe_ciphertext).unwrap();
-    let partial_decryption = vahe.partial_decrypt(&decryption_request, &sk_share, prng).unwrap();
+    let decryption_request = vahe.get_partial_dec_ciphertext(&ahe_ciphertext)?;
+    let rest_of_ciphertext = vahe.get_recover_ciphertext(&ahe_ciphertext)?;
+    let partial_decryption = vahe.partial_decrypt(&decryption_request, &sk_share, prng)?;
     vahe.recover(&partial_decryption, &rest_of_ciphertext, None)
 }
 

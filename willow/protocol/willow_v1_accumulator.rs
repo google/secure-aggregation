@@ -273,17 +273,14 @@ mod tests {
         let max_number_of_decryptors = aggregation_config.max_number_of_decryptors;
 
         // Create common KAHE/VAHE instances.
-        let kahe = Rc::new(
-            ShellKahe::new(create_shell_kahe_config(&aggregation_config).unwrap(), CONTEXT_STRING)
-                .unwrap(),
-        );
-        let vahe = Rc::new(
-            ShellVahe::new(
-                create_shell_ahe_config(max_number_of_decryptors).unwrap(),
-                CONTEXT_STRING,
-            )
-            .unwrap(),
-        );
+        let kahe = Rc::new(ShellKahe::new(
+            create_shell_kahe_config(&aggregation_config)?,
+            CONTEXT_STRING,
+        )?);
+        let vahe = Rc::new(ShellVahe::new(
+            create_shell_ahe_config(max_number_of_decryptors)?,
+            CONTEXT_STRING,
+        )?);
 
         // Create client.
         let client = WillowV1Client::new_with_randomly_generated_seed(kahe.clone(), vahe.clone())?;

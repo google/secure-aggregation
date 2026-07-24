@@ -178,8 +178,7 @@ mod tests {
 
     #[gtest]
     fn coordinator_handles_setup_and_creates_verification_request() -> googletest::Result<()> {
-        let vahe =
-            Rc::new(ShellVahe::new(create_shell_ahe_config(1).unwrap(), CONTEXT_STRING).unwrap());
+        let vahe = Rc::new(ShellVahe::new(create_shell_ahe_config(1)?, CONTEXT_STRING)?);
 
         // Create two decryptors.
         let decryptor1 = WillowV1Decryptor::new_with_randomly_generated_seed(vahe.clone())?;
@@ -209,8 +208,7 @@ mod tests {
 
     #[gtest]
     fn coordinator_setup_fails_when_not_pre_setup() -> googletest::Result<()> {
-        let vahe =
-            Rc::new(ShellVahe::new(create_shell_ahe_config(1).unwrap(), CONTEXT_STRING).unwrap());
+        let vahe = Rc::new(ShellVahe::new(create_shell_ahe_config(1)?, CONTEXT_STRING)?);
 
         let decryptor = WillowV1Decryptor::new_with_randomly_generated_seed(vahe.clone())?;
         let mut state = DecryptorState::default();
@@ -237,8 +235,7 @@ mod tests {
     /// using the multi-decryptor protocol with a coordinator and reputable decryptor.
     #[gtest]
     fn end_to_end_multi_decryptor_protocol() -> googletest::Result<()> {
-        let vahe =
-            Rc::new(ShellVahe::new(create_shell_ahe_config(1).unwrap(), CONTEXT_STRING).unwrap());
+        let vahe = Rc::new(ShellVahe::new(create_shell_ahe_config(1)?, CONTEXT_STRING)?);
 
         // Create two multi-decryptors (same struct, using multi-decryptor traits).
         let decryptor1 = WillowV1Decryptor::new_with_randomly_generated_seed(vahe.clone())?;

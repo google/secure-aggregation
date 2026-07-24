@@ -261,10 +261,9 @@ impl ShellAhe {
     > {
         let (ciphertext, metadata, wraparounds) =
             self.encrypt_impl(plaintext, &pk.0, prng, true)?;
-        if !wraparounds.is_some() {
-            return Err(status::internal("Failed to compute wraparounds."));
-        }
-        Ok((ciphertext, metadata, wraparounds.unwrap()))
+        let wraparounds =
+            wraparounds.ok_or_else(|| status::internal("Failed to compute wraparounds."))?;
+        Ok((ciphertext, metadata, wraparounds))
     }
 
     fn partial_decrypt_impl(
@@ -319,10 +318,8 @@ impl ShellAhe {
     > {
         let (pd, metadata) =
             self.partial_decrypt_impl(ct_a, &sk_share.0, prng, /*compute_metadata=*/ true)?;
-        if !metadata.is_some() {
-            return Err(status::internal("Failed to compute metadata."));
-        }
-        Ok((PartialDecryption(pd), metadata.unwrap()))
+        let metadata = metadata.ok_or_else(|| status::internal("Failed to compute metadata."))?;
+        Ok((PartialDecryption(pd), metadata))
     }
 
     pub fn num_coeffs(&self) -> usize {
