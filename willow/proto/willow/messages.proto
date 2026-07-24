@@ -62,7 +62,7 @@ message ServerState {
   map<string, ShellAhePublicKeyShare> decryptor_public_key_shares = 1;
   ShellKaheCiphertext client_sum_kahe = 2;
   ShellAheRecoverCiphertext client_sum_ahe_recover = 3;
-  ShellAhePartialDecryption partial_decryption_sum = 4;
+  ShellAhePartialDecryption partial_decryption_sum = 4 [deprecated = true];
 }
 
 message VerifierState {

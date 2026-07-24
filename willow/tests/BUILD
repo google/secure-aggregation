@@ -44,6 +44,7 @@ rust_test(
         "//willow/protocol:verifier_traits",
         "//willow/protocol:willow_v1_accumulator",
         "//willow/protocol:willow_v1_client",
+        "//willow/protocol:willow_v1_coordinator",
         "//willow/protocol:willow_v1_decryptor",
         "//willow/protocol:willow_v1_verifier",
         "//willow/testing_utils",

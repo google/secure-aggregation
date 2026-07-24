@@ -27,7 +27,7 @@ use decryptor_traits::SecureAggregationDecryptor;
 use kahe_traits::KaheBase;
 use messages::{
     CiphertextContribution, DecryptionRequestContribution, DecryptorPublicKey,
-    PartialDecryptionRequest,
+    FinalizedPartialDecryption, PartialDecryptionRequest,
 };
 use shell_kahe::ShellKahe;
 use shell_parameters::create_shell_configs;
@@ -275,7 +275,7 @@ fn setup_server_handle_client_message(args: &Args) -> ServerInputs {
 fn run_server_handle_client_message(inputs: &mut ServerInputs) {
     inputs
         .accumulator
-        .handle_ciphertext_contribution(
+        .accumulate_ciphertext_contribution(
             black_box(inputs.ciphertext_contributions.pop().unwrap()),
             black_box(&mut inputs.accumulator_state),
         )
@@ -288,6 +288,7 @@ fn run_server_handle_client_message(inputs: &mut ServerInputs) {
 struct ServerRecoverInputs {
     accumulator: WillowV1CiphertextAccumulator<ShellKahe, ShellVahe>,
     accumulator_state: CiphertextAccumulatorState<ShellKahe, ShellVahe>,
+    finalized_partial_decryption: FinalizedPartialDecryption<ShellVahe>,
 }
 
 fn setup_server_recover_aggregation_result(args: &Args) -> ServerRecoverInputs {
@@ -314,7 +315,7 @@ fn setup_server_recover_aggregation_result(args: &Args) -> ServerRecoverInputs {
     // Accumulator handles its part.
     inputs
         .accumulator
-        .handle_ciphertext_contribution(ciphertext_contribution, &mut inputs.accumulator_state)
+        .accumulate_ciphertext_contribution(ciphertext_contribution, &mut inputs.accumulator_state)
         .unwrap();
 
     // Verifier creates the partial decryption request.
@@ -327,18 +328,22 @@ fn setup_server_recover_aggregation_result(args: &Args) -> ServerRecoverInputs {
         .unwrap();
 
     // Accumulator handles the partial decryption.
-    inputs.accumulator.handle_partial_decryption(pd, &mut inputs.accumulator_state).unwrap();
+    let finalized_pd = FinalizedPartialDecryption { partial_decryption_sum: pd.partial_decryption };
 
     ServerRecoverInputs {
         accumulator: inputs.accumulator,
         accumulator_state: inputs.accumulator_state,
+        finalized_partial_decryption: finalized_pd,
     }
 }
 
 fn run_server_recover_aggregation_result(inputs: &mut ServerRecoverInputs) {
     let res = inputs
         .accumulator
-        .recover_aggregation_result(black_box(&inputs.accumulator_state))
+        .recover_aggregation_result(
+            black_box(&inputs.accumulator_state),
+            black_box(&inputs.finalized_partial_decryption),
+        )
         .unwrap();
     let _ = black_box(res); // Prevent optimization.
 }
@@ -368,7 +373,7 @@ fn setup_decryptor_partial_decryption(args: &Args) -> DecryptorInputs {
     // The accumulator and verifier each handle their part of the client message.
     inputs
         .accumulator
-        .handle_ciphertext_contribution(ciphertext_contribution, &mut inputs.accumulator_state)
+        .accumulate_ciphertext_contribution(ciphertext_contribution, &mut inputs.accumulator_state)
         .unwrap();
     inputs
         .verifier

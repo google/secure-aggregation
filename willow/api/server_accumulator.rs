@@ -17,7 +17,7 @@ use aggregation_config::AggregationConfig;
 use aggregation_config_rust_proto::AggregationConfigProto;
 use ahe_traits::AheBase;
 use kahe_traits::KaheBase;
-use messages::{ClientMessage, PartialDecryptionResponse};
+use messages::{ClientMessage, FinalizedPartialDecryption, PartialDecryptionResponse};
 use messages_rust_proto::PartialDecryptionResponse as PartialDecryptionResponseProto;
 use proto_serialization_traits::{FromProto, ToProto};
 use protobuf::prelude::*;
@@ -187,7 +187,7 @@ impl ServerAccumulator {
             self.accumulator.split_client_message(client_message)?;
         self.verifier.verify_and_include(decryption_request_contribution, verifier_state)?;
         self.accumulator
-            .handle_ciphertext_contribution(ciphertext_contribution, accumulator_state)?;
+            .accumulate_ciphertext_contribution(ciphertext_contribution, accumulator_state)?;
         Ok(())
     }
 
@@ -630,9 +630,10 @@ impl FinalResultDecryptor {
 
         // Receives a single partial decryption response and attempts to recover right away.
         // This only works in the single-decryptor case.
-        self.accumulator.handle_partial_decryption(pd, &mut self.accumulator_state)?;
+        let finalized_pd =
+            FinalizedPartialDecryption { partial_decryption_sum: pd.partial_decryption };
         let aggregation_result =
-            self.accumulator.recover_aggregation_result(&self.accumulator_state)?;
+            self.accumulator.recover_aggregation_result(&self.accumulator_state, &finalized_pd)?;
 
         // `aggregation_result` is a Kahe::Plaintext, i.e. HashMap<String, Vec<u64>>
         // Flatten hashmap for FFI like in shell_testing_decryptor.rs

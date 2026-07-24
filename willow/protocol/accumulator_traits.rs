@@ -14,7 +14,8 @@
 
 use kahe_traits::HasKahe;
 use messages::{
-    CiphertextContribution, ClientMessage, DecryptionRequestContribution, PartialDecryptionResponse,
+    CiphertextContribution, ClientMessage, DecryptionRequestContribution,
+    FinalizedPartialDecryption,
 };
 use status::StatusError;
 use vahe_traits::HasVahe;
@@ -25,7 +26,6 @@ type Vahe<T> = <T as HasVahe>::Vahe;
 
 /// Base trait for the secure aggregation accumulator. Also includes the Coordinator
 /// functionality of the threshold AHE scheme.
-///
 pub trait SecureAggregationCiphertextAccumulator: HasKahe + HasVahe {
     /// The state held by the accumulator between messages.
     type CiphertextAccumulatorState: Default + Clone;
@@ -42,26 +42,19 @@ pub trait SecureAggregationCiphertextAccumulator: HasKahe + HasVahe {
         StatusError,
     >;
 
-    /// Handles a single client message, updating the accumulator state.
-    fn handle_ciphertext_contribution(
+    /// Accumulates a single client ciphertext contribution into the accumulator state.
+    fn accumulate_ciphertext_contribution(
         &self,
         ciphertext_contribution: CiphertextContribution<Kahe<Self>, Vahe<Self>>,
         accumulator_state: &mut Self::CiphertextAccumulatorState,
     ) -> Result<(), StatusError>;
 
-    /// Handles a partial decryption received from a Decryptor, updating the
-    /// accumulator state.
-    fn handle_partial_decryption(
-        &self,
-        partial_decryption_response: PartialDecryptionResponse<Kahe<Self>, Vahe<Self>>,
-        accumulator_state: &mut Self::CiphertextAccumulatorState,
-    ) -> Result<(), StatusError>;
-
-    /// Recovers the aggregation result after enough partial decryptions have
-    /// been received from Decryptors.
+    /// Recovers the aggregation result from the accumulated ciphertext contributions
+    /// and the finalized partial decryption.
     fn recover_aggregation_result(
         &self,
         accumulator_state: &Self::CiphertextAccumulatorState,
+        finalized_partial_decryption: &FinalizedPartialDecryption<Vahe<Self>>,
     ) -> Result<Self::AggregationResult, StatusError>;
 
     /// Merges two accumulator states into one.
