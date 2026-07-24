@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use accumulator_traits::SecureAggregationCiphertextAccumulator;
 use aggregation_config::AggregationConfig;
 use aggregation_config_rust_proto::AggregationConfigProto;
 use ahe_traits::AheBase;
@@ -25,7 +26,6 @@ use rangemap::RangeSet;
 use server_accumulator_rust_proto::{
     ClientMessageRange, FinalResultDecryptorState, NonceRange, ServerAccumulatorState,
 };
-use server_traits::SecureAggregationServer;
 use shell_kahe::ShellKahe;
 use shell_parameters::create_shell_configs;
 use shell_vahe::ShellVahe;
@@ -34,7 +34,7 @@ use std::collections::BTreeMap;
 use std::ops::Range;
 use std::rc::Rc;
 use verifier_traits::SecureAggregationVerifier;
-use willow_v1_server::{ServerState, WillowV1Server};
+use willow_v1_accumulator::{CiphertextAccumulatorState, WillowV1CiphertextAccumulator};
 use willow_v1_verifier::{VerifierState, WillowV1Verifier};
 
 #[cxx::bridge(namespace = "secure_aggregation")]
@@ -118,10 +118,10 @@ pub mod ffi {
 }
 
 pub struct ServerAccumulator {
-    // Server struct used to perform aggregation of client contributions.
-    server: WillowV1Server<ShellKahe, ShellVahe>,
-    // Server state containing the accumulated ciphertexts.
-    server_state: ServerState<ShellKahe, ShellVahe>,
+    // Accumulator struct used to perform aggregation of client contributions.
+    accumulator: WillowV1CiphertextAccumulator<ShellKahe, ShellVahe>,
+    // Accumulator state containing the accumulated ciphertexts.
+    accumulator_state: CiphertextAccumulatorState<ShellKahe, ShellVahe>,
     // Verifier struct used to verify client contributions.
     verifier: WillowV1Verifier<ShellVahe>,
     // Verifier states, one for each range of nonces processed. The map is keyed by the start of the
@@ -140,11 +140,12 @@ impl ServerAccumulator {
         let context_bytes = &aggregation_config.key_id;
         let kahe = Rc::new(ShellKahe::new(kahe_config, &context_bytes)?);
         let vahe = Rc::new(ShellVahe::new(vahe_config, &context_bytes)?);
-        let server = WillowV1Server { kahe: Rc::clone(&kahe), vahe: Rc::clone(&vahe) };
+        let accumulator =
+            WillowV1CiphertextAccumulator { kahe: Rc::clone(&kahe), vahe: Rc::clone(&vahe) };
         let verifier = WillowV1Verifier { vahe };
         Ok(Self {
-            server: server,
-            server_state: Default::default(),
+            accumulator,
+            accumulator_state: Default::default(),
             verifier: verifier,
             verifier_states: Default::default(),
             ranges_processed: Default::default(),
@@ -174,18 +175,19 @@ impl ServerAccumulator {
         Self::from_proto(serialized_server_accumulator_proto, ())
     }
 
-    // Updates the server and verifier states with the given client message. In case of error,
+    // Updates the accumulator and verifier states with the given client message. In case of error,
     // the states are UNDEFINED, and callers should not assume that they are in any particular state.
     fn process_client_message(
         &self,
-        server_state: &mut ServerState<ShellKahe, ShellVahe>,
+        accumulator_state: &mut CiphertextAccumulatorState<ShellKahe, ShellVahe>,
         verifier_state: &mut VerifierState<ShellVahe>,
         client_message: ClientMessage<ShellKahe, ShellVahe>,
     ) -> Result<(), StatusError> {
         let (ciphertext_contribution, decryption_request_contribution) =
-            self.server.split_client_message(client_message)?;
+            self.accumulator.split_client_message(client_message)?;
         self.verifier.verify_and_include(decryption_request_contribution, verifier_state)?;
-        self.server.handle_ciphertext_contribution(ciphertext_contribution, server_state)?;
+        self.accumulator
+            .handle_ciphertext_contribution(ciphertext_contribution, accumulator_state)?;
         Ok(())
     }
 
@@ -260,9 +262,9 @@ impl ServerAccumulator {
             )));
         }
 
-        // Insert client messages into a new server and verifier state.
+        // Insert client messages into a new accumulator and verifier state.
         let mut new_verifier_state = VerifierState::default();
-        let mut new_server_state = ServerState::default();
+        let mut new_accumulator_state = CiphertextAccumulatorState::default();
         // The nonce range boundaries are derived from the random suffix of the
         // nonce (i.e., without the 4-byte timestamp prefix). To compare message
         // nonces against these boundaries, we strip the same prefix.
@@ -282,21 +284,23 @@ impl ServerAccumulator {
                     message.nonce, nonce_range.start, nonce_range.end,
                 )));
             }
-            let old_server_state = new_server_state.clone();
+            let old_accumulator_state = new_accumulator_state.clone();
             let old_verifier_state = new_verifier_state.clone();
-            if let Err(status) =
-                self.process_client_message(&mut new_server_state, &mut new_verifier_state, message)
-            {
+            if let Err(status) = self.process_client_message(
+                &mut new_accumulator_state,
+                &mut new_verifier_state,
+                message,
+            ) {
                 // Restore previous states on error, so we can continue processing messages.
-                new_server_state = old_server_state;
+                new_accumulator_state = old_accumulator_state;
                 new_verifier_state = old_verifier_state;
                 eprintln!("Failed to process client message: {}", status);
             }
         }
 
         // Merge new states into `self`.
-        let new_server_state =
-            self.server.merge_states(self.server_state.clone(), new_server_state)?;
+        let new_accumulator_state =
+            self.accumulator.merge_states(self.accumulator_state.clone(), new_accumulator_state)?;
         let mut new_ranges_processed = self.ranges_processed.clone();
         let mut verifier_states = std::mem::take(&mut self.verifier_states);
         if let Err(status) = self.merge_verifier_states(
@@ -310,7 +314,7 @@ impl ServerAccumulator {
             return Err(status);
         }
         self.ranges_processed = new_ranges_processed;
-        self.server_state = new_server_state;
+        self.accumulator_state = new_accumulator_state;
         self.verifier_states = verifier_states;
         Ok(())
     }
@@ -326,7 +330,7 @@ impl ServerAccumulator {
             let client_messages: Result<Vec<_>, _> = client_range_proto
                 .client_messages()
                 .iter()
-                .map(|m| ClientMessage::from_proto(m, &self.server))
+                .map(|m| ClientMessage::from_proto(m, &self.accumulator))
                 .collect();
             let nonce_range = nonce_range_from_proto(client_range_proto.nonce_range())?;
             std::mem::drop(client_range_proto);
@@ -379,8 +383,9 @@ impl ServerAccumulator {
             verifier_states.push(verifier_state);
         }
 
-        let new_server_state =
-            self.server.merge_states(self.server_state.clone(), other.server_state)?;
+        let new_accumulator_state = self
+            .accumulator
+            .merge_states(self.accumulator_state.clone(), other.accumulator_state)?;
         // Back up states of `self`, to restore on error.
         let mut new_verifier_states = self.verifier_states.clone();
         let mut new_ranges_processed = self.ranges_processed.clone();
@@ -392,7 +397,7 @@ impl ServerAccumulator {
                 nonce_range,
             )?;
         }
-        self.server_state = new_server_state;
+        self.accumulator_state = new_accumulator_state;
         self.ranges_processed = new_ranges_processed;
         self.verifier_states = new_verifier_states;
 
@@ -437,7 +442,7 @@ impl ToProto for ServerAccumulator {
 
     fn to_proto(&self, _context: ()) -> Result<Self::Proto, StatusError> {
         let mut out = proto!(ServerAccumulatorState {
-            server_state: self.server_state.to_proto(&self.server)?,
+            server_state: self.accumulator_state.to_proto(&self.accumulator)?,
             aggregation_config: self.aggregation_config.to_proto(())?,
         });
         for verifier_state in self.verifier_states.values() {
@@ -461,7 +466,8 @@ impl FromProto for ServerAccumulator {
         let proto = proto.as_view();
         let aggregation_config = AggregationConfig::from_proto(proto.aggregation_config(), ())?;
         let mut result = Self::new(aggregation_config)?;
-        result.server_state = ServerState::from_proto(proto.server_state(), &result.server)?;
+        result.accumulator_state =
+            CiphertextAccumulatorState::from_proto(proto.server_state(), &result.accumulator)?;
         if proto.processed_nonce_ranges().len() != proto.verifier_states().len() {
             return Err(status::invalid_argument(
                 "The number of verifier states must match the number of processed nonce ranges",
@@ -529,11 +535,11 @@ pub struct FinalResultDecryptor {
     ///
     /// NOTE: We technically only need client_sum, not decryptor_public_key_shares or
     /// partial_decryption_sum, but because of the monolithic SecureAggregationServer trait
-    /// (b/476137863) we need a complete ServerState to call the decryption functions.
-    server_state: ServerState<ShellKahe, ShellVahe>,
+    /// (b/476137863) we need a complete CiphertextAccumulatorState to call the decryption functions.
+    accumulator_state: CiphertextAccumulatorState<ShellKahe, ShellVahe>,
 
-    /// Server used to hold the necessary KAHE and AHE contexts.
-    server: WillowV1Server<ShellKahe, ShellVahe>,
+    /// Accumulator used to hold the necessary KAHE and AHE contexts.
+    accumulator: WillowV1CiphertextAccumulator<ShellKahe, ShellVahe>,
 }
 
 fn finalize_accumulator(accumulator: ServerAccumulator) -> Result<(Vec<u8>, Vec<u8>), StatusError> {
@@ -551,15 +557,16 @@ fn finalize_accumulator(accumulator: ServerAccumulator) -> Result<(Vec<u8>, Vec<
     let partial_decryption_request =
         accumulator.verifier.create_partial_decryption_request(final_verifier_state)?;
     let serialized_decryption_request = partial_decryption_request
-        .to_proto(&accumulator.server)?
+        .to_proto(&accumulator.accumulator)?
         .serialize()
         .map_err(|e| status::internal(&format!("Failed to serialize: {}", e)))?;
 
-    // Extract the server state (i.e. sum of KAHE ciphertexts and sum of AHE ct_0 ciphertexts).
-    let server_state_proto = accumulator.server_state.to_proto(&accumulator.server)?;
+    // Extract the accumulator state (i.e. sum of KAHE ciphertexts and sum of AHE ct_0 ciphertexts).
+    let accumulator_state_proto =
+        accumulator.accumulator_state.to_proto(&accumulator.accumulator)?;
     let aggregation_config_proto = accumulator.aggregation_config.to_proto(())?;
     let final_result_decryptor_state = proto!(FinalResultDecryptorState {
-        server_state: server_state_proto,
+        server_state: accumulator_state_proto,
         aggregation_config: aggregation_config_proto,
     });
     let serialized_final_result_decryptor_state = final_result_decryptor_state
@@ -588,24 +595,25 @@ impl FinalResultDecryptor {
     fn new_from_serialized(
         serialized_proto: cxx::UniquePtr<cxx::CxxString>,
     ) -> Result<Self, StatusError> {
-        // Parse aggregation config and server state protos.
+        // Parse aggregation config and accumulator state protos.
         let final_result_decryptor_state_proto =
             FinalResultDecryptorState::parse(serialized_proto.as_bytes()).map_err(|e| {
                 status::internal(&format!("Failed to parse FinalResultDecryptorState: {}", e))
             })?;
-        let server_state_proto = final_result_decryptor_state_proto.server_state();
+        let accumulator_state_proto = final_result_decryptor_state_proto.server_state();
         let aggregation_config_proto = final_result_decryptor_state_proto.aggregation_config();
 
-        // Build server that holds the necessary KAHE and AHE contexts, and recover server state.
+        // Build accumulator that holds the necessary KAHE and AHE contexts, and recover accumulator state.
         let aggregation_config = AggregationConfig::from_proto(aggregation_config_proto, ())?;
         let (kahe_config, vahe_config) = create_shell_configs(&aggregation_config)?;
         let context_bytes = &aggregation_config.key_id;
         let kahe = Rc::new(ShellKahe::new(kahe_config, context_bytes)?);
         let vahe = Rc::new(ShellVahe::new(vahe_config, context_bytes)?);
-        let server = WillowV1Server { kahe, vahe };
-        let server_state = ServerState::from_proto(server_state_proto, &server)?;
+        let accumulator = WillowV1CiphertextAccumulator { kahe, vahe };
+        let accumulator_state =
+            CiphertextAccumulatorState::from_proto(accumulator_state_proto, &accumulator)?;
 
-        Ok(FinalResultDecryptor { server_state, server })
+        Ok(FinalResultDecryptor { accumulator_state, accumulator })
     }
 
     fn decrypt(
@@ -618,12 +626,13 @@ impl FinalResultDecryptor {
         .map_err(|e| {
             status::internal(&format!("Failed to parse PartialDecryptionResponse: {}", e))
         })?;
-        let pd = PartialDecryptionResponse::from_proto(pd_proto, &self.server)?;
+        let pd = PartialDecryptionResponse::from_proto(pd_proto, &self.accumulator)?;
 
         // Receives a single partial decryption response and attempts to recover right away.
         // This only works in the single-decryptor case.
-        self.server.handle_partial_decryption(pd, &mut self.server_state)?;
-        let aggregation_result = self.server.recover_aggregation_result(&self.server_state)?;
+        self.accumulator.handle_partial_decryption(pd, &mut self.accumulator_state)?;
+        let aggregation_result =
+            self.accumulator.recover_aggregation_result(&self.accumulator_state)?;
 
         // `aggregation_result` is a Kahe::Plaintext, i.e. HashMap<String, Vec<u64>>
         // Flatten hashmap for FFI like in shell_testing_decryptor.rs

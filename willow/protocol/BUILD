@@ -56,9 +56,9 @@ rust_library(
 )
 
 rust_library(
-    name = "server_traits",
+    name = "accumulator_traits",
     srcs = [
-        "server_traits.rs",
+        "accumulator_traits.rs",
     ],
     deps = [
         ":messages",
@@ -170,12 +170,12 @@ rust_library(
 )
 
 rust_test(
-    name = "willow_v1_server_test",
-    crate = ":willow_v1_server",
+    name = "willow_v1_accumulator_test",
+    crate = ":willow_v1_accumulator",
     deps = [
+        ":accumulator_traits",
         ":client_traits",
         ":decryptor_traits",
-        ":server_traits",
         ":verifier_traits",
         ":willow_v1_client",
         ":willow_v1_decryptor",
@@ -194,13 +194,13 @@ rust_test(
 )
 
 rust_library(
-    name = "willow_v1_server",
+    name = "willow_v1_accumulator",
     srcs = [
-        "willow_v1_server.rs",
+        "willow_v1_accumulator.rs",
     ],
     deps = [
+        ":accumulator_traits",
         ":messages",
-        ":server_traits",
         "@protobuf//rust:protobuf",
         "//ffi_utils:status",
         "//willow/api:proto_serialization_traits",
@@ -235,12 +235,12 @@ rust_test(
     name = "willow_v1_verifier_test",
     crate = ":willow_v1_verifier",
     deps = [
+        ":accumulator_traits",
         ":client_traits",
         ":decryptor_traits",
-        ":server_traits",
+        ":willow_v1_accumulator",
         ":willow_v1_client",
         ":willow_v1_decryptor",
-        ":willow_v1_server",
         "@crate_index//:googletest",
         "//ffi_utils:status_matchers_rs",
         "//willow/api:proto_serialization_traits",

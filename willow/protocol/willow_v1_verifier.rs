@@ -266,22 +266,23 @@ mod tests {
 
     use ahe_traits::AheBase;
     use client_traits::SecureAggregationClient;
+
+    use accumulator_traits::SecureAggregationCiphertextAccumulator;
     use decryptor_traits::SecureAggregationDecryptor;
     use googletest::prelude::{
         contains_substring, eq, err, gtest, verify_eq, verify_that, verify_true,
     };
     use kahe_traits::KaheBase;
     use proto_serialization_traits::{FromProto, ToProto};
-    use server_traits::SecureAggregationServer;
     use shell_kahe::ShellKahe;
     use shell_parameters::{create_shell_ahe_config, create_shell_kahe_config};
     use shell_vahe::ShellVahe;
     use status_matchers_rs::status_is;
     use std::collections::HashMap;
     use testing_utils::{generate_aggregation_config, generate_random_nonce};
+    use willow_v1_accumulator::WillowV1CiphertextAccumulator;
     use willow_v1_client::WillowV1Client;
     use willow_v1_decryptor::{DecryptorState, WillowV1Decryptor};
-    use willow_v1_server::{ServerState, WillowV1Server};
 
     const CONTEXT_STRING: &[u8] = b"testing_context_string";
     const DEFAULT_VECTOR_ID: &str = "default";
@@ -318,9 +319,9 @@ mod tests {
         let mut decryptor_state = DecryptorState::default();
         let decryptor = WillowV1Decryptor::new_with_randomly_generated_seed(Rc::clone(&vahe))?;
 
-        // Create server.
-        let server = WillowV1Server { kahe: Rc::clone(&kahe), vahe: Rc::clone(&vahe) };
-        let mut server_state = ServerState::default();
+        // Create accumulator.
+        let accumulator =
+            WillowV1CiphertextAccumulator { kahe: Rc::clone(&kahe), vahe: Rc::clone(&vahe) };
 
         // Create verifier.
         let verifier = WillowV1Verifier { vahe: Rc::clone(&vahe) };
@@ -328,15 +329,8 @@ mod tests {
         // Decryptor generates public key share.
         let public_key_share = decryptor.create_public_key_share(&mut decryptor_state)?;
 
-        // Server handles the public key share.
-        server.handle_decryptor_public_key_share(
-            public_key_share,
-            "Decryptor 0",
-            &mut server_state,
-        )?;
-
-        // Server creates the public key.
-        let public_key = server.create_decryptor_public_key(&server_state)?;
+        // Aggregate public key share directly.
+        let public_key = vahe.aggregate_public_key_shares(std::iter::once(&public_key_share))?;
 
         // Client encrypts.
         let client_plaintext = HashMap::from([(
@@ -347,8 +341,9 @@ mod tests {
         let client_message =
             client.create_client_message(&client_plaintext, &public_key, &nonce)?;
 
-        // The client message is split and handled by the server and verifier.
-        let (_, decryption_request_contribution) = server.split_client_message(client_message)?;
+        // The client message is split and handled by the accumulator and verifier.
+        let (_, decryption_request_contribution) =
+            accumulator.split_client_message(client_message)?;
 
         Ok(VerifierTestSetup { verifier, decryption_request_contribution })
     }

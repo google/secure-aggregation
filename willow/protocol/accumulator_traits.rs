@@ -14,8 +14,7 @@
 
 use kahe_traits::HasKahe;
 use messages::{
-    CiphertextContribution, ClientMessage, DecryptionRequestContribution, DecryptorPublicKey,
-    DecryptorPublicKeyShare, PartialDecryptionResponse,
+    CiphertextContribution, ClientMessage, DecryptionRequestContribution, PartialDecryptionResponse,
 };
 use status::StatusError;
 use vahe_traits::HasVahe;
@@ -24,30 +23,14 @@ use vahe_traits::HasVahe;
 type Kahe<T> = <T as HasKahe>::Kahe;
 type Vahe<T> = <T as HasVahe>::Vahe;
 
-/// Base trait for the secure aggregation server. Also includes the Coordinator
+/// Base trait for the secure aggregation accumulator. Also includes the Coordinator
 /// functionality of the threshold AHE scheme.
 ///
-pub trait SecureAggregationServer: HasKahe + HasVahe {
-    /// The state held by the server between messages.
-    type ServerState: Default + Clone;
+pub trait SecureAggregationCiphertextAccumulator: HasKahe + HasVahe {
+    /// The state held by the accumulator between messages.
+    type CiphertextAccumulatorState: Default + Clone;
     /// The result of the aggregation.
     type AggregationResult;
-
-    /// Handles a public key share received from a Decryptor, updating the
-    /// server state.
-    fn handle_decryptor_public_key_share(
-        &self,
-        key_share: DecryptorPublicKeyShare<Vahe<Self>>,
-        decryptor_id: &str,
-        server_state: &mut Self::ServerState,
-    ) -> Result<(), StatusError>;
-
-    /// Returns the public key to be sent to the client after enough shares have
-    /// been received from Decryptors.
-    fn create_decryptor_public_key(
-        &self,
-        server_state: &Self::ServerState,
-    ) -> Result<DecryptorPublicKey<Vahe<Self>>, StatusError>;
 
     /// Splits a client message into the ciphertext contribution and the
     /// decryption request contribution.
@@ -59,32 +42,32 @@ pub trait SecureAggregationServer: HasKahe + HasVahe {
         StatusError,
     >;
 
-    /// Handles a single client message, updating the server state.
+    /// Handles a single client message, updating the accumulator state.
     fn handle_ciphertext_contribution(
         &self,
         ciphertext_contribution: CiphertextContribution<Kahe<Self>, Vahe<Self>>,
-        server_state: &mut Self::ServerState,
+        accumulator_state: &mut Self::CiphertextAccumulatorState,
     ) -> Result<(), StatusError>;
 
     /// Handles a partial decryption received from a Decryptor, updating the
-    /// server state.
+    /// accumulator state.
     fn handle_partial_decryption(
         &self,
         partial_decryption_response: PartialDecryptionResponse<Kahe<Self>, Vahe<Self>>,
-        server_state: &mut Self::ServerState,
+        accumulator_state: &mut Self::CiphertextAccumulatorState,
     ) -> Result<(), StatusError>;
 
     /// Recovers the aggregation result after enough partial decryptions have
     /// been received from Decryptors.
     fn recover_aggregation_result(
         &self,
-        server_state: &Self::ServerState,
+        accumulator_state: &Self::CiphertextAccumulatorState,
     ) -> Result<Self::AggregationResult, StatusError>;
 
-    /// Merges two server states into one.
+    /// Merges two accumulator states into one.
     fn merge_states(
         &self,
-        server_state_1: Self::ServerState,
-        server_state_2: Self::ServerState,
-    ) -> Result<Self::ServerState, StatusError>;
+        accumulator_state_1: Self::CiphertextAccumulatorState,
+        accumulator_state_2: Self::CiphertextAccumulatorState,
+    ) -> Result<Self::CiphertextAccumulatorState, StatusError>;
 }

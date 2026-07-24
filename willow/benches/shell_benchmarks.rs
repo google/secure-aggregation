@@ -21,21 +21,22 @@ use std::time::Duration;
 use aggregation_config::AggregationConfig;
 use ahe_traits::AheBase;
 use client_traits::SecureAggregationClient;
+
+use accumulator_traits::SecureAggregationCiphertextAccumulator;
 use decryptor_traits::SecureAggregationDecryptor;
 use kahe_traits::KaheBase;
 use messages::{
     CiphertextContribution, DecryptionRequestContribution, DecryptorPublicKey,
     PartialDecryptionRequest,
 };
-use server_traits::SecureAggregationServer;
 use shell_kahe::ShellKahe;
 use shell_parameters::create_shell_configs;
 use shell_vahe::ShellVahe;
 use testing_utils::{generate_random_nonce, generate_random_unsigned_vector};
 use verifier_traits::SecureAggregationVerifier;
+use willow_v1_accumulator::{CiphertextAccumulatorState, WillowV1CiphertextAccumulator};
 use willow_v1_client::WillowV1Client;
 use willow_v1_decryptor::{DecryptorState, WillowV1Decryptor};
-use willow_v1_server::{ServerState, WillowV1Server};
 use willow_v1_verifier::{VerifierState, WillowV1Verifier};
 
 const DEFAULT_ID: &str = "default";
@@ -103,8 +104,8 @@ struct BaseInputs {
     client: WillowV1Client<ShellKahe, ShellVahe>,
     decryptor: WillowV1Decryptor<ShellVahe>,
     decryptor_state: DecryptorState<ShellVahe>,
-    server: WillowV1Server<ShellKahe, ShellVahe>,
-    server_state: ServerState<ShellKahe, ShellVahe>,
+    accumulator: WillowV1CiphertextAccumulator<ShellKahe, ShellVahe>,
+    accumulator_state: CiphertextAccumulatorState<ShellKahe, ShellVahe>,
     verifier: WillowV1Verifier<ShellVahe>,
     verifier_state: VerifierState<ShellVahe>,
     public_key: DecryptorPublicKey<ShellVahe>,
@@ -139,9 +140,10 @@ fn setup_base(args: &Args) -> BaseInputs {
     let mut decryptor_state = DecryptorState::default();
     let decryptor = WillowV1Decryptor::new_with_randomly_generated_seed(Rc::clone(&vahe)).unwrap();
 
-    // Create server.
-    let server = WillowV1Server { kahe: Rc::clone(&kahe), vahe: Rc::clone(&vahe) };
-    let mut server_state = ServerState::default();
+    // Create accumulator.
+    let accumulator =
+        WillowV1CiphertextAccumulator { kahe: Rc::clone(&kahe), vahe: Rc::clone(&vahe) };
+    let accumulator_state = CiphertextAccumulatorState::default();
 
     // Create verifier.
     let verifier = WillowV1Verifier { vahe: Rc::clone(&vahe) };
@@ -150,20 +152,15 @@ fn setup_base(args: &Args) -> BaseInputs {
     // Decryptor generates public key share.
     let public_key_share = decryptor.create_public_key_share(&mut decryptor_state).unwrap();
 
-    // Server handles the public key share.
-    server
-        .handle_decryptor_public_key_share(public_key_share, "Decryptor 0", &mut server_state)
-        .unwrap();
-
-    // Server creates the public key.
-    let public_key = server.create_decryptor_public_key(&server_state).unwrap();
+    // Aggregate public key share directly.
+    let public_key = vahe.aggregate_public_key_shares(std::iter::once(&public_key_share)).unwrap();
 
     BaseInputs {
         client,
         decryptor,
         decryptor_state,
-        server,
-        server_state,
+        accumulator,
+        accumulator_state,
         verifier,
         verifier_state,
         public_key,
@@ -197,11 +194,11 @@ fn run_client(inputs: &mut ClientInputs) {
     let _ = black_box(res); // Prevent optimization.
 }
 
-// Server benchmarks.
+// Accumulator benchmarks.
 
 struct ServerInputs {
-    server: WillowV1Server<ShellKahe, ShellVahe>,
-    server_state: ServerState<ShellKahe, ShellVahe>,
+    accumulator: WillowV1CiphertextAccumulator<ShellKahe, ShellVahe>,
+    accumulator_state: CiphertextAccumulatorState<ShellKahe, ShellVahe>,
     ciphertext_contributions: Vec<CiphertextContribution<ShellKahe, ShellVahe>>,
 }
 
@@ -226,7 +223,7 @@ fn setup_verifier_verify_client_message(args: &Args) -> VerifierInputs {
             .create_client_message(&client_plaintext, &inputs.public_key, &nonce)
             .unwrap();
         let (_, decryption_request_contribution) =
-            inputs.server.split_client_message(client_message).unwrap();
+            inputs.accumulator.split_client_message(client_message).unwrap();
         decryption_request_contributions.push(decryption_request_contribution);
     }
     decryption_request_contributions.sort_by(|a, b| a.nonce.cmp(&b.nonce));
@@ -265,32 +262,32 @@ fn setup_server_handle_client_message(args: &Args) -> ServerInputs {
             .create_client_message(&client_plaintext, &inputs.public_key, &nonce)
             .unwrap();
         let (ciphertext_contribution, _) =
-            inputs.server.split_client_message(client_message).unwrap();
+            inputs.accumulator.split_client_message(client_message).unwrap();
         ciphertext_contributions.push(ciphertext_contribution);
     }
     ServerInputs {
-        server: inputs.server,
-        server_state: inputs.server_state,
+        accumulator: inputs.accumulator,
+        accumulator_state: inputs.accumulator_state,
         ciphertext_contributions,
     }
 }
 
 fn run_server_handle_client_message(inputs: &mut ServerInputs) {
     inputs
-        .server
+        .accumulator
         .handle_ciphertext_contribution(
             black_box(inputs.ciphertext_contributions.pop().unwrap()),
-            black_box(&mut inputs.server_state),
+            black_box(&mut inputs.accumulator_state),
         )
         .unwrap(); // unwrap to check that we are not measuring the time to produce an error.
 
-    // Prevent optimization (server state is updated in place)
-    let _ = black_box(&mut inputs.server_state);
+    // Prevent optimization (accumulator state is updated in place)
+    let _ = black_box(&mut inputs.accumulator_state);
 }
 
 struct ServerRecoverInputs {
-    server: WillowV1Server<ShellKahe, ShellVahe>,
-    server_state: ServerState<ShellKahe, ShellVahe>,
+    accumulator: WillowV1CiphertextAccumulator<ShellKahe, ShellVahe>,
+    accumulator_state: CiphertextAccumulatorState<ShellKahe, ShellVahe>,
 }
 
 fn setup_server_recover_aggregation_result(args: &Args) -> ServerRecoverInputs {
@@ -304,9 +301,9 @@ fn setup_server_recover_aggregation_result(args: &Args) -> ServerRecoverInputs {
     let client_message =
         inputs.client.create_client_message(&client_plaintext, &inputs.public_key, &nonce).unwrap();
 
-    // Server splits the client message.
+    // Accumulator splits the client message.
     let (ciphertext_contribution, decryption_request_contribution) =
-        inputs.server.split_client_message(client_message).unwrap();
+        inputs.accumulator.split_client_message(client_message).unwrap();
 
     // Verifier handles its part.
     inputs
@@ -314,10 +311,10 @@ fn setup_server_recover_aggregation_result(args: &Args) -> ServerRecoverInputs {
         .verify_and_include(decryption_request_contribution, &mut inputs.verifier_state)
         .unwrap();
 
-    // Server handles its part.
+    // Accumulator handles its part.
     inputs
-        .server
-        .handle_ciphertext_contribution(ciphertext_contribution, &mut inputs.server_state)
+        .accumulator
+        .handle_ciphertext_contribution(ciphertext_contribution, &mut inputs.accumulator_state)
         .unwrap();
 
     // Verifier creates the partial decryption request.
@@ -329,14 +326,20 @@ fn setup_server_recover_aggregation_result(args: &Args) -> ServerRecoverInputs {
         .handle_partial_decryption_request(pd_ct, &mut inputs.decryptor_state)
         .unwrap();
 
-    // Server handles the partial decryption.
-    inputs.server.handle_partial_decryption(pd, &mut inputs.server_state).unwrap();
+    // Accumulator handles the partial decryption.
+    inputs.accumulator.handle_partial_decryption(pd, &mut inputs.accumulator_state).unwrap();
 
-    ServerRecoverInputs { server: inputs.server, server_state: inputs.server_state }
+    ServerRecoverInputs {
+        accumulator: inputs.accumulator,
+        accumulator_state: inputs.accumulator_state,
+    }
 }
 
 fn run_server_recover_aggregation_result(inputs: &mut ServerRecoverInputs) {
-    let res = inputs.server.recover_aggregation_result(black_box(&inputs.server_state)).unwrap();
+    let res = inputs
+        .accumulator
+        .recover_aggregation_result(black_box(&inputs.accumulator_state))
+        .unwrap();
     let _ = black_box(res); // Prevent optimization.
 }
 
@@ -358,14 +361,14 @@ fn setup_decryptor_partial_decryption(args: &Args) -> DecryptorInputs {
     let client_message =
         inputs.client.create_client_message(&client_plaintext, &inputs.public_key, &nonce).unwrap();
 
-    // Server splits the client message.
+    // Accumulator splits the client message.
     let (ciphertext_contribution, decryption_request_contribution) =
-        inputs.server.split_client_message(client_message).unwrap();
+        inputs.accumulator.split_client_message(client_message).unwrap();
 
-    // The server and verifier each handle their part of the client message.
+    // The accumulator and verifier each handle their part of the client message.
     inputs
-        .server
-        .handle_ciphertext_contribution(ciphertext_contribution, &mut inputs.server_state)
+        .accumulator
+        .handle_ciphertext_contribution(ciphertext_contribution, &mut inputs.accumulator_state)
         .unwrap();
     inputs
         .verifier

@@ -14,6 +14,8 @@
 
 use ahe_traits::AheBase;
 use client_traits::SecureAggregationClient;
+
+use accumulator_traits::SecureAggregationCiphertextAccumulator;
 use decryptor_traits::SecureAggregationDecryptor;
 use googletest::prelude::container_eq;
 use googletest::{gtest, verify_eq, verify_that};
@@ -23,7 +25,6 @@ use messages::{
     PartialDecryptionRequest, PartialDecryptionResponse,
 };
 use proto_serialization_traits::{FromProto, ToProto};
-use server_traits::SecureAggregationServer;
 use shell_kahe::ShellKahe;
 use shell_parameters::{create_shell_ahe_config, create_shell_kahe_config};
 use shell_vahe::ShellVahe;
@@ -35,9 +36,9 @@ use testing_utils::{
     generate_aggregation_config, generate_random_nonce, generate_random_unsigned_vector,
 };
 use verifier_traits::SecureAggregationVerifier;
+use willow_v1_accumulator::{CiphertextAccumulatorState, WillowV1CiphertextAccumulator};
 use willow_v1_client::WillowV1Client;
 use willow_v1_decryptor::{DecryptorState, WillowV1Decryptor};
-use willow_v1_server::{ServerState, WillowV1Server};
 use willow_v1_verifier::{VerifierState, WillowV1Verifier};
 
 const CONTEXT_STRING: &[u8] = b"testing_context_string";
@@ -67,9 +68,10 @@ fn encrypt_decrypt_one() -> googletest::Result<()> {
     let mut decryptor_state = DecryptorState::default();
     let decryptor = WillowV1Decryptor::new_with_randomly_generated_seed(Rc::clone(&vahe)).unwrap();
 
-    // Create server.
-    let server = WillowV1Server { kahe: Rc::clone(&kahe), vahe: Rc::clone(&vahe) };
-    let mut server_state = ServerState::default();
+    // Create accumulator.
+    let accumulator =
+        WillowV1CiphertextAccumulator { kahe: Rc::clone(&kahe), vahe: Rc::clone(&vahe) };
+    let mut accumulator_state = CiphertextAccumulatorState::default();
 
     // Create verifier.
     let verifier = WillowV1Verifier { vahe: Rc::clone(&vahe) };
@@ -78,13 +80,8 @@ fn encrypt_decrypt_one() -> googletest::Result<()> {
     // Decryptor generates public key share.
     let public_key_share = decryptor.create_public_key_share(&mut decryptor_state).unwrap();
 
-    // Server handles the public key share.
-    server
-        .handle_decryptor_public_key_share(public_key_share, "Decryptor 0", &mut server_state)
-        .unwrap();
-
-    // Server creates the public key.
-    let public_key = server.create_decryptor_public_key(&server_state).unwrap();
+    // Aggregate public key share directly.
+    let public_key = vahe.aggregate_public_key_shares(std::iter::once(&public_key_share)).unwrap();
 
     // Client encrypts.
     let input_values = vec![1, 2, 3, 4, 5, 6, 7, 8, 7, 6, 5, 4, 3, 2, 1];
@@ -93,11 +90,13 @@ fn encrypt_decrypt_one() -> googletest::Result<()> {
     let client_message =
         client.create_client_message(&client_plaintext, &public_key, &nonce).unwrap();
 
-    // The client message is split and handled by the server and verifier.
+    // The client message is split and handled by the accumulator and verifier.
     let (ciphertext_contribution, decryption_request_contribution) =
-        server.split_client_message(client_message).unwrap();
+        accumulator.split_client_message(client_message).unwrap();
     verifier.verify_and_include(decryption_request_contribution, &mut verifier_state).unwrap();
-    server.handle_ciphertext_contribution(ciphertext_contribution, &mut server_state).unwrap();
+    accumulator
+        .handle_ciphertext_contribution(ciphertext_contribution, &mut accumulator_state)
+        .unwrap();
 
     // Verifier creates the partial decryption request.
     let pd_ct = verifier.create_partial_decryption_request(verifier_state).unwrap();
@@ -105,11 +104,11 @@ fn encrypt_decrypt_one() -> googletest::Result<()> {
     // Decryptor creates partial decryption.
     let pd = decryptor.handle_partial_decryption_request(pd_ct, &mut decryptor_state).unwrap();
 
-    // Server handles the partial decryption.
-    server.handle_partial_decryption(pd, &mut server_state).unwrap();
+    // Accumulator handles the partial decryption.
+    accumulator.handle_partial_decryption(pd, &mut accumulator_state).unwrap();
 
-    // Server recovers the aggregation result.
-    let aggregation_result = server.recover_aggregation_result(&server_state).unwrap();
+    // Accumulator recovers the aggregation result.
+    let aggregation_result = accumulator.recover_aggregation_result(&accumulator_state).unwrap();
 
     // Check that the (padded) result matches the client plaintext.
     verify_that!(aggregation_result.keys().collect::<Vec<_>>(), container_eq([&default_id]))?;
@@ -146,9 +145,10 @@ fn encrypt_decrypt_one_serialized() -> googletest::Result<()> {
     let mut decryptor_state = DecryptorState::default();
     let decryptor = WillowV1Decryptor::new_with_randomly_generated_seed(Rc::clone(&vahe)).unwrap();
 
-    // Create server.
-    let server = WillowV1Server { kahe: Rc::clone(&kahe), vahe: Rc::clone(&vahe) };
-    let mut server_state = ServerState::default();
+    // Create accumulator.
+    let accumulator =
+        WillowV1CiphertextAccumulator { kahe: Rc::clone(&kahe), vahe: Rc::clone(&vahe) };
+    let mut accumulator_state = CiphertextAccumulatorState::default();
 
     // Create verifier.
     let verifier = WillowV1Verifier { vahe: Rc::clone(&vahe) };
@@ -162,19 +162,14 @@ fn encrypt_decrypt_one_serialized() -> googletest::Result<()> {
     let public_key_share: DecryptorPublicKeyShare<ShellVahe> =
         DecryptorPublicKeyShare::<ShellVahe>::from_proto(
             public_key_share_proto,
-            server.vahe.as_ref(),
+            accumulator.vahe.as_ref(),
         )?;
 
-    // Server handles the public key share.
-    server
-        .handle_decryptor_public_key_share(public_key_share, "Decryptor 0", &mut server_state)
-        .unwrap();
-
-    // Server creates the public key.
-    let public_key = server.create_decryptor_public_key(&server_state).unwrap();
+    // Aggregate public key share directly.
+    let public_key = vahe.aggregate_public_key_shares(std::iter::once(&public_key_share)).unwrap();
 
     // Serialize and deserialize the public key.
-    let public_key_proto = public_key.to_proto(server.vahe.as_ref())?;
+    let public_key_proto = public_key.to_proto(accumulator.vahe.as_ref())?;
     let public_key = messages::DecryptorPublicKey::<ShellVahe>::from_proto(
         public_key_proto,
         client.vahe.as_ref(),
@@ -195,19 +190,19 @@ fn encrypt_decrypt_one_serialized() -> googletest::Result<()> {
     // Serialize and deserialize the client message.
     let client_message_proto = client_message.to_proto(&client)?;
     let client_message: ClientMessage<ShellKahe, ShellVahe> =
-        ClientMessage::from_proto(client_message_proto, &server)?;
+        ClientMessage::from_proto(client_message_proto, &accumulator)?;
 
-    // The client message is split and handled by the server and verifier.
+    // The client message is split and handled by the accumulator and verifier.
     let (ciphertext_contribution, decryption_request_contribution) =
-        server.split_client_message(client_message).unwrap();
+        accumulator.split_client_message(client_message).unwrap();
 
     // Serialize and deserialize the contributions.
-    let ciphertext_contribution_proto = ciphertext_contribution.to_proto(&server)?;
+    let ciphertext_contribution_proto = ciphertext_contribution.to_proto(&accumulator)?;
     let ciphertext_contribution: CiphertextContribution<ShellKahe, ShellVahe> =
-        CiphertextContribution::from_proto(ciphertext_contribution_proto, &server)?;
+        CiphertextContribution::from_proto(ciphertext_contribution_proto, &accumulator)?;
 
     let decryption_request_contribution_proto =
-        decryption_request_contribution.to_proto(&server)?;
+        decryption_request_contribution.to_proto(&accumulator)?;
     let decryption_request_contribution: DecryptionRequestContribution<ShellVahe> =
         DecryptionRequestContribution::from_proto(
             decryption_request_contribution_proto,
@@ -215,7 +210,9 @@ fn encrypt_decrypt_one_serialized() -> googletest::Result<()> {
         )?;
 
     verifier.verify_and_include(decryption_request_contribution, &mut verifier_state).unwrap();
-    server.handle_ciphertext_contribution(ciphertext_contribution, &mut server_state).unwrap();
+    accumulator
+        .handle_ciphertext_contribution(ciphertext_contribution, &mut accumulator_state)
+        .unwrap();
 
     // Verifier creates the partial decryption request.
     let pd_ct = verifier.create_partial_decryption_request(verifier_state).unwrap();
@@ -231,13 +228,13 @@ fn encrypt_decrypt_one_serialized() -> googletest::Result<()> {
     // Serialize and deserialize the partial decryption.
     let pd_proto = pd.to_proto((&decryptor, None))?;
     let pd: PartialDecryptionResponse<ShellKahe, ShellVahe> =
-        PartialDecryptionResponse::from_proto(pd_proto, &server)?;
+        PartialDecryptionResponse::from_proto(pd_proto, &accumulator)?;
 
-    // Server handles the partial decryption.
-    server.handle_partial_decryption(pd, &mut server_state).unwrap();
+    // Accumulator handles the partial decryption.
+    accumulator.handle_partial_decryption(pd, &mut accumulator_state).unwrap();
 
-    // Server recovers the aggregation result.
-    let aggregation_result = server.recover_aggregation_result(&server_state).unwrap();
+    // Accumulator recovers the aggregation result.
+    let aggregation_result = accumulator.recover_aggregation_result(&accumulator_state).unwrap();
 
     // Check that the (padded) result matches the client plaintext.
     verify_that!(aggregation_result.keys().collect::<Vec<_>>(), container_eq([&default_id]))?;
@@ -280,9 +277,10 @@ fn encrypt_decrypt_multiple_clients() -> googletest::Result<()> {
     let mut decryptor_state = DecryptorState::default();
     let decryptor = WillowV1Decryptor::new_with_randomly_generated_seed(Rc::clone(&vahe)).unwrap();
 
-    // Create server.
-    let server = WillowV1Server { kahe: Rc::clone(&kahe), vahe: Rc::clone(&vahe) };
-    let mut server_state = ServerState::default();
+    // Create accumulator.
+    let accumulator =
+        WillowV1CiphertextAccumulator { kahe: Rc::clone(&kahe), vahe: Rc::clone(&vahe) };
+    let mut accumulator_state = CiphertextAccumulatorState::default();
 
     // Create verifier.
     let verifier = WillowV1Verifier { vahe: Rc::clone(&vahe) };
@@ -291,13 +289,8 @@ fn encrypt_decrypt_multiple_clients() -> googletest::Result<()> {
     // Decryptor generates public key share.
     let public_key_share = decryptor.create_public_key_share(&mut decryptor_state).unwrap();
 
-    // Server handles the public key share.
-    server
-        .handle_decryptor_public_key_share(public_key_share, "Decryptor 0", &mut server_state)
-        .unwrap();
-
-    // Server creates the public key.
-    let public_key = server.create_decryptor_public_key(&server_state).unwrap();
+    // Aggregate public key share directly.
+    let public_key = vahe.aggregate_public_key_shares(std::iter::once(&public_key_share)).unwrap();
 
     // Clients encrypt.
     let mut expected_output = vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
@@ -320,11 +313,13 @@ fn encrypt_decrypt_multiple_clients() -> googletest::Result<()> {
 
     // Handle client messages.
     for client_message in client_messages.clone() {
-        // The client message is split and handled by the server and verifier.
+        // The client message is split and handled by the accumulator and verifier.
         let (ciphertext_contribution, decryption_request_contribution) =
-            server.split_client_message(client_message).unwrap();
+            accumulator.split_client_message(client_message).unwrap();
         verifier.verify_and_include(decryption_request_contribution, &mut verifier_state).unwrap();
-        server.handle_ciphertext_contribution(ciphertext_contribution, &mut server_state).unwrap();
+        accumulator
+            .handle_ciphertext_contribution(ciphertext_contribution, &mut accumulator_state)
+            .unwrap();
     }
 
     // Verify again using two states and merge the states to check that merge works.
@@ -333,7 +328,7 @@ fn encrypt_decrypt_multiple_clients() -> googletest::Result<()> {
     let half = client_messages.len() / 2;
     for (i, client_message) in client_messages.into_iter().enumerate() {
         let (_, decryption_request_contribution) =
-            server.split_client_message(client_message).unwrap();
+            accumulator.split_client_message(client_message).unwrap();
         let mut verifier_state =
             if i < half { &mut verifier_state_1 } else { &mut verifier_state_2 };
         verifier.verify_and_include(decryption_request_contribution, &mut verifier_state).unwrap();
@@ -341,8 +336,8 @@ fn encrypt_decrypt_multiple_clients() -> googletest::Result<()> {
     let verifier_state_merged = verifier.merge_states(verifier_state_1, verifier_state_2).unwrap();
 
     // Run the rest of the protocol twice, once with each of the the two copies of the verifier state.
-    for (mut server_state, verifier_state) in
-        [(server_state.clone(), verifier_state), (server_state, verifier_state_merged)]
+    for (mut accumulator_state, verifier_state) in
+        [(accumulator_state.clone(), verifier_state), (accumulator_state, verifier_state_merged)]
     {
         // Verifier creates the partial decryption request.
         let pd_ct = verifier.create_partial_decryption_request(verifier_state).unwrap();
@@ -350,11 +345,12 @@ fn encrypt_decrypt_multiple_clients() -> googletest::Result<()> {
         // Decryptor creates partial decryption.
         let pd = decryptor.handle_partial_decryption_request(pd_ct, &mut decryptor_state).unwrap();
 
-        // Server handles the partial decryption.
-        server.handle_partial_decryption(pd, &mut server_state).unwrap();
+        // Accumulator handles the partial decryption.
+        accumulator.handle_partial_decryption(pd, &mut accumulator_state).unwrap();
 
-        // Server recovers the aggregation result.
-        let aggregation_result = server.recover_aggregation_result(&server_state).unwrap();
+        // Accumulator recovers the aggregation result.
+        let aggregation_result =
+            accumulator.recover_aggregation_result(&accumulator_state).unwrap();
 
         // Check that the (padded) result matches the client plaintext.
         verify_that!(aggregation_result.keys().collect::<Vec<_>>(), container_eq([&default_id]))?;
@@ -409,9 +405,10 @@ fn encrypt_decrypt_multiple_clients_including_invalid_proofs() -> googletest::Re
     let mut decryptor_state = DecryptorState::default();
     let decryptor = WillowV1Decryptor::new_with_randomly_generated_seed(Rc::clone(&vahe)).unwrap();
 
-    // Create server.
-    let server = WillowV1Server { kahe: Rc::clone(&kahe), vahe: Rc::clone(&vahe) };
-    let mut server_state = ServerState::default();
+    // Create accumulator.
+    let accumulator =
+        WillowV1CiphertextAccumulator { kahe: Rc::clone(&kahe), vahe: Rc::clone(&vahe) };
+    let mut accumulator_state = CiphertextAccumulatorState::default();
 
     // Create verifier.
     let verifier = WillowV1Verifier { vahe: Rc::clone(&vahe) };
@@ -420,13 +417,8 @@ fn encrypt_decrypt_multiple_clients_including_invalid_proofs() -> googletest::Re
     // Decryptor generates public key share.
     let public_key_share = decryptor.create_public_key_share(&mut decryptor_state).unwrap();
 
-    // Server handles the public key share.
-    server
-        .handle_decryptor_public_key_share(public_key_share, "Decryptor 0", &mut server_state)
-        .unwrap();
-
-    // Server creates the public key.
-    let public_key = server.create_decryptor_public_key(&server_state).unwrap();
+    // Aggregate public key share directly.
+    let public_key = vahe.aggregate_public_key_shares(std::iter::once(&public_key_share)).unwrap();
 
     // Good Clients encrypt and should be included in the aggregation.
     let mut expected_output = vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
@@ -449,11 +441,13 @@ fn encrypt_decrypt_multiple_clients_including_invalid_proofs() -> googletest::Re
 
     // Handle client messages.
     for client_message in client_messages {
-        // The client message is split and handled by the server and verifier.
+        // The client message is split and handled by the accumulator and verifier.
         let (ciphertext_contribution, decryption_request_contribution) =
-            server.split_client_message(client_message).unwrap();
+            accumulator.split_client_message(client_message).unwrap();
         verifier.verify_and_include(decryption_request_contribution, &mut verifier_state).unwrap();
-        server.handle_ciphertext_contribution(ciphertext_contribution, &mut server_state).unwrap();
+        accumulator
+            .handle_ciphertext_contribution(ciphertext_contribution, &mut accumulator_state)
+            .unwrap();
     }
 
     // Use first bad client to create a proof object that the others will use.
@@ -483,9 +477,9 @@ fn encrypt_decrypt_multiple_clients_including_invalid_proofs() -> googletest::Re
     }
     client_messages.sort_by(|a, b| a.nonce.cmp(&b.nonce));
     for client_message in client_messages {
-        // The client message is split and handled by the server and verifier.
+        // The client message is split and handled by the accumulator and verifier.
         let (_ciphertext_contribution, decryption_request_contribution) =
-            server.split_client_message(client_message).unwrap();
+            accumulator.split_client_message(client_message).unwrap();
         verify_that!(
             verifier.verify_and_include(decryption_request_contribution, &mut verifier_state),
             status_is(StatusErrorCode::PERMISSION_DENIED)
@@ -498,11 +492,11 @@ fn encrypt_decrypt_multiple_clients_including_invalid_proofs() -> googletest::Re
     // Decryptor creates partial decryption.
     let pd = decryptor.handle_partial_decryption_request(pd_ct, &mut decryptor_state).unwrap();
 
-    // Server handles the partial decryption.
-    server.handle_partial_decryption(pd, &mut server_state).unwrap();
+    // Accumulator handles the partial decryption.
+    accumulator.handle_partial_decryption(pd, &mut accumulator_state).unwrap();
 
-    // Server recovers the aggregation result.
-    let aggregation_result = server.recover_aggregation_result(&server_state).unwrap();
+    // Accumulator recovers the aggregation result.
+    let aggregation_result = accumulator.recover_aggregation_result(&accumulator_state).unwrap();
 
     // Check that the (padded) result matches the client plaintext.
     verify_that!(aggregation_result.keys().collect::<Vec<_>>(), container_eq([&default_id]))?;
@@ -546,9 +540,10 @@ fn encrypt_decrypt_many_clients_decryptors() -> googletest::Result<()> {
             .unwrap(),
     );
 
-    // Create server.
-    let server = WillowV1Server { kahe: Rc::clone(&kahe), vahe: Rc::clone(&vahe) };
-    let mut server_state = ServerState::default();
+    // Create accumulator.
+    let accumulator =
+        WillowV1CiphertextAccumulator { kahe: Rc::clone(&kahe), vahe: Rc::clone(&vahe) };
+    let mut accumulator_state = CiphertextAccumulatorState::default();
 
     // Create verifier.
     let verifier = WillowV1Verifier { vahe: Rc::clone(&vahe) };
@@ -557,29 +552,22 @@ fn encrypt_decrypt_many_clients_decryptors() -> googletest::Result<()> {
     // Create decryptors.
     let mut decryptors = vec![];
     let mut decryptor_states = vec![];
-    for i in 0..NUM_DECRYPTORS {
+    let mut public_key_shares = vec![];
+    for _ in 0..NUM_DECRYPTORS {
         let mut decryptor_state = DecryptorState::default();
         let decryptor =
             WillowV1Decryptor::new_with_randomly_generated_seed(Rc::clone(&vahe)).unwrap();
 
         // Decryptor generates public key share.
         let public_key_share = decryptor.create_public_key_share(&mut decryptor_state).unwrap();
-
-        // Server handles the public key share.
-        server
-            .handle_decryptor_public_key_share(
-                public_key_share,
-                format!("Decryptor {i}").as_str(),
-                &mut server_state,
-            )
-            .unwrap();
+        public_key_shares.push(public_key_share);
 
         decryptors.push(decryptor);
         decryptor_states.push(decryptor_state);
     }
 
-    // Server creates the public key.
-    let public_key = server.create_decryptor_public_key(&server_state).unwrap();
+    // Aggregate public key shares directly.
+    let public_key = vahe.aggregate_public_key_shares(public_key_shares.iter()).unwrap();
 
     // Create clients, and each client generates their messages.
     let mut expected_output = vec![0; INPUT_LENGTH as usize];
@@ -607,11 +595,13 @@ fn encrypt_decrypt_many_clients_decryptors() -> googletest::Result<()> {
 
     // Handle client messages.
     for client_message in client_messages {
-        // The client message is split and handled by the server and verifier.
+        // The client message is split and handled by the accumulator and verifier.
         let (ciphertext_contribution, decryption_request_contribution) =
-            server.split_client_message(client_message).unwrap();
+            accumulator.split_client_message(client_message).unwrap();
         verifier.verify_and_include(decryption_request_contribution, &mut verifier_state).unwrap();
-        server.handle_ciphertext_contribution(ciphertext_contribution, &mut server_state).unwrap();
+        accumulator
+            .handle_ciphertext_contribution(ciphertext_contribution, &mut accumulator_state)
+            .unwrap();
     }
 
     // Verifier creates the partial decryption request.
@@ -624,12 +614,12 @@ fn encrypt_decrypt_many_clients_decryptors() -> googletest::Result<()> {
             .handle_partial_decryption_request(pd_ct.clone(), &mut decryptor_states[i])
             .unwrap();
 
-        // Server handles the partial decryption.
-        server.handle_partial_decryption(pd, &mut server_state).unwrap();
+        // Accumulator handles the partial decryption.
+        accumulator.handle_partial_decryption(pd, &mut accumulator_state).unwrap();
     }
 
-    // Server recovers the aggregation result.
-    let aggregation_result = server.recover_aggregation_result(&server_state).unwrap();
+    // Accumulator recovers the aggregation result.
+    let aggregation_result = accumulator.recover_aggregation_result(&accumulator_state).unwrap();
 
     // Check that the (padded) result matches the client plaintext.
     verify_that!(aggregation_result.keys().collect::<Vec<_>>(), container_eq([&default_id]))?;
@@ -682,30 +672,25 @@ fn encrypt_decrypt_no_dropout() -> googletest::Result<()> {
         decryptors.push(decryptor);
     }
 
-    // Create server.
-    let server = WillowV1Server { kahe: Rc::clone(&kahe), vahe: Rc::clone(&vahe) };
-    let mut server_state = ServerState::default();
+    // Create accumulator.
+    let accumulator =
+        WillowV1CiphertextAccumulator { kahe: Rc::clone(&kahe), vahe: Rc::clone(&vahe) };
+    let mut accumulator_state = CiphertextAccumulatorState::default();
 
     // Create verifier.
     let verifier = WillowV1Verifier { vahe: Rc::clone(&vahe) };
     let mut verifier_state = VerifierState::default();
 
     // Decryptors generate public key shares.
+    let mut public_key_shares = vec![];
     for i in 0..decryptors.len() {
         let public_key_share =
             decryptors[i].create_public_key_share(&mut decryptor_states[i]).unwrap();
-        // Server handles the public key share.
-        server
-            .handle_decryptor_public_key_share(
-                public_key_share,
-                format!("Decryptor {i}").as_str(),
-                &mut server_state,
-            )
-            .unwrap();
+        public_key_shares.push(public_key_share);
     }
 
-    // Server creates the public key.
-    let public_key = server.create_decryptor_public_key(&server_state).unwrap();
+    // Aggregate public key shares directly.
+    let public_key = vahe.aggregate_public_key_shares(public_key_shares.iter()).unwrap();
 
     // Clients encrypt.
     let mut expected_output = vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
@@ -728,11 +713,13 @@ fn encrypt_decrypt_no_dropout() -> googletest::Result<()> {
 
     // Handle client messages.
     for client_message in client_messages {
-        // The client message is split and handled by the server and verifier.
+        // The client message is split and handled by the accumulator and verifier.
         let (ciphertext_contribution, decryption_request_contribution) =
-            server.split_client_message(client_message).unwrap();
+            accumulator.split_client_message(client_message).unwrap();
         verifier.verify_and_include(decryption_request_contribution, &mut verifier_state).unwrap();
-        server.handle_ciphertext_contribution(ciphertext_contribution, &mut server_state).unwrap();
+        accumulator
+            .handle_ciphertext_contribution(ciphertext_contribution, &mut accumulator_state)
+            .unwrap();
     }
 
     // Verifier creates the partial decryption request.
@@ -743,12 +730,12 @@ fn encrypt_decrypt_no_dropout() -> googletest::Result<()> {
         let pd = decryptors[i]
             .handle_partial_decryption_request(pd_ct.clone(), &mut decryptor_states[i])
             .unwrap();
-        // Server handles the partial decryption.
-        server.handle_partial_decryption(pd, &mut server_state).unwrap();
+        // Accumulator handles the partial decryption.
+        accumulator.handle_partial_decryption(pd, &mut accumulator_state).unwrap();
     }
 
-    // Server recovers the aggregation result.
-    let aggregation_result = server.recover_aggregation_result(&server_state).unwrap();
+    // Accumulator recovers the aggregation result.
+    let aggregation_result = accumulator.recover_aggregation_result(&accumulator_state).unwrap();
 
     // Check that the (padded) result matches the client plaintext.
     verify_that!(aggregation_result.keys().collect::<Vec<_>>(), container_eq([&default_id]))?;
