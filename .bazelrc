@@ -3,3 +3,6 @@ build --action_env=CC=clang
 build --action_env=CXX=clang++
 build --repo_env=CC=clang
 build --repo_env=CXX=clang++
+
+# retry transient network timeouts when downloading external repositories
+build --http_connector_attempts=3

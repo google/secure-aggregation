@@ -38,20 +38,27 @@ jobs:
       - name: Set bazel version
         run: echo "${{ matrix.bazel-version }}.x" > .bazelversion
 
-      - name: Cache bazel build artifacts
+      - name: Cache Bazel repository dependencies
         uses: actions/cache@9255dc7a253b0ccc959486e2bca901246202afeb # pin@v5.0.1
         with:
-          path: |
-            ~/.cache/bazel
-          key: ${{ runner.os }}-bazel-v${{ matrix.bazel-version }}-${{ hashFiles('.bazelrc', '.bazelversion', 'MODULE.bazel.lock') }}-${{ github.sha }}
+          path: ~/.cache/bazel-repo
+          key: ${{ runner.os }}-bazel-repo-v${{ matrix.bazel-version }}-${{ hashFiles('.bazelrc', '.bazelversion', 'MODULE.bazel', 'MODULE.bazel.lock') }}
           restore-keys: |
-            ${{ runner.os }}-bazel-v${{ matrix.bazel-version }}-${{ hashFiles('.bazelrc', '.bazelversion', 'MODULE.bazel.lock') }}-
-            ${{ runner.os }}-${{ hashFiles('.bazelrc', '.bazelversion', 'MODULE.bazel.lock') }}-
+            ${{ runner.os }}-bazel-repo-v${{ matrix.bazel-version }}-
+
+      - name: Cache Bazel build outputs
+        uses: actions/cache@9255dc7a253b0ccc959486e2bca901246202afeb # pin@v5.0.1
+        with:
+          path: ~/.cache/bazel-disk
+          key: ${{ runner.os }}-bazel-disk-v${{ matrix.bazel-version }}-${{ hashFiles('.bazelrc', '.bazelversion', 'MODULE.bazel', 'MODULE.bazel.lock', '**/BUILD', '**/BUILD.bazel', '**/*.bzl') }}-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-bazel-disk-v${{ matrix.bazel-version }}-${{ hashFiles('.bazelrc', '.bazelversion', 'MODULE.bazel', 'MODULE.bazel.lock', '**/BUILD', '**/BUILD.bazel', '**/*.bzl') }}-
+            ${{ runner.os }}-bazel-disk-v${{ matrix.bazel-version }}-
 
       - name: "Run `bazel build`"
         run: |
-          bazel build -c opt //...
+          bazel build --repository_cache=~/.cache/bazel-repo --disk_cache=~/.cache/bazel-disk -c opt //...
 
       - name: "Run `bazel test`"
         run: |
-          bazel test -c opt //...
+          bazel test --repository_cache=~/.cache/bazel-repo --disk_cache=~/.cache/bazel-disk -c opt //...
