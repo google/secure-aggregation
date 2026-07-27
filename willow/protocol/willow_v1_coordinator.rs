@@ -125,7 +125,6 @@ where
         &self,
         _coordinator_state: &mut Self::CoordinatorState,
     ) -> Result<Vec<RecoveryRequest>, StatusError> {
-        // Dropout recovery is not yet implemented.
         Err(status::unimplemented("Dropout recovery is not yet implemented"))
     }
 
@@ -134,7 +133,6 @@ where
         _recovery_responses: Vec<RecoveryResponse>,
         _coordinator_state: &mut Self::CoordinatorState,
     ) -> Result<(), StatusError> {
-        // Dropout recovery is not yet implemented.
         Err(status::unimplemented("Dropout recovery is not yet implemented"))
     }
 

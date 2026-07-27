@@ -204,3 +204,72 @@ cc_test(
         "//willow/testing_utils:testing_utils_cc",
     ],
 )
+
+rust_library(
+    name = "coordinator_rust",
+    srcs = ["coordinator.rs"],
+    deps = [
+        ":aggregation_config",
+        ":proto_serialization_traits",
+        "@protobuf//rust:protobuf",
+        "@cxx.rs//:cxx",
+        "//ffi_utils:status",
+        "//willow/crypto:ahe_traits",
+        "//willow/crypto:kahe_traits",
+        "//willow/crypto:shell_kahe",
+        "//willow/crypto:shell_parameters",
+        "//willow/crypto:shell_vahe",
+        "//willow/crypto:vahe_traits",
+        "//willow/proto/shell:shell_ciphertexts_rust_proto",
+        "//willow/proto/willow:aggregation_config_rust_proto",
+        "//willow/proto/willow:messages_rust_proto",
+        "//willow/protocol:decryptor_traits",
+        "//willow/protocol:messages",
+        "//willow/protocol:willow_v1_coordinator",
+    ],
+)
+
+rust_cxx_bridge(
+    name = "coordinator_cxx",
+    src = "coordinator.rs",
+    deps = [
+        ":coordinator_rust",
+        "//ffi_utils:status_cxx",
+    ],
+)
+
+cc_library(
+    name = "coordinator",
+    srcs = ["coordinator.cc"],
+    hdrs = ["coordinator.h"],
+    deps = [
+        ":coordinator_cxx",
+        ":coordinator_cxx/include",  # fixdeps: keep
+        ":coordinator_rust",  # fixdeps: keep
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:statusor",
+        "@abseil-cpp//absl/types:span",
+        "@cxx.rs//:core",
+        "//ffi_utils:cxx_utils",
+        "//ffi_utils:status_macros",
+        "//willow/proto/shell:shell_ciphertexts_cc_proto",
+        "//willow/proto/willow:aggregation_config_cc_proto",
+        "//willow/proto/willow:messages_cc_proto",
+    ],
+)
+
+cc_test(
+    name = "coordinator_test",
+    srcs = ["coordinator_test.cc"],
+    deps = [
+        ":coordinator",
+        ":coordinator_cxx",  # fixdeps: keep
+        "@googletest//:gtest_main",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:statusor",
+        "//ffi_utils:status_matchers",
+        "//willow/proto/shell:shell_ciphertexts_cc_proto",
+        "//willow/proto/willow:aggregation_config_cc_proto",
+        "//willow/proto/willow:messages_cc_proto",
+    ],
+)
