@@ -273,3 +273,27 @@ cc_test(
         "//willow/proto/willow:messages_cc_proto",
     ],
 )
+
+cc_test(
+    name = "willow_v1_api_e2e_test",
+    srcs = ["willow_v1_api_e2e_test.cc"],
+    deps = [
+        ":client_cc",
+        ":client_cxx",  # fixdeps: keep
+        ":coordinator",
+        ":coordinator_cxx",  # fixdeps: keep
+        ":server_accumulator",
+        ":server_accumulator_cxx",  # fixdeps: keep
+        "@googletest//:gtest_main",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:statusor",
+        "//ffi_utils:status_macros",
+        "//ffi_utils:status_matchers",
+        "//willow/input_encoding:codec",
+        "//willow/proto/willow:aggregation_config_cc_proto",
+        "//willow/proto/willow:input_spec_cc_proto",
+        "//willow/proto/willow:messages_cc_proto",
+        "//willow/testing_utils:shell_testing_decryptor_cc",
+        "//willow/testing_utils:testing_utils_cc",
+    ],
+)

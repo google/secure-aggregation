@@ -18,9 +18,13 @@ use aggregation_config::AggregationConfig;
 use aggregation_config_rust_proto::AggregationConfigProto;
 use ahe_traits::{AheBase, AheKeygen, PartialDec};
 use kahe_traits::{KaheBase, KaheDecrypt, TrySecretKeyFrom};
-use messages::{ClientMessage, PartialDecryptionRequest, PartialDecryptionResponse};
+use messages::{
+    ClientMessage, KeyContribution, PartialDecryptionRequest, PartialDecryptionResponse,
+    SetupContribution, VerifyKeyContributionsRequest,
+};
 use messages_rust_proto::ClientMessage as ClientMessageProto;
 use messages_rust_proto::PartialDecryptionRequest as PartialDecryptionRequestProto;
+use messages_rust_proto::VerifyKeyContributionsRequest as VerifyKeyContributionsRequestProto;
 use prng_traits::SecurePrng;
 use proto_serialization_traits::{FromProto, ToProto};
 use protobuf::prelude::*;
@@ -33,7 +37,7 @@ use single_thread_hkdf::SingleThreadHkdfPrng;
 use status::StatusError;
 use std::cell::RefCell;
 use vahe_traits::Recover;
-use vahe_traits::{HasVahe, VaheBase};
+use vahe_traits::{HasVahe, KeyGenVerify, VaheBase, VerifiableKeyGen};
 
 /// Basic implementation of a single decryptor that uses Shell operations directly. Useful for
 /// testing Shell clients, by checking that encrypted messages can be decrypted properly. Comes with
@@ -207,6 +211,64 @@ impl ShellTestingDecryptor {
             .map(|response| unsafe { *out = response })
             .into()
     }
+
+    fn create_setup_contribution_serialized(&mut self) -> Result<Vec<u8>, StatusError> {
+        let (sk_share, pk_share, key_gen_proof) =
+            self.vahe.verifiable_key_gen(&mut self.prng.borrow_mut())?;
+        self.secret_key = Some(sk_share);
+        let key_contribution =
+            KeyContribution { public_key_share: pk_share, proof: Some(key_gen_proof) };
+        let setup_contribution = SetupContribution {
+            key_contribution,
+            dp_setup: None,
+            encrypted_randomness_shares: None,
+        };
+        let proto = setup_contribution.to_proto(self)?;
+        proto.serialize().map_err(|e| status::internal(&format!("Serialize error: {}", e)))
+    }
+
+    /// SAFETY: `out` must be valid for writes.
+    unsafe fn create_setup_contribution_ffi(&mut self, out: *mut Vec<u8>) -> ffi::FfiStatus {
+        self.create_setup_contribution_serialized().map(|res| unsafe { *out = res }).into()
+    }
+
+    fn verify_and_aggregate_key_contributions_serialized(
+        &self,
+        request_bytes: &[u8],
+    ) -> Result<Vec<u8>, StatusError> {
+        let request_proto =
+            VerifyKeyContributionsRequestProto::parse(request_bytes).map_err(|e| {
+                status::internal(&format!("Failed to parse VerifyKeyContributionsRequest: {}", e))
+            })?;
+        let request = VerifyKeyContributionsRequest::from_proto(request_proto, self)?;
+        if request.key_contributions.is_empty() {
+            return Err(status::invalid_argument("key_contributions list is empty"));
+        }
+        for key_contribution in &request.key_contributions {
+            let proof = key_contribution.proof.as_ref().ok_or_else(|| {
+                status::invalid_argument(
+                    "Missing key generation proof in VerifyKeyContributionsRequest",
+                )
+            })?;
+            self.vahe.verify_key_gen(proof, &key_contribution.public_key_share)?;
+        }
+        let public_key_shares: Vec<_> =
+            request.key_contributions.iter().map(|kc| &kc.public_key_share).collect();
+        let public_key = self.vahe.aggregate_public_key_shares(public_key_shares.into_iter())?;
+        let proto = public_key.to_proto(&self.vahe)?;
+        proto.serialize().map_err(|e| status::internal(&format!("Serialize error: {}", e)))
+    }
+
+    /// SAFETY: `out` must be valid for writes.
+    unsafe fn verify_and_aggregate_key_contributions_ffi(
+        &mut self,
+        request_bytes: &[u8],
+        out: *mut Vec<u8>,
+    ) -> ffi::FfiStatus {
+        self.verify_and_aggregate_key_contributions_serialized(request_bytes)
+            .map(|res| unsafe { *out = res })
+            .into()
+    }
 }
 
 /// CXX bridge to call ShellTestingDecryptor from C++, using serialized protos as input and output.
@@ -239,6 +301,19 @@ pub mod ffi {
         #[rust_name = "generate_public_key_ffi"]
         unsafe fn generate_public_key(
             self: &mut ShellTestingDecryptor,
+            out: *mut Vec<u8>,
+        ) -> FfiStatus;
+
+        #[rust_name = "create_setup_contribution_ffi"]
+        unsafe fn create_setup_contribution(
+            self: &mut ShellTestingDecryptor,
+            out: *mut Vec<u8>,
+        ) -> FfiStatus;
+
+        #[rust_name = "verify_and_aggregate_key_contributions_ffi"]
+        unsafe fn verify_and_aggregate_key_contributions(
+            self: &mut ShellTestingDecryptor,
+            request: &[u8],
             out: *mut Vec<u8>,
         ) -> FfiStatus;
 
