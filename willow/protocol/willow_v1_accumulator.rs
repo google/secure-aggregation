@@ -22,9 +22,7 @@ use messages::{
 use messages_rust_proto::ServerState as ServerStateProto;
 use proto_serialization_traits::{FromProto, ToProto};
 use protobuf::AsView;
-use shell_ciphertexts_rust_proto::{
-    ShellAhePartialDecryption, ShellAheRecoverCiphertext, ShellKaheCiphertext,
-};
+use shell_ciphertexts_rust_proto::{ShellAheRecoverCiphertext, ShellKaheCiphertext};
 use status::StatusError;
 use std::rc::Rc;
 use vahe_traits::{EncryptVerify, HasVahe, Recover, VaheBase};
@@ -250,7 +248,6 @@ mod tests {
     use accumulator_traits::SecureAggregationCiphertextAccumulator;
     use ahe_traits::AheBase;
     use client_traits::SecureAggregationClient;
-    use decryptor_traits::SecureAggregationDecryptor;
     use googletest::{gtest, verify_eq, verify_true};
     use proto_serialization_traits::{FromProto, ToProto};
     use shell_kahe::ShellKahe;
@@ -260,7 +257,8 @@ mod tests {
     use testing_utils::{generate_aggregation_config, generate_random_nonce};
     use verifier_traits::SecureAggregationVerifier;
     use willow_v1_client::WillowV1Client;
-    use willow_v1_decryptor::{DecryptorState, WillowV1Decryptor};
+    use willow_v1_decryptor::DecryptorState;
+    use willow_v1_single_decryptor::WillowV1SingleDecryptor;
     use willow_v1_verifier::{VerifierState, WillowV1Verifier};
 
     const CONTEXT_STRING: &[u8] = b"testing_context_string";
@@ -287,7 +285,8 @@ mod tests {
 
         // Create decryptor.
         let mut decryptor_state = DecryptorState::default();
-        let decryptor = WillowV1Decryptor::new_with_randomly_generated_seed(Rc::clone(&vahe))?;
+        let decryptor =
+            WillowV1SingleDecryptor::new_with_randomly_generated_seed(Rc::clone(&vahe))?;
 
         // Create accumulator.
         let accumulator =

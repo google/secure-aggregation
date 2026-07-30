@@ -223,7 +223,6 @@ rust_library(
         "//willow/proto/shell:shell_ciphertexts_rust_proto",
         "//willow/proto/willow:aggregation_config_rust_proto",
         "//willow/proto/willow:messages_rust_proto",
-        "//willow/protocol:decryptor_traits",
         "//willow/protocol:messages",
         "//willow/protocol:willow_v1_coordinator",
     ],

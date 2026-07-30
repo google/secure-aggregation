@@ -23,7 +23,6 @@ use ahe_traits::AheBase;
 use client_traits::SecureAggregationClient;
 
 use accumulator_traits::SecureAggregationCiphertextAccumulator;
-use decryptor_traits::SecureAggregationDecryptor;
 use kahe_traits::KaheBase;
 use messages::{
     CiphertextContribution, DecryptionRequestContribution, DecryptorPublicKey,
@@ -36,7 +35,8 @@ use testing_utils::{generate_random_nonce, generate_random_unsigned_vector};
 use verifier_traits::SecureAggregationVerifier;
 use willow_v1_accumulator::{CiphertextAccumulatorState, WillowV1CiphertextAccumulator};
 use willow_v1_client::WillowV1Client;
-use willow_v1_decryptor::{DecryptorState, WillowV1Decryptor};
+use willow_v1_decryptor::DecryptorState;
+use willow_v1_single_decryptor::WillowV1SingleDecryptor;
 use willow_v1_verifier::{VerifierState, WillowV1Verifier};
 
 const DEFAULT_ID: &str = "default";
@@ -102,7 +102,7 @@ pub fn match_and_bench(args: &Args) -> Duration {
 
 struct BaseInputs {
     client: WillowV1Client<ShellKahe, ShellVahe>,
-    decryptor: WillowV1Decryptor<ShellVahe>,
+    decryptor: WillowV1SingleDecryptor<ShellVahe>,
     decryptor_state: DecryptorState<ShellVahe>,
     accumulator: WillowV1CiphertextAccumulator<ShellKahe, ShellVahe>,
     accumulator_state: CiphertextAccumulatorState<ShellKahe, ShellVahe>,
@@ -138,7 +138,8 @@ fn setup_base(args: &Args) -> BaseInputs {
 
     // Create decryptor.
     let mut decryptor_state = DecryptorState::default();
-    let decryptor = WillowV1Decryptor::new_with_randomly_generated_seed(Rc::clone(&vahe)).unwrap();
+    let decryptor =
+        WillowV1SingleDecryptor::new_with_randomly_generated_seed(Rc::clone(&vahe)).unwrap();
 
     // Create accumulator.
     let accumulator =
@@ -351,7 +352,7 @@ fn run_server_recover_aggregation_result(inputs: &mut ServerRecoverInputs) {
 // Decryptor benchmarks.
 
 struct DecryptorInputs {
-    decryptor: WillowV1Decryptor<ShellVahe>,
+    decryptor: WillowV1SingleDecryptor<ShellVahe>,
     decryptor_state: DecryptorState<ShellVahe>,
     partial_decryption_request: PartialDecryptionRequest<ShellVahe>,
 }

@@ -268,7 +268,6 @@ mod tests {
     use client_traits::SecureAggregationClient;
 
     use accumulator_traits::SecureAggregationCiphertextAccumulator;
-    use decryptor_traits::SecureAggregationDecryptor;
     use googletest::prelude::{
         contains_substring, eq, err, gtest, verify_eq, verify_that, verify_true,
     };
@@ -282,7 +281,8 @@ mod tests {
     use testing_utils::{generate_aggregation_config, generate_random_nonce};
     use willow_v1_accumulator::WillowV1CiphertextAccumulator;
     use willow_v1_client::WillowV1Client;
-    use willow_v1_decryptor::{DecryptorState, WillowV1Decryptor};
+    use willow_v1_decryptor::DecryptorState;
+    use willow_v1_single_decryptor::WillowV1SingleDecryptor;
 
     const CONTEXT_STRING: &[u8] = b"testing_context_string";
     const DEFAULT_VECTOR_ID: &str = "default";
@@ -313,7 +313,8 @@ mod tests {
 
         // Create decryptor.
         let mut decryptor_state = DecryptorState::default();
-        let decryptor = WillowV1Decryptor::new_with_randomly_generated_seed(Rc::clone(&vahe))?;
+        let decryptor =
+            WillowV1SingleDecryptor::new_with_randomly_generated_seed(Rc::clone(&vahe))?;
 
         // Create accumulator.
         let accumulator =

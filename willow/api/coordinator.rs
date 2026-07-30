@@ -15,7 +15,6 @@
 use aggregation_config::AggregationConfig;
 use aggregation_config_rust_proto::AggregationConfigProto;
 use ahe_traits::AheBase;
-use decryptor_traits::SecureAggregationCoordinator;
 use kahe_traits::{HasKahe, KaheBase};
 use messages::CoordinatorState;
 use proto_serialization_traits::{FromProto, ToProto};

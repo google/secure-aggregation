@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use ahe_traits::{AheBase, PartialDec};
-use decryptor_traits::SecureAggregationCoordinator;
 use kahe_traits::KaheBase;
 use messages::{
     CoordinatorState, CoordinatorStatus, FinalizedPartialDecryption, PartialDecryptionRequest,
@@ -41,18 +40,24 @@ impl<Vahe: VaheBase> HasVahe for WillowV1Coordinator<Vahe> {
     }
 }
 
-impl<Vahe> SecureAggregationCoordinator for WillowV1Coordinator<Vahe>
+impl<Vahe: VaheBase> WillowV1Coordinator<Vahe> {
+    pub fn new(vahe: Rc<Vahe>) -> Self {
+        Self { vahe }
+    }
+}
+
+impl<Vahe> WillowV1Coordinator<Vahe>
 where
     Vahe: VaheBase + PartialDec,
 {
-    type CoordinatorState = CoordinatorState<Vahe>;
-
-    fn handle_setup_submissions(
+    /// Stores setup contributions from all decryptors and creates a request to verify the
+    /// contributions.
+    pub fn handle_setup_submissions(
         &self,
-        non_reputable_contributions: Vec<SetupContribution<Self::Vahe>>,
-        reputable_contributions: Vec<SetupContribution<Self::Vahe>>,
-        coordinator_state: &mut Self::CoordinatorState,
-    ) -> Result<VerifyKeyContributionsRequest<Self::Vahe>, StatusError> {
+        non_reputable_contributions: Vec<SetupContribution<Vahe>>,
+        reputable_contributions: Vec<SetupContribution<Vahe>>,
+        coordinator_state: &mut CoordinatorState<Vahe>,
+    ) -> Result<VerifyKeyContributionsRequest<Vahe>, StatusError> {
         if coordinator_state.status != CoordinatorStatus::PreSetup {
             return Err(status::failed_precondition("Coordinator is not in PreSetup state"));
         }
@@ -75,11 +80,14 @@ where
         Ok(VerifyKeyContributionsRequest { key_contributions: all_key_contributions })
     }
 
-    fn prepare_decryption_request(
+    /// Combines the verifier's ciphertext half with the accumulated AHE components.
+    ///
+    /// The result should be forwarded to decryptors for partial decryption.
+    pub fn prepare_decryption_request(
         &self,
-        verifier_ciphertext: &<Self::Vahe as AheBase>::PartialDecCiphertext,
-        coordinator_state: &mut Self::CoordinatorState,
-    ) -> Result<PartialDecryptionRequest<Self::Vahe>, StatusError> {
+        verifier_ciphertext: &<Vahe as AheBase>::PartialDecCiphertext,
+        coordinator_state: &mut CoordinatorState<Vahe>,
+    ) -> Result<PartialDecryptionRequest<Vahe>, StatusError> {
         if coordinator_state.status != CoordinatorStatus::KeySharesReceived {
             return Err(status::failed_precondition(
                 "Coordinator is not in KeySharesReceived state. \
@@ -94,11 +102,12 @@ where
         Ok(PartialDecryptionRequest { partial_dec_ciphertext, aggregation_config: None })
     }
 
-    fn aggregate_partial_decryptions<Kahe: KaheBase>(
+    /// Accumulates partial decryptions from responding decryptors.
+    pub fn aggregate_partial_decryptions<Kahe: KaheBase>(
         &self,
-        partial_responses: Vec<PartialDecryptionResponse<Kahe, Self::Vahe>>,
+        partial_responses: Vec<PartialDecryptionResponse<Kahe, Vahe>>,
         _kahe: Option<&Kahe>,
-        coordinator_state: &mut Self::CoordinatorState,
+        coordinator_state: &mut CoordinatorState<Vahe>,
     ) -> Result<(), StatusError> {
         if coordinator_state.status != CoordinatorStatus::AwaitingPartialDecryptions {
             return Err(status::failed_precondition(
@@ -121,25 +130,38 @@ where
         Ok(())
     }
 
-    fn create_recovery_requests(
+    /// Creates recovery requests for surviving decryptors to decrypt shares of dropped client
+    /// decryptors.
+    ///
+    /// If the vector is empty, there are no dropped decryptors to recover and
+    /// recover_dropped_decryptors can be called immediately with an empty vector.
+    pub fn create_recovery_requests(
         &self,
-        _coordinator_state: &mut Self::CoordinatorState,
+        _coordinator_state: &mut CoordinatorState<Vahe>,
     ) -> Result<Vec<RecoveryRequest>, StatusError> {
         Err(status::unimplemented("Dropout recovery is not yet implemented"))
     }
 
-    fn recover_dropped_decryptors(
+    /// Recovers randomness from dropped decryptors.
+    ///
+    /// Uses decrypted shares from survivors to simulate missing partial decryptions.
+    pub fn recover_dropped_decryptors(
         &self,
         _recovery_responses: Vec<RecoveryResponse>,
-        _coordinator_state: &mut Self::CoordinatorState,
+        _coordinator_state: &mut CoordinatorState<Vahe>,
     ) -> Result<(), StatusError> {
         Err(status::unimplemented("Dropout recovery is not yet implemented"))
     }
 
-    fn finalize_partial_decryption(
+    /// Returns the finalized partial decryption.
+    ///
+    /// This can be combined with the aggregated client
+    /// CiphertextContributions (KAHE ciphertext and AHE recover_plaintext ct_0) to
+    /// obtain the final noisy KAHE plaintext.
+    pub fn finalize_partial_decryption(
         &self,
-        coordinator_state: &mut Self::CoordinatorState,
-    ) -> Result<FinalizedPartialDecryption<Self::Vahe>, StatusError> {
+        coordinator_state: &mut CoordinatorState<Vahe>,
+    ) -> Result<FinalizedPartialDecryption<Vahe>, StatusError> {
         if coordinator_state.status != CoordinatorStatus::OutputReady {
             return Err(status::failed_precondition("Coordinator is not in OutputReady state"));
         }
@@ -156,10 +178,6 @@ where
 mod tests {
     use crate::WillowV1Coordinator;
     use ahe_traits::AheBase;
-    use decryptor_traits::{
-        SecureAggregationBaseMultiDecryptor, SecureAggregationCoordinator,
-        SecureAggregationReputableDecryptor,
-    };
     use googletest::gtest;
     use googletest::prelude::*;
     use messages::{CoordinatorState, CoordinatorStatus};
