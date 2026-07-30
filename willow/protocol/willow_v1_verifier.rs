@@ -268,7 +268,6 @@ mod tests {
     use client_traits::SecureAggregationClient;
 
     use accumulator_traits::SecureAggregationCiphertextAccumulator;
-    use decryptor_traits::SecureAggregationDecryptor;
     use googletest::prelude::{
         contains_substring, eq, err, gtest, verify_eq, verify_that, verify_true,
     };
@@ -322,8 +321,9 @@ mod tests {
         // Create verifier.
         let verifier = WillowV1Verifier { vahe: Rc::clone(&vahe) };
 
-        // Decryptor generates public key share.
-        let public_key_share = decryptor.create_public_key_share(&mut decryptor_state)?;
+        // Decryptor generates public key share via setup contribution.
+        let setup_contribution = decryptor.create_setup_contribution(&mut decryptor_state)?;
+        let public_key_share = setup_contribution.key_contribution.public_key_share;
 
         // Aggregate public key share directly.
         let public_key = vahe.aggregate_public_key_shares(std::iter::once(&public_key_share))?;
