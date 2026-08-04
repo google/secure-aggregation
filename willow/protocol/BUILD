@@ -162,6 +162,7 @@ rust_test(
         ":decryptor",
         ":default_client",
         ":default_verifier",
+        ":single_decryptor",
         ":verifier_traits",
         "@crate_index//:googletest",
         "//willow/api:proto_serialization_traits",
@@ -223,6 +224,7 @@ rust_test(
         ":decryptor",
         ":default_accumulator",
         ":default_client",
+        ":single_decryptor",
         "@crate_index//:googletest",
         "//ffi_utils:status_matchers_rs",
         "//willow/api:proto_serialization_traits",
@@ -264,6 +266,37 @@ rust_test(
         "//willow/crypto:ahe_traits",
         "//willow/crypto:prng_traits",
         "//willow/crypto:shell_kahe",
+        "//willow/crypto:shell_parameters",
+        "//willow/crypto:shell_vahe",
+        "//willow/crypto:single_thread_hkdf",
+        "//willow/crypto:vahe_traits",
+    ],
+)
+
+# Single-decryptor implementation.
+rust_library(
+    name = "single_decryptor",
+    srcs = [
+        "single_decryptor.rs",
+    ],
+    deps = [
+        ":decryptor",
+        ":messages",
+        "//ffi_utils:status",
+        "//willow/crypto:ahe_traits",
+        "//willow/crypto:shell_kahe",
+        "//willow/crypto:vahe_traits",
+    ],
+)
+
+rust_test(
+    name = "single_decryptor_test",
+    crate = ":single_decryptor",
+    deps = [
+        "@crate_index//:googletest",
+        "//willow/api:proto_serialization_traits",
+        "//willow/crypto:ahe_traits",
+        "//willow/crypto:prng_traits",
         "//willow/crypto:shell_parameters",
         "//willow/crypto:shell_vahe",
         "//willow/crypto:single_thread_hkdf",

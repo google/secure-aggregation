@@ -45,6 +45,7 @@ rust_test(
         "//willow/protocol:default_client",
         "//willow/protocol:default_verifier",
         "//willow/protocol:messages",
+        "//willow/protocol:single_decryptor",
         "//willow/protocol:verifier_traits",
         "//willow/testing_utils",
         "//willow/testing_utils:shell_testing_parameters",

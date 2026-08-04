@@ -247,7 +247,7 @@ mod tests {
     use accumulator_traits::CiphertextAccumulator;
     use ahe_traits::AheBase;
     use client_traits::Client;
-    use decryptor::{Decryptor, DecryptorState};
+    use decryptor::DecryptorState;
     use default_client::DefaultClient;
     use default_verifier::{DefaultVerifier, VerifierState};
     use googletest::{gtest, verify_eq, verify_true};
@@ -255,6 +255,7 @@ mod tests {
     use shell_kahe::ShellKahe;
     use shell_parameters::{create_shell_ahe_config, create_shell_kahe_config};
     use shell_vahe::ShellVahe;
+    use single_decryptor::SingleDecryptor;
     use std::collections::HashMap;
     use testing_utils::{generate_aggregation_config, generate_random_nonce};
     use verifier_traits::Verifier;
@@ -283,7 +284,7 @@ mod tests {
 
         // Create decryptor.
         let mut decryptor_state = DecryptorState::default();
-        let decryptor = Decryptor::new_with_randomly_generated_seed(Rc::clone(&vahe))?;
+        let decryptor = SingleDecryptor::new_with_randomly_generated_seed(Rc::clone(&vahe))?;
 
         // Create accumulator.
         let accumulator =
@@ -301,10 +302,7 @@ mod tests {
         verify_true!(accumulator_state_roundtrip.client_sum.is_none())?;
 
         // Populate accumulator state.
-        let setup_contribution = decryptor.create_setup_contribution(&mut decryptor_state)?;
-        let public_key_share = setup_contribution.key_contribution.public_key_share;
-        // Aggregate public key share directly.
-        let public_key = vahe.aggregate_public_key_shares(std::iter::once(&public_key_share))?;
+        let public_key = decryptor.create_public_key(&mut decryptor_state)?;
         let client_plaintext = HashMap::from([(
             DEFAULT_VECTOR_ID.to_string(),
             vec![1, 2, 3, 4, 5, 6, 7, 8, 8, 7, 6, 5, 4, 3, 2, 1],
@@ -321,11 +319,7 @@ mod tests {
         accumulator
             .accumulate_ciphertext_contribution(ciphertext_contribution, &mut accumulator_state)?;
         let pd_ct = verifier.create_partial_decryption_request(verifier_state)?;
-        let pd = decryptor.handle_partial_decryption_request(
-            pd_ct,
-            None::<&ShellKahe>,
-            &mut decryptor_state,
-        )?;
+        let pd = decryptor.handle_partial_decryption_request(pd_ct, &mut decryptor_state)?;
 
         // Check populated state serialization
         verify_true!(accumulator_state.client_sum.is_some())?;

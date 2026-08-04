@@ -267,7 +267,7 @@ mod tests {
     use accumulator_traits::CiphertextAccumulator;
     use ahe_traits::AheBase;
     use client_traits::Client;
-    use decryptor::{Decryptor, DecryptorState};
+    use decryptor::DecryptorState;
     use default_accumulator::DefaultCiphertextAccumulator;
     use default_client::DefaultClient;
     use googletest::prelude::{
@@ -278,6 +278,7 @@ mod tests {
     use shell_kahe::ShellKahe;
     use shell_parameters::{create_shell_ahe_config, create_shell_kahe_config};
     use shell_vahe::ShellVahe;
+    use single_decryptor::SingleDecryptor;
     use status_matchers_rs::status_is;
     use std::collections::HashMap;
     use testing_utils::{generate_aggregation_config, generate_random_nonce};
@@ -311,7 +312,7 @@ mod tests {
 
         // Create decryptor.
         let mut decryptor_state = DecryptorState::default();
-        let decryptor = Decryptor::new_with_randomly_generated_seed(Rc::clone(&vahe))?;
+        let decryptor = SingleDecryptor::new_with_randomly_generated_seed(Rc::clone(&vahe))?;
 
         // Create accumulator.
         let accumulator =
@@ -320,12 +321,8 @@ mod tests {
         // Create verifier.
         let verifier = DefaultVerifier { vahe: Rc::clone(&vahe) };
 
-        // Decryptor generates public key share via setup contribution.
-        let setup_contribution = decryptor.create_setup_contribution(&mut decryptor_state)?;
-        let public_key_share = setup_contribution.key_contribution.public_key_share;
-
-        // Aggregate public key share directly.
-        let public_key = vahe.aggregate_public_key_shares(std::iter::once(&public_key_share))?;
+        // Decryptor generates public key.
+        let public_key = decryptor.create_public_key(&mut decryptor_state)?;
 
         // Client encrypts.
         let client_plaintext = HashMap::from([(

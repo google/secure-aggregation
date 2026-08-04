@@ -43,6 +43,7 @@ rust_library(
         "//willow/protocol:default_client",
         "//willow/protocol:default_verifier",
         "//willow/protocol:messages",
+        "//willow/protocol:single_decryptor",
         "//willow/protocol:verifier_traits",
         "//willow/testing_utils",
     ],

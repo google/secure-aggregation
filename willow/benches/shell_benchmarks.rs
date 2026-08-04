@@ -22,7 +22,7 @@ use accumulator_traits::CiphertextAccumulator;
 use aggregation_config::AggregationConfig;
 use ahe_traits::AheBase;
 use client_traits::Client;
-use decryptor::{Decryptor, DecryptorState};
+use decryptor::DecryptorState;
 use default_accumulator::{CiphertextAccumulatorState, DefaultCiphertextAccumulator};
 use default_client::DefaultClient;
 use default_verifier::{DefaultVerifier, VerifierState};
@@ -34,6 +34,7 @@ use messages::{
 use shell_kahe::ShellKahe;
 use shell_parameters::create_shell_configs;
 use shell_vahe::ShellVahe;
+use single_decryptor::SingleDecryptor;
 use testing_utils::{generate_random_nonce, generate_random_unsigned_vector};
 use verifier_traits::Verifier;
 
@@ -100,7 +101,7 @@ pub fn match_and_bench(args: &Args) -> Duration {
 
 struct BaseInputs {
     client: DefaultClient<ShellKahe, ShellVahe>,
-    decryptor: Decryptor<ShellVahe>,
+    decryptor: SingleDecryptor<ShellVahe>,
     decryptor_state: DecryptorState<ShellVahe>,
     accumulator: DefaultCiphertextAccumulator<ShellKahe, ShellVahe>,
     accumulator_state: CiphertextAccumulatorState<ShellKahe, ShellVahe>,
@@ -136,7 +137,7 @@ fn setup_base(args: &Args) -> BaseInputs {
 
     // Create decryptor.
     let mut decryptor_state = DecryptorState::default();
-    let decryptor = Decryptor::new_with_randomly_generated_seed(Rc::clone(&vahe)).unwrap();
+    let decryptor = SingleDecryptor::new_with_randomly_generated_seed(Rc::clone(&vahe)).unwrap();
 
     // Create accumulator.
     let accumulator =
@@ -148,11 +149,7 @@ fn setup_base(args: &Args) -> BaseInputs {
     let verifier_state = VerifierState::default();
 
     // Decryptor generates public key share via setup contribution.
-    let setup_contribution = decryptor.create_setup_contribution(&mut decryptor_state).unwrap();
-    let public_key_share = setup_contribution.key_contribution.public_key_share;
-
-    // Aggregate public key share directly.
-    let public_key = vahe.aggregate_public_key_shares(std::iter::once(&public_key_share)).unwrap();
+    let public_key = decryptor.create_public_key(&mut decryptor_state).unwrap();
 
     BaseInputs {
         client,
@@ -323,7 +320,7 @@ fn setup_server_recover_aggregation_result(args: &Args) -> ServerRecoverInputs {
     // Decryptor creates partial decryption.
     let pd = inputs
         .decryptor
-        .handle_partial_decryption_request(pd_ct, None::<&ShellKahe>, &mut inputs.decryptor_state)
+        .handle_partial_decryption_request(pd_ct, &mut inputs.decryptor_state)
         .unwrap();
 
     // Accumulator handles the partial decryption.
@@ -350,7 +347,7 @@ fn run_server_recover_aggregation_result(inputs: &mut ServerRecoverInputs) {
 // Decryptor benchmarks.
 
 struct DecryptorInputs {
-    decryptor: Decryptor<ShellVahe>,
+    decryptor: SingleDecryptor<ShellVahe>,
     decryptor_state: DecryptorState<ShellVahe>,
     partial_decryption_request: PartialDecryptionRequest<ShellVahe>,
 }
@@ -393,7 +390,6 @@ fn run_decryptor_partial_decryption(inputs: &mut DecryptorInputs) {
         .decryptor
         .handle_partial_decryption_request(
             black_box(inputs.partial_decryption_request.clone()),
-            None::<&ShellKahe>,
             black_box(&mut inputs.decryptor_state),
         )
         .unwrap();

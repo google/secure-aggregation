@@ -26,12 +26,13 @@ use googletest::{gtest, verify_eq, verify_that};
 use kahe_traits::KaheBase;
 use messages::{
     CiphertextContribution, ClientMessage, CoordinatorState, DecryptionRequestContribution,
-    DecryptorPublicKeyShare, PartialDecryptionRequest, PartialDecryptionResponse,
+    PartialDecryptionRequest, PartialDecryptionResponse,
 };
 use proto_serialization_traits::{FromProto, ToProto};
 use shell_kahe::ShellKahe;
 use shell_parameters::{create_shell_ahe_config, create_shell_kahe_config};
 use shell_vahe::ShellVahe;
+use single_decryptor::SingleDecryptor;
 use status::StatusErrorCode;
 use status_matchers_rs::status_is;
 use std::collections::HashMap;
@@ -63,7 +64,7 @@ fn encrypt_decrypt_one() -> googletest::Result<()> {
         DefaultClient::new_with_randomly_generated_seed(Rc::clone(&kahe), Rc::clone(&vahe))?;
 
     let mut decryptor_state = DecryptorState::default();
-    let decryptor = Decryptor::new_with_randomly_generated_seed(Rc::clone(&vahe))?;
+    let decryptor = SingleDecryptor::new_with_randomly_generated_seed(Rc::clone(&vahe))?;
 
     // Create accumulator.
     let accumulator =
@@ -74,12 +75,8 @@ fn encrypt_decrypt_one() -> googletest::Result<()> {
     let verifier = DefaultVerifier { vahe: Rc::clone(&vahe) };
     let mut verifier_state = VerifierState::default();
 
-    // Decryptor generates public key share via setup contribution.
-    let setup_contribution = decryptor.create_setup_contribution(&mut decryptor_state)?;
-    let public_key_share = setup_contribution.key_contribution.public_key_share;
-
-    // Aggregate public key share directly.
-    let public_key = vahe.aggregate_public_key_shares(std::iter::once(&public_key_share))?;
+    // Decryptor generates public key.
+    let public_key = decryptor.create_public_key(&mut decryptor_state)?;
 
     // Client encrypts.
     let input_values = vec![1, 2, 3, 4, 5, 6, 7, 8, 7, 6, 5, 4, 3, 2, 1];
@@ -98,11 +95,7 @@ fn encrypt_decrypt_one() -> googletest::Result<()> {
     let pd_ct = verifier.create_partial_decryption_request(verifier_state)?;
 
     // Decryptor creates partial decryption.
-    let pd = decryptor.handle_partial_decryption_request(
-        pd_ct,
-        None::<&ShellKahe>,
-        &mut decryptor_state,
-    )?;
+    let pd = decryptor.handle_partial_decryption_request(pd_ct, &mut decryptor_state)?;
 
     // Accumulator recovers the aggregation result.
     let finalized_pd =
@@ -140,7 +133,7 @@ fn encrypt_decrypt_one_serialized() -> googletest::Result<()> {
 
     // Create decryptor.
     let mut decryptor_state = DecryptorState::default();
-    let decryptor = Decryptor::new_with_randomly_generated_seed(Rc::clone(&vahe))?;
+    let decryptor = SingleDecryptor::new_with_randomly_generated_seed(Rc::clone(&vahe))?;
 
     // Create accumulator.
     let accumulator =
@@ -151,20 +144,8 @@ fn encrypt_decrypt_one_serialized() -> googletest::Result<()> {
     let verifier = DefaultVerifier { vahe: Rc::clone(&vahe) };
     let mut verifier_state = VerifierState::default();
 
-    // Decryptor generates public key share.
-    let setup_contribution = decryptor.create_setup_contribution(&mut decryptor_state)?;
-    let public_key_share = setup_contribution.key_contribution.public_key_share;
-
-    // Serialize and deserialize the public key share.
-    let public_key_share_proto = public_key_share.to_proto(decryptor.vahe.as_ref())?;
-    let public_key_share: DecryptorPublicKeyShare<ShellVahe> =
-        DecryptorPublicKeyShare::<ShellVahe>::from_proto(
-            public_key_share_proto,
-            accumulator.vahe.as_ref(),
-        )?;
-
-    // Aggregate public key share directly.
-    let public_key = vahe.aggregate_public_key_shares(std::iter::once(&public_key_share))?;
+    // Decryptor generates public key.
+    let public_key = decryptor.create_public_key(&mut decryptor_state)?;
 
     // Serialize and deserialize the public key.
     let public_key_proto = public_key.to_proto(accumulator.vahe.as_ref())?;
@@ -218,11 +199,7 @@ fn encrypt_decrypt_one_serialized() -> googletest::Result<()> {
         PartialDecryptionRequest::from_proto(pd_ct_proto, &decryptor)?;
 
     // Decryptor creates partial decryption.
-    let pd = decryptor.handle_partial_decryption_request(
-        pd_ct,
-        None::<&ShellKahe>,
-        &mut decryptor_state,
-    )?;
+    let pd = decryptor.handle_partial_decryption_request(pd_ct, &mut decryptor_state)?;
 
     // Serialize and deserialize the partial decryption.
     let pd_proto = pd.to_proto((&decryptor, None))?;
@@ -271,7 +248,7 @@ fn encrypt_decrypt_multiple_clients() -> googletest::Result<()> {
 
     // Create decryptor.
     let mut decryptor_state = DecryptorState::default();
-    let decryptor = Decryptor::new_with_randomly_generated_seed(Rc::clone(&vahe))?;
+    let decryptor = SingleDecryptor::new_with_randomly_generated_seed(Rc::clone(&vahe))?;
 
     // Create accumulator.
     let accumulator =
@@ -283,11 +260,7 @@ fn encrypt_decrypt_multiple_clients() -> googletest::Result<()> {
     let mut verifier_state = VerifierState::default();
 
     // Decryptor generates public key share.
-    let setup_contribution = decryptor.create_setup_contribution(&mut decryptor_state)?;
-    let public_key_share = setup_contribution.key_contribution.public_key_share;
-
-    // Aggregate public key share directly.
-    let public_key = vahe.aggregate_public_key_shares(std::iter::once(&public_key_share))?;
+    let public_key = decryptor.create_public_key(&mut decryptor_state)?;
 
     // Clients encrypt.
     let mut expected_output = vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
@@ -339,11 +312,7 @@ fn encrypt_decrypt_multiple_clients() -> googletest::Result<()> {
         let pd_ct = verifier.create_partial_decryption_request(verifier_state)?;
 
         // Decryptor creates partial decryption.
-        let pd = decryptor.handle_partial_decryption_request(
-            pd_ct,
-            None::<&ShellKahe>,
-            &mut decryptor_state,
-        )?;
+        let pd = decryptor.handle_partial_decryption_request(pd_ct, &mut decryptor_state)?;
 
         // Accumulator recovers the aggregation result.
         let finalized_pd =
@@ -398,7 +367,7 @@ fn encrypt_decrypt_multiple_clients_including_invalid_proofs() -> googletest::Re
 
     // Create decryptor.
     let mut decryptor_state = DecryptorState::default();
-    let decryptor = Decryptor::new_with_randomly_generated_seed(Rc::clone(&vahe))?;
+    let decryptor = SingleDecryptor::new_with_randomly_generated_seed(Rc::clone(&vahe))?;
 
     // Create accumulator.
     let accumulator =
@@ -410,11 +379,7 @@ fn encrypt_decrypt_multiple_clients_including_invalid_proofs() -> googletest::Re
     let mut verifier_state = VerifierState::default();
 
     // Decryptor generates public key share.
-    let setup_contribution = decryptor.create_setup_contribution(&mut decryptor_state)?;
-    let public_key_share = setup_contribution.key_contribution.public_key_share;
-
-    // Aggregate public key share directly.
-    let public_key = vahe.aggregate_public_key_shares(std::iter::once(&public_key_share))?;
+    let public_key = decryptor.create_public_key(&mut decryptor_state)?;
 
     // Good Clients encrypt and should be included in the aggregation.
     let mut expected_output = vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
@@ -485,11 +450,7 @@ fn encrypt_decrypt_multiple_clients_including_invalid_proofs() -> googletest::Re
     let pd_ct = verifier.create_partial_decryption_request(verifier_state)?;
 
     // Decryptor creates partial decryption.
-    let pd = decryptor.handle_partial_decryption_request(
-        pd_ct,
-        None::<&ShellKahe>,
-        &mut decryptor_state,
-    )?;
+    let pd = decryptor.handle_partial_decryption_request(pd_ct, &mut decryptor_state)?;
 
     // Accumulator recovers the aggregation result.
     let finalized_pd =
