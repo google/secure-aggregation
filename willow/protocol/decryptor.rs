@@ -16,9 +16,8 @@ use aggregation_config::AggregationConfig;
 use ahe_traits::{AheKeygen, PartialDec};
 use kahe_traits::KaheBase;
 use messages::{
-    DecryptorPublicKey, DecryptorPublicKeyShare, KeyContribution, PartialDecryptionRequest,
-    PartialDecryptionResponse, RecoveryRequest, RecoveryResponse, SetupContribution,
-    VerifyKeyContributionsRequest,
+    DecryptorPublicKey, KeyContribution, PartialDecryptionRequest, PartialDecryptionResponse,
+    RecoveryRequest, RecoveryResponse, SetupContribution, VerifyKeyContributionsRequest,
 };
 use messages_rust_proto::DecryptorState as DecryptorStateProto;
 use prng_traits::SecurePrng;
@@ -29,26 +28,26 @@ use shell_kahe::ShellKahe;
 use status::StatusError;
 use std::cell::RefCell;
 use std::rc::Rc;
-use vahe_traits::{EncryptVerify, HasVahe, KeyGenVerify, VaheBase, VerifiableKeyGen};
+use vahe_traits::{HasVahe, KeyGenVerify, VaheBase, VerifiableKeyGen};
 
-/// Implementation of Willow V1 Decryptor directly exposing VAHE types.
+/// Implementation of Decryptor directly exposing VAHE types.
 ///
 /// This struct supports multi-decryptor committee mode via inherent methods
 /// (`create_setup_contribution`, `handle_partial_decryption_request`,
 /// `verify_and_aggregate_key_contributions`, `handle_recovery_request`).
-pub struct WillowV1Decryptor<Vahe: VaheBase> {
+pub struct Decryptor<Vahe: VaheBase> {
     pub vahe: Rc<Vahe>,
     pub prng: RefCell<Vahe::Rng>,
 }
 
-impl<Vahe: VaheBase> HasVahe for WillowV1Decryptor<Vahe> {
+impl<Vahe: VaheBase> HasVahe for Decryptor<Vahe> {
     type Vahe = Vahe;
     fn vahe(&self) -> &Self::Vahe {
         &self.vahe
     }
 }
 
-impl<Vahe: VaheBase> WillowV1Decryptor<Vahe> {
+impl<Vahe: VaheBase> Decryptor<Vahe> {
     pub fn new_with_randomly_generated_seed(vahe: Rc<Vahe>) -> Result<Self, status::StatusError> {
         let seed = Vahe::Rng::generate_seed()?;
         let prng = RefCell::new(Vahe::Rng::create(&seed)?);
@@ -122,7 +121,7 @@ where
     }
 }
 
-impl<Vahe> WillowV1Decryptor<Vahe>
+impl<Vahe> Decryptor<Vahe>
 where
     Vahe: VaheBase + VerifiableKeyGen + KeyGenVerify + PartialDec + AheKeygen,
 {
@@ -229,7 +228,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use crate::{DecryptorState, WillowV1Decryptor};
+    use crate::{Decryptor, DecryptorState};
     use ahe_traits::AheBase;
     use googletest::{gtest, verify_true};
     use proto_serialization_traits::{FromProto, ToProto};
@@ -242,7 +241,7 @@ mod tests {
     #[gtest]
     fn decryptor_state_serialization_roundtrip() -> googletest::Result<()> {
         let vahe = Rc::new(ShellVahe::new(create_shell_ahe_config(1)?, CONTEXT_STRING)?);
-        let decryptor = WillowV1Decryptor::new_with_randomly_generated_seed(vahe)?;
+        let decryptor = Decryptor::new_with_randomly_generated_seed(vahe)?;
         let mut decryptor_state = DecryptorState::default();
 
         // Check empty state serialization.
@@ -270,7 +269,7 @@ mod tests {
         use testing_utils::generate_aggregation_config;
 
         let vahe = Rc::new(ShellVahe::new(create_shell_ahe_config(1)?, CONTEXT_STRING)?);
-        let decryptor = WillowV1Decryptor::new_with_randomly_generated_seed(vahe)?;
+        let decryptor = Decryptor::new_with_randomly_generated_seed(vahe)?;
 
         let config = generate_aggregation_config("default".to_string(), 16, 10, 1, 1);
         let kahe_config = create_shell_kahe_config(&config)?;
@@ -300,7 +299,7 @@ mod tests {
     #[gtest]
     fn create_setup_contribution_generates_key_share_and_proof() -> googletest::Result<()> {
         let vahe = Rc::new(ShellVahe::new(create_shell_ahe_config(1)?, CONTEXT_STRING)?);
-        let decryptor = WillowV1Decryptor::new_with_randomly_generated_seed(vahe)?;
+        let decryptor = Decryptor::new_with_randomly_generated_seed(vahe)?;
         let mut state = DecryptorState::default();
 
         let contribution = decryptor.create_setup_contribution(&mut state)?;
@@ -318,8 +317,8 @@ mod tests {
         use messages::VerifyKeyContributionsRequest;
 
         let vahe = Rc::new(ShellVahe::new(create_shell_ahe_config(1)?, CONTEXT_STRING)?);
-        let decryptor1 = WillowV1Decryptor::new_with_randomly_generated_seed(vahe.clone())?;
-        let decryptor2 = WillowV1Decryptor::new_with_randomly_generated_seed(vahe.clone())?;
+        let decryptor1 = Decryptor::new_with_randomly_generated_seed(vahe.clone())?;
+        let decryptor2 = Decryptor::new_with_randomly_generated_seed(vahe.clone())?;
 
         let mut state1 = DecryptorState::default();
         let mut state2 = DecryptorState::default();
@@ -340,7 +339,7 @@ mod tests {
         use messages::VerifyKeyContributionsRequest;
 
         let vahe = Rc::new(ShellVahe::new(create_shell_ahe_config(1)?, CONTEXT_STRING)?);
-        let decryptor = WillowV1Decryptor::new_with_randomly_generated_seed(vahe.clone())?;
+        let decryptor = Decryptor::new_with_randomly_generated_seed(vahe.clone())?;
 
         let mut state = DecryptorState::default();
         let mut contribution = decryptor.create_setup_contribution(&mut state)?;
@@ -360,7 +359,7 @@ mod tests {
         use messages::VerifyKeyContributionsRequest;
 
         let vahe = Rc::new(ShellVahe::new(create_shell_ahe_config(1)?, CONTEXT_STRING)?);
-        let decryptor = WillowV1Decryptor::new_with_randomly_generated_seed(vahe)?;
+        let decryptor = Decryptor::new_with_randomly_generated_seed(vahe)?;
 
         let request = VerifyKeyContributionsRequest { key_contributions: vec![] };
         let result = decryptor.verify_and_aggregate_key_contributions(request);
@@ -379,7 +378,7 @@ mod tests {
 
         let vahe = Rc::new(ShellVahe::new(create_shell_ahe_config(1)?, CONTEXT_STRING)?);
 
-        let decryptor = WillowV1Decryptor::new_with_randomly_generated_seed(vahe.clone())?;
+        let decryptor = Decryptor::new_with_randomly_generated_seed(vahe.clone())?;
         let mut state = DecryptorState::default();
         let contribution = decryptor.create_setup_contribution(&mut state)?;
 

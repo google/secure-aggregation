@@ -12,10 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use accumulator_traits::SecureAggregationCiphertextAccumulator;
+use accumulator_traits::CiphertextAccumulator;
 use aggregation_config::AggregationConfig;
 use aggregation_config_rust_proto::AggregationConfigProto;
 use ahe_traits::AheBase;
+use default_accumulator::{CiphertextAccumulatorState, DefaultCiphertextAccumulator};
+use default_verifier::{DefaultVerifier, VerifierState};
 use kahe_traits::KaheBase;
 use messages::{ClientMessage, FinalizedPartialDecryption, PartialDecryptionResponse};
 use messages_rust_proto::PartialDecryptionResponse as PartialDecryptionResponseProto;
@@ -33,9 +35,7 @@ use status::StatusError;
 use std::collections::BTreeMap;
 use std::ops::Range;
 use std::rc::Rc;
-use verifier_traits::SecureAggregationVerifier;
-use willow_v1_accumulator::{CiphertextAccumulatorState, WillowV1CiphertextAccumulator};
-use willow_v1_verifier::{VerifierState, WillowV1Verifier};
+use verifier_traits::Verifier;
 
 #[cxx::bridge(namespace = "secure_aggregation")]
 pub mod ffi {
@@ -119,11 +119,11 @@ pub mod ffi {
 
 pub struct ServerAccumulator {
     // Accumulator struct used to perform aggregation of client contributions.
-    accumulator: WillowV1CiphertextAccumulator<ShellKahe, ShellVahe>,
+    accumulator: DefaultCiphertextAccumulator<ShellKahe, ShellVahe>,
     // Accumulator state containing the accumulated ciphertexts.
     accumulator_state: CiphertextAccumulatorState<ShellKahe, ShellVahe>,
     // Verifier struct used to verify client contributions.
-    verifier: WillowV1Verifier<ShellVahe>,
+    verifier: DefaultVerifier<ShellVahe>,
     // Verifier states, one for each range of nonces processed. The map is keyed by the start of the
     // range.
     verifier_states: BTreeMap<Vec<u8>, VerifierState<ShellVahe>>,
@@ -141,8 +141,8 @@ impl ServerAccumulator {
         let kahe = Rc::new(ShellKahe::new(kahe_config, &context_bytes)?);
         let vahe = Rc::new(ShellVahe::new(vahe_config, &context_bytes)?);
         let accumulator =
-            WillowV1CiphertextAccumulator { kahe: Rc::clone(&kahe), vahe: Rc::clone(&vahe) };
-        let verifier = WillowV1Verifier { vahe };
+            DefaultCiphertextAccumulator { kahe: Rc::clone(&kahe), vahe: Rc::clone(&vahe) };
+        let verifier = DefaultVerifier { vahe };
         Ok(Self {
             accumulator,
             accumulator_state: Default::default(),
@@ -539,7 +539,7 @@ pub struct FinalResultDecryptor {
     accumulator_state: CiphertextAccumulatorState<ShellKahe, ShellVahe>,
 
     /// Accumulator used to hold the necessary KAHE and AHE contexts.
-    accumulator: WillowV1CiphertextAccumulator<ShellKahe, ShellVahe>,
+    accumulator: DefaultCiphertextAccumulator<ShellKahe, ShellVahe>,
 }
 
 fn finalize_accumulator(accumulator: ServerAccumulator) -> Result<(Vec<u8>, Vec<u8>), StatusError> {
@@ -609,7 +609,7 @@ impl FinalResultDecryptor {
         let context_bytes = &aggregation_config.key_id;
         let kahe = Rc::new(ShellKahe::new(kahe_config, context_bytes)?);
         let vahe = Rc::new(ShellVahe::new(vahe_config, context_bytes)?);
-        let accumulator = WillowV1CiphertextAccumulator { kahe, vahe };
+        let accumulator = DefaultCiphertextAccumulator { kahe, vahe };
         let accumulator_state =
             CiphertextAccumulatorState::from_proto(accumulator_state_proto, &accumulator)?;
 

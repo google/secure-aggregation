@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use accumulator_traits::SecureAggregationCiphertextAccumulator;
+use accumulator_traits::CiphertextAccumulator;
 use ahe_traits::PartialDec;
 use kahe_traits::{HasKahe, KaheBase, KaheDecrypt, TrySecretKeyFrom};
 use messages::{
@@ -22,9 +22,7 @@ use messages::{
 use messages_rust_proto::ServerState as ServerStateProto;
 use proto_serialization_traits::{FromProto, ToProto};
 use protobuf::AsView;
-use shell_ciphertexts_rust_proto::{
-    ShellAhePartialDecryption, ShellAheRecoverCiphertext, ShellKaheCiphertext,
-};
+use shell_ciphertexts_rust_proto::{ShellAheRecoverCiphertext, ShellKaheCiphertext};
 use status::StatusError;
 use std::rc::Rc;
 use vahe_traits::{EncryptVerify, HasVahe, Recover, VaheBase};
@@ -32,19 +30,19 @@ use vahe_traits::{EncryptVerify, HasVahe, Recover, VaheBase};
 /// Implements the `accumulator` role in the Willow protocol. This includes
 /// aggregating client ciphertexts, and recovering the aggregation result after
 /// receiving partial decryption responses from the decryptors.
-pub struct WillowV1CiphertextAccumulator<Kahe: KaheBase, Vahe: VaheBase> {
+pub struct DefaultCiphertextAccumulator<Kahe: KaheBase, Vahe: VaheBase> {
     pub kahe: Rc<Kahe>,
     pub vahe: Rc<Vahe>,
 }
 
-impl<Kahe: KaheBase, Vahe: VaheBase> HasKahe for WillowV1CiphertextAccumulator<Kahe, Vahe> {
+impl<Kahe: KaheBase, Vahe: VaheBase> HasKahe for DefaultCiphertextAccumulator<Kahe, Vahe> {
     type Kahe = Kahe;
     fn kahe(&self) -> &Self::Kahe {
         &self.kahe
     }
 }
 
-impl<Kahe: KaheBase, Vahe: VaheBase> HasVahe for WillowV1CiphertextAccumulator<Kahe, Vahe> {
+impl<Kahe: KaheBase, Vahe: VaheBase> HasVahe for DefaultCiphertextAccumulator<Kahe, Vahe> {
     type Vahe = Vahe;
     fn vahe(&self) -> &Self::Vahe {
         &self.vahe
@@ -130,8 +128,7 @@ where
     }
 }
 
-impl<Kahe, Vahe> SecureAggregationCiphertextAccumulator
-    for WillowV1CiphertextAccumulator<Kahe, Vahe>
+impl<Kahe, Vahe> CiphertextAccumulator for DefaultCiphertextAccumulator<Kahe, Vahe>
 where
     Vahe: EncryptVerify + PartialDec + Recover,
     Kahe: KaheBase + TrySecretKeyFrom<Vahe::Plaintext> + KaheDecrypt,
@@ -247,9 +244,12 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use accumulator_traits::SecureAggregationCiphertextAccumulator;
+    use accumulator_traits::CiphertextAccumulator;
     use ahe_traits::AheBase;
-    use client_traits::SecureAggregationClient;
+    use client_traits::Client;
+    use decryptor::{Decryptor, DecryptorState};
+    use default_client::DefaultClient;
+    use default_verifier::{DefaultVerifier, VerifierState};
     use googletest::{gtest, verify_eq, verify_true};
     use proto_serialization_traits::{FromProto, ToProto};
     use shell_kahe::ShellKahe;
@@ -257,10 +257,7 @@ mod tests {
     use shell_vahe::ShellVahe;
     use std::collections::HashMap;
     use testing_utils::{generate_aggregation_config, generate_random_nonce};
-    use verifier_traits::SecureAggregationVerifier;
-    use willow_v1_client::WillowV1Client;
-    use willow_v1_decryptor::{DecryptorState, WillowV1Decryptor};
-    use willow_v1_verifier::{VerifierState, WillowV1Verifier};
+    use verifier_traits::Verifier;
 
     const CONTEXT_STRING: &[u8] = b"testing_context_string";
     const DEFAULT_VECTOR_ID: &str = "default";
@@ -282,19 +279,19 @@ mod tests {
         )?);
 
         // Create client.
-        let client = WillowV1Client::new_with_randomly_generated_seed(kahe.clone(), vahe.clone())?;
+        let client = DefaultClient::new_with_randomly_generated_seed(kahe.clone(), vahe.clone())?;
 
         // Create decryptor.
         let mut decryptor_state = DecryptorState::default();
-        let decryptor = WillowV1Decryptor::new_with_randomly_generated_seed(Rc::clone(&vahe))?;
+        let decryptor = Decryptor::new_with_randomly_generated_seed(Rc::clone(&vahe))?;
 
         // Create accumulator.
         let accumulator =
-            WillowV1CiphertextAccumulator { kahe: kahe.clone(), vahe: Rc::clone(&vahe) };
+            DefaultCiphertextAccumulator { kahe: kahe.clone(), vahe: Rc::clone(&vahe) };
         let mut accumulator_state = CiphertextAccumulatorState::default();
 
         // Create verifier.
-        let verifier = WillowV1Verifier { vahe: vahe.clone() };
+        let verifier = DefaultVerifier { vahe: vahe.clone() };
         let mut verifier_state = VerifierState::default();
 
         // Check empty state serialization

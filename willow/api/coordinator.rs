@@ -15,6 +15,7 @@
 use aggregation_config::AggregationConfig;
 use aggregation_config_rust_proto::AggregationConfigProto;
 use ahe_traits::AheBase;
+use coordinator::Coordinator;
 use kahe_traits::{HasKahe, KaheBase};
 use messages::CoordinatorState;
 use proto_serialization_traits::{FromProto, ToProto};
@@ -26,7 +27,6 @@ use shell_vahe::ShellVahe;
 use status::StatusError;
 use std::rc::Rc;
 use vahe_traits::HasVahe;
-use willow_v1_coordinator::WillowV1Coordinator;
 
 #[cxx::bridge(namespace = "secure_aggregation")]
 pub mod ffi {
@@ -82,7 +82,7 @@ pub mod ffi {
 
 pub struct WillowShellCoordinator {
     kahe: Rc<ShellKahe>,
-    coord: WillowV1Coordinator<ShellVahe>,
+    coord: Coordinator<ShellVahe>,
     coord_state: CoordinatorState<ShellVahe>,
 }
 
@@ -130,7 +130,7 @@ impl WillowShellCoordinator {
         let context_bytes = &aggregation_config.key_id;
         let kahe = Rc::new(ShellKahe::new(kahe_config, context_bytes)?);
         let vahe = Rc::new(ShellVahe::new(ahe_config, context_bytes)?);
-        let coord = WillowV1Coordinator { vahe };
+        let coord = Coordinator { vahe };
         let coord_state = CoordinatorState::default();
         Ok(WillowShellCoordinator { kahe, coord, coord_state })
     }

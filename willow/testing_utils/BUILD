@@ -79,8 +79,8 @@ rust_library(
         "//willow/crypto:shell_kahe",
         "//willow/crypto:shell_vahe",
         "//willow/crypto:vahe_traits",
+        "//willow/protocol:default_client",
         "//willow/protocol:messages",
-        "//willow/protocol:willow_v1_client",
     ],
 )
 

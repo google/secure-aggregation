@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use client_traits::SecureAggregationClient;
+use client_traits::Client;
 use kahe_traits::{HasKahe, KaheBase, KaheEncrypt, KaheKeygen, TrySecretKeyInto};
 use messages::{ClientMessage, DecryptorPublicKey};
 use prng_traits::SecurePrng;
@@ -21,27 +21,27 @@ use std::rc::Rc;
 use vahe_traits::{HasVahe, VaheBase, VerifiableEncrypt};
 
 /// Lightweight client directly exposing KAHE/VAHE types.
-pub struct WillowV1Client<Kahe: KaheBase, Vahe: VaheBase> {
+pub struct DefaultClient<Kahe: KaheBase, Vahe: VaheBase> {
     pub kahe: Rc<Kahe>,
     pub vahe: Rc<Vahe>,
     pub prng: RefCell<Kahe::Rng>, // Using a single PRNG for both VAHE and KAHE.
 }
 
-impl<Kahe: KaheBase, Vahe: VaheBase> HasKahe for WillowV1Client<Kahe, Vahe> {
+impl<Kahe: KaheBase, Vahe: VaheBase> HasKahe for DefaultClient<Kahe, Vahe> {
     type Kahe = Kahe;
     fn kahe(&self) -> &Self::Kahe {
         self.kahe.as_ref()
     }
 }
 
-impl<Kahe: KaheBase, Vahe: VaheBase> HasVahe for WillowV1Client<Kahe, Vahe> {
+impl<Kahe: KaheBase, Vahe: VaheBase> HasVahe for DefaultClient<Kahe, Vahe> {
     type Vahe = Vahe;
     fn vahe(&self) -> &Self::Vahe {
         self.vahe.as_ref()
     }
 }
 
-impl<Kahe: KaheBase, Vahe: VaheBase> WillowV1Client<Kahe, Vahe> {
+impl<Kahe: KaheBase, Vahe: VaheBase> DefaultClient<Kahe, Vahe> {
     pub fn new_with_randomly_generated_seed(
         kahe: Rc<Kahe>,
         vahe: Rc<Vahe>,
@@ -52,10 +52,10 @@ impl<Kahe: KaheBase, Vahe: VaheBase> WillowV1Client<Kahe, Vahe> {
     }
 }
 
-/// Implementation of the `SecureAggregationClient` trait for the generic
+/// Implementation of the `Client` trait for the generic
 /// KAHE/VAHE client, using WillowCommon as the common types (e.g. protocol
 /// messages are directly the AHE public key and ciphertexts).
-impl<Kahe, Vahe> SecureAggregationClient for WillowV1Client<Kahe, Vahe>
+impl<Kahe, Vahe> Client for DefaultClient<Kahe, Vahe>
 where
     Vahe: VaheBase + VerifiableEncrypt,
     // Reusing the same PRNG for both AHE and KAHE.
@@ -125,7 +125,7 @@ mod test {
         let (kahe_config, ahe_config) = create_shell_configs(&aggregation_config)?;
         let kahe = Rc::new(ShellKahe::new(kahe_config, CONTEXT_STRING)?);
         let vahe = Rc::new(ShellVahe::new(ahe_config, CONTEXT_STRING)?);
-        let client = WillowV1Client::new_with_randomly_generated_seed(kahe, vahe)?;
+        let client = DefaultClient::new_with_randomly_generated_seed(kahe, vahe)?;
 
         // Generate AHE keys.
         let mut testing_decryptor =
@@ -167,8 +167,8 @@ mod test {
 
         // Create clients.
         let client1 =
-            WillowV1Client::new_with_randomly_generated_seed(Rc::clone(&kahe), Rc::clone(&vahe))?;
-        let client2 = WillowV1Client::new_with_randomly_generated_seed(kahe, vahe)?;
+            DefaultClient::new_with_randomly_generated_seed(Rc::clone(&kahe), Rc::clone(&vahe))?;
+        let client2 = DefaultClient::new_with_randomly_generated_seed(kahe, vahe)?;
 
         // Generate AHE keys.
         let mut testing_decryptor =

@@ -13,16 +13,20 @@
 // limitations under the License.
 
 use ahe_traits::AheBase;
-use client_traits::SecureAggregationClient;
 
-use accumulator_traits::SecureAggregationCiphertextAccumulator;
+use accumulator_traits::CiphertextAccumulator;
+use client_traits::Client;
+use coordinator::Coordinator;
+use decryptor::{Decryptor, DecryptorState};
+use default_accumulator::{CiphertextAccumulatorState, DefaultCiphertextAccumulator};
+use default_client::DefaultClient;
+use default_verifier::{DefaultVerifier, VerifierState};
 use googletest::prelude::container_eq;
 use googletest::{gtest, verify_eq, verify_that};
 use kahe_traits::KaheBase;
 use messages::{
-    CiphertextContribution, ClientMessage, CoordinatorState, CoordinatorStatus,
-    DecryptionRequestContribution, DecryptorPublicKeyShare, PartialDecryptionRequest,
-    PartialDecryptionResponse,
+    CiphertextContribution, ClientMessage, CoordinatorState, DecryptionRequestContribution,
+    DecryptorPublicKeyShare, PartialDecryptionRequest, PartialDecryptionResponse,
 };
 use proto_serialization_traits::{FromProto, ToProto};
 use shell_kahe::ShellKahe;
@@ -35,12 +39,7 @@ use std::rc::Rc;
 use testing_utils::{
     generate_aggregation_config, generate_random_nonce, generate_random_unsigned_vector,
 };
-use verifier_traits::SecureAggregationVerifier;
-use willow_v1_accumulator::{CiphertextAccumulatorState, WillowV1CiphertextAccumulator};
-use willow_v1_client::WillowV1Client;
-use willow_v1_coordinator::WillowV1Coordinator;
-use willow_v1_decryptor::{DecryptorState, WillowV1Decryptor};
-use willow_v1_verifier::{VerifierState, WillowV1Verifier};
+use verifier_traits::Verifier;
 
 const CONTEXT_STRING: &[u8] = b"testing_context_string";
 
@@ -61,18 +60,18 @@ fn encrypt_decrypt_one() -> googletest::Result<()> {
 
     // Create client.
     let client =
-        WillowV1Client::new_with_randomly_generated_seed(Rc::clone(&kahe), Rc::clone(&vahe))?;
+        DefaultClient::new_with_randomly_generated_seed(Rc::clone(&kahe), Rc::clone(&vahe))?;
 
     let mut decryptor_state = DecryptorState::default();
-    let decryptor = WillowV1Decryptor::new_with_randomly_generated_seed(Rc::clone(&vahe))?;
+    let decryptor = Decryptor::new_with_randomly_generated_seed(Rc::clone(&vahe))?;
 
     // Create accumulator.
     let accumulator =
-        WillowV1CiphertextAccumulator { kahe: Rc::clone(&kahe), vahe: Rc::clone(&vahe) };
+        DefaultCiphertextAccumulator { kahe: Rc::clone(&kahe), vahe: Rc::clone(&vahe) };
     let mut accumulator_state = CiphertextAccumulatorState::default();
 
     // Create verifier.
-    let verifier = WillowV1Verifier { vahe: Rc::clone(&vahe) };
+    let verifier = DefaultVerifier { vahe: Rc::clone(&vahe) };
     let mut verifier_state = VerifierState::default();
 
     // Decryptor generates public key share via setup contribution.
@@ -137,19 +136,19 @@ fn encrypt_decrypt_one_serialized() -> googletest::Result<()> {
 
     // Create client.
     let client =
-        WillowV1Client::new_with_randomly_generated_seed(Rc::clone(&kahe), Rc::clone(&vahe))?;
+        DefaultClient::new_with_randomly_generated_seed(Rc::clone(&kahe), Rc::clone(&vahe))?;
 
     // Create decryptor.
     let mut decryptor_state = DecryptorState::default();
-    let decryptor = WillowV1Decryptor::new_with_randomly_generated_seed(Rc::clone(&vahe))?;
+    let decryptor = Decryptor::new_with_randomly_generated_seed(Rc::clone(&vahe))?;
 
     // Create accumulator.
     let accumulator =
-        WillowV1CiphertextAccumulator { kahe: Rc::clone(&kahe), vahe: Rc::clone(&vahe) };
+        DefaultCiphertextAccumulator { kahe: Rc::clone(&kahe), vahe: Rc::clone(&vahe) };
     let mut accumulator_state = CiphertextAccumulatorState::default();
 
     // Create verifier.
-    let verifier = WillowV1Verifier { vahe: Rc::clone(&vahe) };
+    let verifier = DefaultVerifier { vahe: Rc::clone(&vahe) };
     let mut verifier_state = VerifierState::default();
 
     // Decryptor generates public key share.
@@ -266,21 +265,21 @@ fn encrypt_decrypt_multiple_clients() -> googletest::Result<()> {
     let mut clients = vec![];
     for _ in 0..NUM_CLIENTS {
         let client =
-            WillowV1Client::new_with_randomly_generated_seed(Rc::clone(&kahe), Rc::clone(&vahe))?;
+            DefaultClient::new_with_randomly_generated_seed(Rc::clone(&kahe), Rc::clone(&vahe))?;
         clients.push(client);
     }
 
     // Create decryptor.
     let mut decryptor_state = DecryptorState::default();
-    let decryptor = WillowV1Decryptor::new_with_randomly_generated_seed(Rc::clone(&vahe))?;
+    let decryptor = Decryptor::new_with_randomly_generated_seed(Rc::clone(&vahe))?;
 
     // Create accumulator.
     let accumulator =
-        WillowV1CiphertextAccumulator { kahe: Rc::clone(&kahe), vahe: Rc::clone(&vahe) };
+        DefaultCiphertextAccumulator { kahe: Rc::clone(&kahe), vahe: Rc::clone(&vahe) };
     let mut accumulator_state = CiphertextAccumulatorState::default();
 
     // Create verifier.
-    let verifier = WillowV1Verifier { vahe: Rc::clone(&vahe) };
+    let verifier = DefaultVerifier { vahe: Rc::clone(&vahe) };
     let mut verifier_state = VerifierState::default();
 
     // Decryptor generates public key share.
@@ -385,7 +384,7 @@ fn encrypt_decrypt_multiple_clients_including_invalid_proofs() -> googletest::Re
     let mut good_clients = vec![];
     for _ in 0..NUM_GOOD_CLIENTS {
         let client =
-            WillowV1Client::new_with_randomly_generated_seed(Rc::clone(&kahe), Rc::clone(&vahe))?;
+            DefaultClient::new_with_randomly_generated_seed(Rc::clone(&kahe), Rc::clone(&vahe))?;
         good_clients.push(client);
     }
 
@@ -393,21 +392,21 @@ fn encrypt_decrypt_multiple_clients_including_invalid_proofs() -> googletest::Re
     let mut bad_clients = vec![];
     for _ in 0..NUM_BAD_CLIENTS {
         let client =
-            WillowV1Client::new_with_randomly_generated_seed(Rc::clone(&kahe), Rc::clone(&vahe))?;
+            DefaultClient::new_with_randomly_generated_seed(Rc::clone(&kahe), Rc::clone(&vahe))?;
         bad_clients.push(client);
     }
 
     // Create decryptor.
     let mut decryptor_state = DecryptorState::default();
-    let decryptor = WillowV1Decryptor::new_with_randomly_generated_seed(Rc::clone(&vahe))?;
+    let decryptor = Decryptor::new_with_randomly_generated_seed(Rc::clone(&vahe))?;
 
     // Create accumulator.
     let accumulator =
-        WillowV1CiphertextAccumulator { kahe: Rc::clone(&kahe), vahe: Rc::clone(&vahe) };
+        DefaultCiphertextAccumulator { kahe: Rc::clone(&kahe), vahe: Rc::clone(&vahe) };
     let mut accumulator_state = CiphertextAccumulatorState::default();
 
     // Create verifier.
-    let verifier = WillowV1Verifier { vahe: Rc::clone(&vahe) };
+    let verifier = DefaultVerifier { vahe: Rc::clone(&vahe) };
     let mut verifier_state = VerifierState::default();
 
     // Decryptor generates public key share.
@@ -542,15 +541,15 @@ fn encrypt_decrypt_many_clients_decryptors() -> googletest::Result<()> {
 
     // Create accumulator.
     let accumulator =
-        WillowV1CiphertextAccumulator { kahe: Rc::clone(&kahe), vahe: Rc::clone(&vahe) };
+        DefaultCiphertextAccumulator { kahe: Rc::clone(&kahe), vahe: Rc::clone(&vahe) };
     let mut accumulator_state = CiphertextAccumulatorState::default();
 
     // Create verifier.
-    let verifier = WillowV1Verifier { vahe: Rc::clone(&vahe) };
+    let verifier = DefaultVerifier { vahe: Rc::clone(&vahe) };
     let mut verifier_state = VerifierState::default();
 
     // Create coordinator.
-    let coord = WillowV1Coordinator { vahe: Rc::clone(&vahe) };
+    let coord = Coordinator { vahe: Rc::clone(&vahe) };
     let mut coord_state = CoordinatorState::default();
 
     // Create decryptors.
@@ -559,7 +558,7 @@ fn encrypt_decrypt_many_clients_decryptors() -> googletest::Result<()> {
     let mut setup_contributions = vec![];
     for _ in 0..NUM_DECRYPTORS {
         let mut decryptor_state = DecryptorState::default();
-        let decryptor = WillowV1Decryptor::new_with_randomly_generated_seed(Rc::clone(&vahe))?;
+        let decryptor = Decryptor::new_with_randomly_generated_seed(Rc::clone(&vahe))?;
 
         // Decryptor generates its setup contribution.
         let contribution = decryptor.create_setup_contribution(&mut decryptor_state)?;
@@ -581,7 +580,7 @@ fn encrypt_decrypt_many_clients_decryptors() -> googletest::Result<()> {
     let mut client_messages = vec![];
     for _ in 0..NUM_CLIENTS {
         let client =
-            WillowV1Client::new_with_randomly_generated_seed(Rc::clone(&kahe), Rc::clone(&vahe))?;
+            DefaultClient::new_with_randomly_generated_seed(Rc::clone(&kahe), Rc::clone(&vahe))?;
 
         let client_input_values =
             generate_random_unsigned_vector(INPUT_LENGTH as usize, INPUT_DOMAIN as u64);
@@ -672,7 +671,7 @@ fn encrypt_decrypt_no_dropout() -> googletest::Result<()> {
     let mut clients = vec![];
     for _ in 0..NUM_CLIENTS {
         let client =
-            WillowV1Client::new_with_randomly_generated_seed(Rc::clone(&kahe), Rc::clone(&vahe))?;
+            DefaultClient::new_with_randomly_generated_seed(Rc::clone(&kahe), Rc::clone(&vahe))?;
         clients.push(client);
     }
 
@@ -681,22 +680,22 @@ fn encrypt_decrypt_no_dropout() -> googletest::Result<()> {
     let mut decryptors = vec![];
     for _ in 0..NUM_DECRYPTORS {
         let decryptor_state = DecryptorState::default();
-        let decryptor = WillowV1Decryptor::new_with_randomly_generated_seed(Rc::clone(&vahe))?;
+        let decryptor = Decryptor::new_with_randomly_generated_seed(Rc::clone(&vahe))?;
         decryptor_states.push(decryptor_state);
         decryptors.push(decryptor);
     }
 
     // Create accumulator.
     let accumulator =
-        WillowV1CiphertextAccumulator { kahe: Rc::clone(&kahe), vahe: Rc::clone(&vahe) };
+        DefaultCiphertextAccumulator { kahe: Rc::clone(&kahe), vahe: Rc::clone(&vahe) };
     let mut accumulator_state = CiphertextAccumulatorState::default();
 
     // Create verifier.
-    let verifier = WillowV1Verifier { vahe: Rc::clone(&vahe) };
+    let verifier = DefaultVerifier { vahe: Rc::clone(&vahe) };
     let mut verifier_state = VerifierState::default();
 
     // Create coordinator.
-    let coord = WillowV1Coordinator { vahe: Rc::clone(&vahe) };
+    let coord = Coordinator { vahe: Rc::clone(&vahe) };
     let mut coord_state = CoordinatorState::default();
 
     // Decryptors generate setup contributions.

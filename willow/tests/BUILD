@@ -17,11 +17,11 @@ load("@rules_rust//rust:defs.bzl", "rust_test")
 package(default_applicable_licenses = [
 ])
 
-# Integration tests for Willow V1 with SHELL instantiation.
+# Integration tests for Willow with SHELL instantiation.
 rust_test(
-    name = "willow_v1_shell",
+    name = "e2e_shell",
     srcs = [
-        "willow_v1_shell.rs",
+        "e2e_shell.rs",
     ],
     deps = [
         "@crate_index//:googletest",
@@ -39,13 +39,13 @@ rust_test(
         "//willow/crypto:vahe_traits",
         "//willow/protocol:accumulator_traits",
         "//willow/protocol:client_traits",
+        "//willow/protocol:coordinator",
+        "//willow/protocol:decryptor",
+        "//willow/protocol:default_accumulator",
+        "//willow/protocol:default_client",
+        "//willow/protocol:default_verifier",
         "//willow/protocol:messages",
         "//willow/protocol:verifier_traits",
-        "//willow/protocol:willow_v1_accumulator",
-        "//willow/protocol:willow_v1_client",
-        "//willow/protocol:willow_v1_coordinator",
-        "//willow/protocol:willow_v1_decryptor",
-        "//willow/protocol:willow_v1_verifier",
         "//willow/testing_utils",
         "//willow/testing_utils:shell_testing_parameters",
     ],

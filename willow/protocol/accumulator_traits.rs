@@ -26,7 +26,7 @@ type Vahe<T> = <T as HasVahe>::Vahe;
 
 /// Base trait for the secure aggregation accumulator. Also includes the Coordinator
 /// functionality of the threshold AHE scheme.
-pub trait SecureAggregationCiphertextAccumulator: HasKahe + HasVahe {
+pub trait CiphertextAccumulator: HasKahe + HasVahe {
     /// The state held by the accumulator between messages.
     type CiphertextAccumulatorState: Default + Clone;
     /// The result of the aggregation.

@@ -32,18 +32,18 @@ use vahe_traits::{HasVahe, VaheBase};
 /// protocol is secure even if it behaves arbitrarily.
 /// As such it need not be run on secure hardware, however it does need access to the
 /// cryptographic library for most of these functions.
-pub struct WillowV1Coordinator<Vahe: VaheBase> {
+pub struct Coordinator<Vahe: VaheBase> {
     pub vahe: Rc<Vahe>,
 }
 
-impl<Vahe: VaheBase> HasVahe for WillowV1Coordinator<Vahe> {
+impl<Vahe: VaheBase> HasVahe for Coordinator<Vahe> {
     type Vahe = Vahe;
     fn vahe(&self) -> &Self::Vahe {
         &self.vahe
     }
 }
 
-impl<Vahe: VaheBase + PartialDec> WillowV1Coordinator<Vahe> {
+impl<Vahe: VaheBase + PartialDec> Coordinator<Vahe> {
     /// Stores setup contributions from all decryptors and creates a request to verify the
     /// contributions.
     pub fn handle_setup_submissions(
@@ -170,9 +170,10 @@ impl<Vahe: VaheBase + PartialDec> WillowV1Coordinator<Vahe> {
 
 #[cfg(test)]
 mod tests {
-    use crate::WillowV1Coordinator;
+    use crate::Coordinator;
     use ahe_traits::AheBase;
 
+    use decryptor::{Decryptor, DecryptorState};
     use googletest::gtest;
     use googletest::prelude::*;
     use messages::{CoordinatorState, CoordinatorStatus};
@@ -183,7 +184,6 @@ mod tests {
     use single_thread_hkdf::SingleThreadHkdfPrng;
     use std::rc::Rc;
     use vahe_traits::{Recover, VerifiableEncrypt};
-    use willow_v1_decryptor::{DecryptorState, WillowV1Decryptor};
 
     const CONTEXT_STRING: &[u8] = b"testing_context_string";
 
@@ -192,8 +192,8 @@ mod tests {
         let vahe = Rc::new(ShellVahe::new(create_shell_ahe_config(1)?, CONTEXT_STRING)?);
 
         // Create two decryptors.
-        let decryptor1 = WillowV1Decryptor::new_with_randomly_generated_seed(vahe.clone())?;
-        let decryptor2 = WillowV1Decryptor::new_with_randomly_generated_seed(vahe.clone())?;
+        let decryptor1 = Decryptor::new_with_randomly_generated_seed(vahe.clone())?;
+        let decryptor2 = Decryptor::new_with_randomly_generated_seed(vahe.clone())?;
 
         let mut state1 = DecryptorState::default();
         let mut state2 = DecryptorState::default();
@@ -201,7 +201,7 @@ mod tests {
         let contribution2 = decryptor2.create_setup_contribution(&mut state2)?;
 
         // Create coordinator.
-        let coordinator = WillowV1Coordinator { vahe: vahe.clone() };
+        let coordinator = Coordinator { vahe: vahe.clone() };
         let mut coord_state = CoordinatorState::default();
 
         // Handle setup submissions.
@@ -221,18 +221,18 @@ mod tests {
     fn coordinator_setup_fails_when_not_pre_setup() -> googletest::Result<()> {
         let vahe = Rc::new(ShellVahe::new(create_shell_ahe_config(1)?, CONTEXT_STRING)?);
 
-        let decryptor = WillowV1Decryptor::new_with_randomly_generated_seed(vahe.clone())?;
+        let decryptor = Decryptor::new_with_randomly_generated_seed(vahe.clone())?;
         let mut state = DecryptorState::default();
         let contribution = decryptor.create_setup_contribution(&mut state)?;
 
-        let coordinator = WillowV1Coordinator { vahe: vahe.clone() };
+        let coordinator = Coordinator { vahe: vahe.clone() };
         let mut coord_state = CoordinatorState::default();
 
         // First call succeeds.
         coordinator.handle_setup_submissions(vec![], vec![contribution], &mut coord_state)?;
 
         // Second call should fail.
-        let decryptor2 = WillowV1Decryptor::new_with_randomly_generated_seed(vahe.clone())?;
+        let decryptor2 = Decryptor::new_with_randomly_generated_seed(vahe.clone())?;
         let mut state2 = DecryptorState::default();
         let contribution2 = decryptor2.create_setup_contribution(&mut state2)?;
         let result =
@@ -249,8 +249,8 @@ mod tests {
         let vahe = Rc::new(ShellVahe::new(create_shell_ahe_config(1)?, CONTEXT_STRING)?);
 
         // Create two multi-decryptors (same struct, using multi-decryptor traits).
-        let decryptor1 = WillowV1Decryptor::new_with_randomly_generated_seed(vahe.clone())?;
-        let decryptor2 = WillowV1Decryptor::new_with_randomly_generated_seed(vahe.clone())?;
+        let decryptor1 = Decryptor::new_with_randomly_generated_seed(vahe.clone())?;
+        let decryptor2 = Decryptor::new_with_randomly_generated_seed(vahe.clone())?;
 
         let mut dec_state1 = DecryptorState::default();
         let mut dec_state2 = DecryptorState::default();
@@ -262,7 +262,7 @@ mod tests {
         let contribution2 = decryptor2.create_setup_contribution(&mut dec_state2)?;
 
         // Coordinator processes setup.
-        let coordinator = WillowV1Coordinator { vahe: vahe.clone() };
+        let coordinator = Coordinator { vahe: vahe.clone() };
         let mut coord_state = CoordinatorState::default();
         let verify_request = coordinator.handle_setup_submissions(
             vec![],

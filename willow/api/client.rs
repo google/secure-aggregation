@@ -17,7 +17,8 @@
 use aggregation_config::AggregationConfig;
 use aggregation_config_rust_proto::AggregationConfigProto;
 use ahe_traits::AheBase;
-use client_traits::SecureAggregationClient;
+use client_traits::Client;
+use default_client::DefaultClient;
 use kahe_traits::KaheBase;
 use proto_serialization_traits::{FromProto, ToProto};
 use protobuf::prelude::*;
@@ -29,7 +30,6 @@ use shell_vahe::ShellVahe;
 use status::StatusError;
 use std::collections::HashMap;
 use std::rc::Rc;
-use willow_v1_client::WillowV1Client;
 
 /// CXX bridge to call Rust client code from C++.
 ///
@@ -72,7 +72,7 @@ pub mod ffi {
     }
 }
 
-pub struct WillowShellClient(WillowV1Client<ShellKahe, ShellVahe>);
+pub struct WillowShellClient(DefaultClient<ShellKahe, ShellVahe>);
 
 impl WillowShellClient {
     fn new_from_serialized_config(
@@ -87,7 +87,7 @@ impl WillowShellClient {
         let context_bytes = &aggregation_config.key_id;
         let kahe = Rc::new(ShellKahe::new(kahe_config, &context_bytes)?);
         let vahe = Rc::new(ShellVahe::new(ahe_config, &context_bytes)?);
-        let client = WillowV1Client::new_with_randomly_generated_seed(kahe, vahe)?;
+        let client = DefaultClient::new_with_randomly_generated_seed(kahe, vahe)?;
         Ok(WillowShellClient(client))
     }
 

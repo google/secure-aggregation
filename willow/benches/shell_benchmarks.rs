@@ -18,11 +18,14 @@ use std::hint::black_box;
 use std::rc::Rc;
 use std::time::Duration;
 
+use accumulator_traits::CiphertextAccumulator;
 use aggregation_config::AggregationConfig;
 use ahe_traits::AheBase;
-use client_traits::SecureAggregationClient;
-
-use accumulator_traits::SecureAggregationCiphertextAccumulator;
+use client_traits::Client;
+use decryptor::{Decryptor, DecryptorState};
+use default_accumulator::{CiphertextAccumulatorState, DefaultCiphertextAccumulator};
+use default_client::DefaultClient;
+use default_verifier::{DefaultVerifier, VerifierState};
 use kahe_traits::KaheBase;
 use messages::{
     CiphertextContribution, DecryptionRequestContribution, DecryptorPublicKey,
@@ -32,11 +35,7 @@ use shell_kahe::ShellKahe;
 use shell_parameters::create_shell_configs;
 use shell_vahe::ShellVahe;
 use testing_utils::{generate_random_nonce, generate_random_unsigned_vector};
-use verifier_traits::SecureAggregationVerifier;
-use willow_v1_accumulator::{CiphertextAccumulatorState, WillowV1CiphertextAccumulator};
-use willow_v1_client::WillowV1Client;
-use willow_v1_decryptor::{DecryptorState, WillowV1Decryptor};
-use willow_v1_verifier::{VerifierState, WillowV1Verifier};
+use verifier_traits::Verifier;
 
 const DEFAULT_ID: &str = "default";
 const CONTEXT_STRING: &[u8] = b"benchmark_context_string";
@@ -100,12 +99,12 @@ pub fn match_and_bench(args: &Args) -> Duration {
 // Common inputs that are shared by all benchmarks.
 
 struct BaseInputs {
-    client: WillowV1Client<ShellKahe, ShellVahe>,
-    decryptor: WillowV1Decryptor<ShellVahe>,
+    client: DefaultClient<ShellKahe, ShellVahe>,
+    decryptor: Decryptor<ShellVahe>,
     decryptor_state: DecryptorState<ShellVahe>,
-    accumulator: WillowV1CiphertextAccumulator<ShellKahe, ShellVahe>,
+    accumulator: DefaultCiphertextAccumulator<ShellKahe, ShellVahe>,
     accumulator_state: CiphertextAccumulatorState<ShellKahe, ShellVahe>,
-    verifier: WillowV1Verifier<ShellVahe>,
+    verifier: DefaultVerifier<ShellVahe>,
     verifier_state: VerifierState<ShellVahe>,
     public_key: DecryptorPublicKey<ShellVahe>,
 }
@@ -132,20 +131,20 @@ fn setup_base(args: &Args) -> BaseInputs {
 
     // Create client.
     let client =
-        WillowV1Client::new_with_randomly_generated_seed(Rc::clone(&kahe), Rc::clone(&vahe))
+        DefaultClient::new_with_randomly_generated_seed(Rc::clone(&kahe), Rc::clone(&vahe))
             .unwrap();
 
     // Create decryptor.
     let mut decryptor_state = DecryptorState::default();
-    let decryptor = WillowV1Decryptor::new_with_randomly_generated_seed(Rc::clone(&vahe)).unwrap();
+    let decryptor = Decryptor::new_with_randomly_generated_seed(Rc::clone(&vahe)).unwrap();
 
     // Create accumulator.
     let accumulator =
-        WillowV1CiphertextAccumulator { kahe: Rc::clone(&kahe), vahe: Rc::clone(&vahe) };
+        DefaultCiphertextAccumulator { kahe: Rc::clone(&kahe), vahe: Rc::clone(&vahe) };
     let accumulator_state = CiphertextAccumulatorState::default();
 
     // Create verifier.
-    let verifier = WillowV1Verifier { vahe: Rc::clone(&vahe) };
+    let verifier = DefaultVerifier { vahe: Rc::clone(&vahe) };
     let verifier_state = VerifierState::default();
 
     // Decryptor generates public key share via setup contribution.
@@ -170,7 +169,7 @@ fn setup_base(args: &Args) -> BaseInputs {
 // Client benchmarks.
 
 struct ClientInputs {
-    client: WillowV1Client<ShellKahe, ShellVahe>,
+    client: DefaultClient<ShellKahe, ShellVahe>,
     public_key: DecryptorPublicKey<ShellVahe>,
     plaintext: <ShellKahe as KaheBase>::Plaintext,
     nonce: Vec<u8>,
@@ -197,13 +196,13 @@ fn run_client(inputs: &mut ClientInputs) {
 // Accumulator benchmarks.
 
 struct ServerInputs {
-    accumulator: WillowV1CiphertextAccumulator<ShellKahe, ShellVahe>,
+    accumulator: DefaultCiphertextAccumulator<ShellKahe, ShellVahe>,
     accumulator_state: CiphertextAccumulatorState<ShellKahe, ShellVahe>,
     ciphertext_contributions: Vec<CiphertextContribution<ShellKahe, ShellVahe>>,
 }
 
 struct VerifierInputs {
-    verifier: WillowV1Verifier<ShellVahe>,
+    verifier: DefaultVerifier<ShellVahe>,
     verifier_state: VerifierState<ShellVahe>,
     decryption_request_contributions: Vec<DecryptionRequestContribution<ShellVahe>>,
 }
@@ -286,7 +285,7 @@ fn run_server_handle_client_message(inputs: &mut ServerInputs) {
 }
 
 struct ServerRecoverInputs {
-    accumulator: WillowV1CiphertextAccumulator<ShellKahe, ShellVahe>,
+    accumulator: DefaultCiphertextAccumulator<ShellKahe, ShellVahe>,
     accumulator_state: CiphertextAccumulatorState<ShellKahe, ShellVahe>,
     finalized_partial_decryption: FinalizedPartialDecryption<ShellVahe>,
 }
@@ -351,7 +350,7 @@ fn run_server_recover_aggregation_result(inputs: &mut ServerRecoverInputs) {
 // Decryptor benchmarks.
 
 struct DecryptorInputs {
-    decryptor: WillowV1Decryptor<ShellVahe>,
+    decryptor: Decryptor<ShellVahe>,
     decryptor_state: DecryptorState<ShellVahe>,
     partial_decryption_request: PartialDecryptionRequest<ShellVahe>,
 }

@@ -82,9 +82,9 @@ rust_library(
 
 # Protocol level implementations using Shell
 rust_library(
-    name = "willow_v1_client",
+    name = "default_client",
     srcs = [
-        "willow_v1_client.rs",
+        "default_client.rs",
     ],
     deps = [
         ":client_traits",
@@ -98,8 +98,8 @@ rust_library(
 )
 
 rust_test(
-    name = "willow_v1_client_test",
-    crate = ":willow_v1_client",
+    name = "default_client_test",
+    crate = ":default_client",
     deps = [
         "@crate_index//:googletest",
         "//willow/api:aggregation_config",
@@ -113,8 +113,8 @@ rust_test(
 )
 
 rust_test(
-    name = "willow_v1_decryptor_test",
-    crate = ":willow_v1_decryptor",
+    name = "decryptor_test",
+    crate = ":decryptor",
     deps = [
         ":messages",
         "@crate_index//:googletest",
@@ -132,9 +132,9 @@ rust_test(
 )
 
 rust_library(
-    name = "willow_v1_decryptor",
+    name = "decryptor",
     srcs = [
-        "willow_v1_decryptor.rs",
+        "decryptor.rs",
     ],
     deps = [
         ":messages",
@@ -154,15 +154,15 @@ rust_library(
 )
 
 rust_test(
-    name = "willow_v1_accumulator_test",
-    crate = ":willow_v1_accumulator",
+    name = "default_accumulator_test",
+    crate = ":default_accumulator",
     deps = [
         ":accumulator_traits",
         ":client_traits",
+        ":decryptor",
+        ":default_client",
+        ":default_verifier",
         ":verifier_traits",
-        ":willow_v1_client",
-        ":willow_v1_decryptor",
-        ":willow_v1_verifier",
         "@crate_index//:googletest",
         "//willow/api:proto_serialization_traits",
         "//willow/crypto:ahe_traits",
@@ -177,9 +177,9 @@ rust_test(
 )
 
 rust_library(
-    name = "willow_v1_accumulator",
+    name = "default_accumulator",
     srcs = [
-        "willow_v1_accumulator.rs",
+        "default_accumulator.rs",
     ],
     deps = [
         ":accumulator_traits",
@@ -196,9 +196,9 @@ rust_library(
 )
 
 rust_library(
-    name = "willow_v1_verifier",
+    name = "default_verifier",
     srcs = [
-        "willow_v1_verifier.rs",
+        "default_verifier.rs",
     ],
     deps = [
         ":messages",
@@ -215,14 +215,14 @@ rust_library(
 )
 
 rust_test(
-    name = "willow_v1_verifier_test",
-    crate = ":willow_v1_verifier",
+    name = "default_verifier_test",
+    crate = ":default_verifier",
     deps = [
         ":accumulator_traits",
         ":client_traits",
-        ":willow_v1_accumulator",
-        ":willow_v1_client",
-        ":willow_v1_decryptor",
+        ":decryptor",
+        ":default_accumulator",
+        ":default_client",
         "@crate_index//:googletest",
         "//ffi_utils:status_matchers_rs",
         "//willow/api:proto_serialization_traits",
@@ -241,9 +241,9 @@ rust_test(
 
 # Multi-decryptor coordinator implementation.
 rust_library(
-    name = "willow_v1_coordinator",
+    name = "coordinator",
     srcs = [
-        "willow_v1_coordinator.rs",
+        "coordinator.rs",
     ],
     deps = [
         ":messages",
@@ -255,11 +255,11 @@ rust_library(
 )
 
 rust_test(
-    name = "willow_v1_coordinator_test",
-    crate = ":willow_v1_coordinator",
+    name = "coordinator_test",
+    crate = ":coordinator",
     deps = [
+        ":decryptor",
         ":messages",
-        ":willow_v1_decryptor",
         "@crate_index//:googletest",
         "//willow/crypto:ahe_traits",
         "//willow/crypto:prng_traits",

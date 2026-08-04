@@ -21,14 +21,14 @@ use status::StatusError;
 use std::fmt::Debug;
 use std::rc::Rc;
 use vahe_traits::{EncryptVerify, HasVahe, VaheBase};
-use verifier_traits::SecureAggregationVerifier;
+use verifier_traits::Verifier;
 
 /// The verifier struct, containing a WillowCommon instance.
-pub struct WillowV1Verifier<Vahe: VaheBase> {
+pub struct DefaultVerifier<Vahe: VaheBase> {
     pub vahe: Rc<Vahe>,
 }
 
-impl<Vahe: VaheBase> HasVahe for WillowV1Verifier<Vahe> {
+impl<Vahe: VaheBase> HasVahe for DefaultVerifier<Vahe> {
     type Vahe = Vahe;
     fn vahe(&self) -> &Self::Vahe {
         &self.vahe
@@ -158,7 +158,7 @@ where
     }
 }
 
-impl<Vahe> SecureAggregationVerifier for WillowV1Verifier<Vahe>
+impl<Vahe> Verifier for DefaultVerifier<Vahe>
 where
     Vahe: EncryptVerify,
 {
@@ -264,10 +264,12 @@ where
 mod tests {
     use super::*;
 
+    use accumulator_traits::CiphertextAccumulator;
     use ahe_traits::AheBase;
-    use client_traits::SecureAggregationClient;
-
-    use accumulator_traits::SecureAggregationCiphertextAccumulator;
+    use client_traits::Client;
+    use decryptor::{Decryptor, DecryptorState};
+    use default_accumulator::DefaultCiphertextAccumulator;
+    use default_client::DefaultClient;
     use googletest::prelude::{
         contains_substring, eq, err, gtest, verify_eq, verify_that, verify_true,
     };
@@ -279,15 +281,12 @@ mod tests {
     use status_matchers_rs::status_is;
     use std::collections::HashMap;
     use testing_utils::{generate_aggregation_config, generate_random_nonce};
-    use willow_v1_accumulator::WillowV1CiphertextAccumulator;
-    use willow_v1_client::WillowV1Client;
-    use willow_v1_decryptor::{DecryptorState, WillowV1Decryptor};
 
     const CONTEXT_STRING: &[u8] = b"testing_context_string";
     const DEFAULT_VECTOR_ID: &str = "default";
 
     struct VerifierTestSetup {
-        verifier: WillowV1Verifier<ShellVahe>,
+        verifier: DefaultVerifier<ShellVahe>,
         decryption_request_contribution: DecryptionRequestContribution<ShellVahe>,
     }
 
@@ -308,18 +307,18 @@ mod tests {
 
         // Create client.
         let client =
-            WillowV1Client::new_with_randomly_generated_seed(Rc::clone(&kahe), Rc::clone(&vahe))?;
+            DefaultClient::new_with_randomly_generated_seed(Rc::clone(&kahe), Rc::clone(&vahe))?;
 
         // Create decryptor.
         let mut decryptor_state = DecryptorState::default();
-        let decryptor = WillowV1Decryptor::new_with_randomly_generated_seed(Rc::clone(&vahe))?;
+        let decryptor = Decryptor::new_with_randomly_generated_seed(Rc::clone(&vahe))?;
 
         // Create accumulator.
         let accumulator =
-            WillowV1CiphertextAccumulator { kahe: Rc::clone(&kahe), vahe: Rc::clone(&vahe) };
+            DefaultCiphertextAccumulator { kahe: Rc::clone(&kahe), vahe: Rc::clone(&vahe) };
 
         // Create verifier.
-        let verifier = WillowV1Verifier { vahe: Rc::clone(&vahe) };
+        let verifier = DefaultVerifier { vahe: Rc::clone(&vahe) };
 
         // Decryptor generates public key share via setup contribution.
         let setup_contribution = decryptor.create_setup_contribution(&mut decryptor_state)?;

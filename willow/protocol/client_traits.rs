@@ -18,7 +18,7 @@ use status::StatusError;
 use vahe_traits::HasVahe;
 
 /// Base trait for the secure aggregation Client.
-pub trait SecureAggregationClient: HasKahe + HasVahe {
+pub trait Client: HasKahe + HasVahe {
     /// The plaintext to be aggregated.
     type Plaintext;
     type PlaintextSlice<'a>;

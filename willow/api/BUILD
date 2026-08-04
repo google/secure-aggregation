@@ -124,9 +124,9 @@ rust_library(
         "//willow/crypto:vahe_traits",
         "//willow/protocol:messages",
         "//willow/protocol:accumulator_traits",
+        "//willow/protocol:default_accumulator",
+        "//willow/protocol:default_verifier",
         "//willow/protocol:verifier_traits",
-        "//willow/protocol:willow_v1_accumulator",
-        "//willow/protocol:willow_v1_verifier",
         ":proto_serialization_traits",
     ],
 )
@@ -153,8 +153,8 @@ rust_library(
         "//willow/proto/willow:aggregation_config_rust_proto",
         "//willow/proto/willow:messages_rust_proto",
         "//willow/protocol:client_traits",
+        "//willow/protocol:default_client",
         "//willow/protocol:messages",
-        "//willow/protocol:willow_v1_client",
     ],
 )
 
@@ -223,8 +223,8 @@ rust_library(
         "//willow/proto/shell:shell_ciphertexts_rust_proto",
         "//willow/proto/willow:aggregation_config_rust_proto",
         "//willow/proto/willow:messages_rust_proto",
+        "//willow/protocol:coordinator",
         "//willow/protocol:messages",
-        "//willow/protocol:willow_v1_coordinator",
     ],
 )
 
