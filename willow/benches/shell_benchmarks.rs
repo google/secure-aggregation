@@ -23,7 +23,6 @@ use ahe_traits::AheBase;
 use client_traits::SecureAggregationClient;
 
 use accumulator_traits::SecureAggregationCiphertextAccumulator;
-use decryptor_traits::SecureAggregationDecryptor;
 use kahe_traits::KaheBase;
 use messages::{
     CiphertextContribution, DecryptionRequestContribution, DecryptorPublicKey,
@@ -149,8 +148,9 @@ fn setup_base(args: &Args) -> BaseInputs {
     let verifier = WillowV1Verifier { vahe: Rc::clone(&vahe) };
     let verifier_state = VerifierState::default();
 
-    // Decryptor generates public key share.
-    let public_key_share = decryptor.create_public_key_share(&mut decryptor_state).unwrap();
+    // Decryptor generates public key share via setup contribution.
+    let setup_contribution = decryptor.create_setup_contribution(&mut decryptor_state).unwrap();
+    let public_key_share = setup_contribution.key_contribution.public_key_share;
 
     // Aggregate public key share directly.
     let public_key = vahe.aggregate_public_key_shares(std::iter::once(&public_key_share)).unwrap();
@@ -324,7 +324,7 @@ fn setup_server_recover_aggregation_result(args: &Args) -> ServerRecoverInputs {
     // Decryptor creates partial decryption.
     let pd = inputs
         .decryptor
-        .handle_partial_decryption_request(pd_ct, &mut inputs.decryptor_state)
+        .handle_partial_decryption_request(pd_ct, None::<&ShellKahe>, &mut inputs.decryptor_state)
         .unwrap();
 
     // Accumulator handles the partial decryption.
@@ -394,6 +394,7 @@ fn run_decryptor_partial_decryption(inputs: &mut DecryptorInputs) {
         .decryptor
         .handle_partial_decryption_request(
             black_box(inputs.partial_decryption_request.clone()),
+            None::<&ShellKahe>,
             black_box(&mut inputs.decryptor_state),
         )
         .unwrap();

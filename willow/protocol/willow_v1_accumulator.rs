@@ -250,7 +250,6 @@ mod tests {
     use accumulator_traits::SecureAggregationCiphertextAccumulator;
     use ahe_traits::AheBase;
     use client_traits::SecureAggregationClient;
-    use decryptor_traits::SecureAggregationDecryptor;
     use googletest::{gtest, verify_eq, verify_true};
     use proto_serialization_traits::{FromProto, ToProto};
     use shell_kahe::ShellKahe;
@@ -305,7 +304,8 @@ mod tests {
         verify_true!(accumulator_state_roundtrip.client_sum.is_none())?;
 
         // Populate accumulator state.
-        let public_key_share = decryptor.create_public_key_share(&mut decryptor_state)?;
+        let setup_contribution = decryptor.create_setup_contribution(&mut decryptor_state)?;
+        let public_key_share = setup_contribution.key_contribution.public_key_share;
         // Aggregate public key share directly.
         let public_key = vahe.aggregate_public_key_shares(std::iter::once(&public_key_share))?;
         let client_plaintext = HashMap::from([(
@@ -324,7 +324,11 @@ mod tests {
         accumulator
             .accumulate_ciphertext_contribution(ciphertext_contribution, &mut accumulator_state)?;
         let pd_ct = verifier.create_partial_decryption_request(verifier_state)?;
-        let pd = decryptor.handle_partial_decryption_request(pd_ct, &mut decryptor_state)?;
+        let pd = decryptor.handle_partial_decryption_request(
+            pd_ct,
+            None::<&ShellKahe>,
+            &mut decryptor_state,
+        )?;
 
         // Check populated state serialization
         verify_true!(accumulator_state.client_sum.is_some())?;

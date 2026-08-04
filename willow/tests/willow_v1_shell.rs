@@ -47,7 +47,6 @@ const CONTEXT_STRING: &[u8] = b"testing_context_string";
 /// Encrypt and decrypt with a single decryptor and single client.
 #[gtest]
 fn encrypt_decrypt_one() -> googletest::Result<()> {
-    use decryptor_traits::SecureAggregationDecryptor;
     let default_id = String::from("default");
     let aggregation_config = generate_aggregation_config(default_id.clone(), 16, 10, 1, 1);
     let max_number_of_decryptors = aggregation_config.max_number_of_decryptors;
@@ -76,8 +75,9 @@ fn encrypt_decrypt_one() -> googletest::Result<()> {
     let verifier = WillowV1Verifier { vahe: Rc::clone(&vahe) };
     let mut verifier_state = VerifierState::default();
 
-    // Decryptor generates public key share.
-    let public_key_share = decryptor.create_public_key_share(&mut decryptor_state)?;
+    // Decryptor generates public key share via setup contribution.
+    let setup_contribution = decryptor.create_setup_contribution(&mut decryptor_state)?;
+    let public_key_share = setup_contribution.key_contribution.public_key_share;
 
     // Aggregate public key share directly.
     let public_key = vahe.aggregate_public_key_shares(std::iter::once(&public_key_share))?;
@@ -99,7 +99,11 @@ fn encrypt_decrypt_one() -> googletest::Result<()> {
     let pd_ct = verifier.create_partial_decryption_request(verifier_state)?;
 
     // Decryptor creates partial decryption.
-    let pd = decryptor.handle_partial_decryption_request(pd_ct, &mut decryptor_state)?;
+    let pd = decryptor.handle_partial_decryption_request(
+        pd_ct,
+        None::<&ShellKahe>,
+        &mut decryptor_state,
+    )?;
 
     // Accumulator recovers the aggregation result.
     let finalized_pd =
@@ -119,7 +123,6 @@ fn encrypt_decrypt_one() -> googletest::Result<()> {
 /// Encrypt and decrypt with a single decryptor and single client, using serialization.
 #[gtest]
 fn encrypt_decrypt_one_serialized() -> googletest::Result<()> {
-    use decryptor_traits::SecureAggregationDecryptor;
     let default_id = String::from("default");
     let aggregation_config = generate_aggregation_config(default_id.clone(), 16, 10, 1, 1);
     let max_number_of_decryptors = aggregation_config.max_number_of_decryptors;
@@ -150,7 +153,8 @@ fn encrypt_decrypt_one_serialized() -> googletest::Result<()> {
     let mut verifier_state = VerifierState::default();
 
     // Decryptor generates public key share.
-    let public_key_share = decryptor.create_public_key_share(&mut decryptor_state)?;
+    let setup_contribution = decryptor.create_setup_contribution(&mut decryptor_state)?;
+    let public_key_share = setup_contribution.key_contribution.public_key_share;
 
     // Serialize and deserialize the public key share.
     let public_key_share_proto = public_key_share.to_proto(decryptor.vahe.as_ref())?;
@@ -215,7 +219,11 @@ fn encrypt_decrypt_one_serialized() -> googletest::Result<()> {
         PartialDecryptionRequest::from_proto(pd_ct_proto, &decryptor)?;
 
     // Decryptor creates partial decryption.
-    let pd = decryptor.handle_partial_decryption_request(pd_ct, &mut decryptor_state)?;
+    let pd = decryptor.handle_partial_decryption_request(
+        pd_ct,
+        None::<&ShellKahe>,
+        &mut decryptor_state,
+    )?;
 
     // Serialize and deserialize the partial decryption.
     let pd_proto = pd.to_proto((&decryptor, None))?;
@@ -240,7 +248,6 @@ fn encrypt_decrypt_one_serialized() -> googletest::Result<()> {
 // Encrypt and decrypt with multiple clients and a single decryptor.
 #[gtest]
 fn encrypt_decrypt_multiple_clients() -> googletest::Result<()> {
-    use decryptor_traits::SecureAggregationDecryptor;
     const NUM_CLIENTS: i64 = 10;
     let default_id = String::from("default");
     let aggregation_config =
@@ -277,7 +284,8 @@ fn encrypt_decrypt_multiple_clients() -> googletest::Result<()> {
     let mut verifier_state = VerifierState::default();
 
     // Decryptor generates public key share.
-    let public_key_share = decryptor.create_public_key_share(&mut decryptor_state)?;
+    let setup_contribution = decryptor.create_setup_contribution(&mut decryptor_state)?;
+    let public_key_share = setup_contribution.key_contribution.public_key_share;
 
     // Aggregate public key share directly.
     let public_key = vahe.aggregate_public_key_shares(std::iter::once(&public_key_share))?;
@@ -332,7 +340,11 @@ fn encrypt_decrypt_multiple_clients() -> googletest::Result<()> {
         let pd_ct = verifier.create_partial_decryption_request(verifier_state)?;
 
         // Decryptor creates partial decryption.
-        let pd = decryptor.handle_partial_decryption_request(pd_ct, &mut decryptor_state)?;
+        let pd = decryptor.handle_partial_decryption_request(
+            pd_ct,
+            None::<&ShellKahe>,
+            &mut decryptor_state,
+        )?;
 
         // Accumulator recovers the aggregation result.
         let finalized_pd =
@@ -353,7 +365,6 @@ fn encrypt_decrypt_multiple_clients() -> googletest::Result<()> {
 // Encrypt and decrypt with multiple clients including invalid client proofs and a single decryptor.
 #[gtest]
 fn encrypt_decrypt_multiple_clients_including_invalid_proofs() -> googletest::Result<()> {
-    use decryptor_traits::SecureAggregationDecryptor;
     const NUM_MAX_CLIENTS: i64 = 10;
     const NUM_GOOD_CLIENTS: i64 = 10;
     const NUM_BAD_CLIENTS: i64 = 5;
@@ -400,7 +411,8 @@ fn encrypt_decrypt_multiple_clients_including_invalid_proofs() -> googletest::Re
     let mut verifier_state = VerifierState::default();
 
     // Decryptor generates public key share.
-    let public_key_share = decryptor.create_public_key_share(&mut decryptor_state)?;
+    let setup_contribution = decryptor.create_setup_contribution(&mut decryptor_state)?;
+    let public_key_share = setup_contribution.key_contribution.public_key_share;
 
     // Aggregate public key share directly.
     let public_key = vahe.aggregate_public_key_shares(std::iter::once(&public_key_share))?;
@@ -474,7 +486,11 @@ fn encrypt_decrypt_multiple_clients_including_invalid_proofs() -> googletest::Re
     let pd_ct = verifier.create_partial_decryption_request(verifier_state)?;
 
     // Decryptor creates partial decryption.
-    let pd = decryptor.handle_partial_decryption_request(pd_ct, &mut decryptor_state)?;
+    let pd = decryptor.handle_partial_decryption_request(
+        pd_ct,
+        None::<&ShellKahe>,
+        &mut decryptor_state,
+    )?;
 
     // Accumulator recovers the aggregation result.
     let finalized_pd =
@@ -494,9 +510,6 @@ fn encrypt_decrypt_multiple_clients_including_invalid_proofs() -> googletest::Re
 /// Note: This test uses RLWE parameters for production use.
 #[gtest]
 fn encrypt_decrypt_many_clients_decryptors() -> googletest::Result<()> {
-    use decryptor_traits::{
-        SecureAggregationBaseMultiDecryptor, SecureAggregationReputableDecryptor,
-    };
     const INPUT_LENGTH: isize = 100_000; // 100K
     const INPUT_DOMAIN: i64 = 1i64 << 32;
     const MAX_NUM_CLIENTS: i64 = 10_000_000; // used to generate parameters.
@@ -637,9 +650,6 @@ fn encrypt_decrypt_many_clients_decryptors() -> googletest::Result<()> {
 // Encrypt and decrypt with multiple clients and multiple decryptors, but no dropout.
 #[gtest]
 fn encrypt_decrypt_no_dropout() -> googletest::Result<()> {
-    use decryptor_traits::{
-        SecureAggregationBaseMultiDecryptor, SecureAggregationReputableDecryptor,
-    };
     const NUM_CLIENTS: i64 = 10;
     const NUM_DECRYPTORS: i64 = 10;
     let default_id = String::from("default");
