@@ -495,8 +495,7 @@ fn encrypt_decrypt_multiple_clients_including_invalid_proofs() -> googletest::Re
 #[gtest]
 fn encrypt_decrypt_many_clients_decryptors() -> googletest::Result<()> {
     use decryptor_traits::{
-        SecureAggregationBaseMultiDecryptor, SecureAggregationCoordinator,
-        SecureAggregationReputableDecryptor,
+        SecureAggregationBaseMultiDecryptor, SecureAggregationReputableDecryptor,
     };
     const INPUT_LENGTH: isize = 100_000; // 100K
     const INPUT_DOMAIN: i64 = 1i64 << 32;
@@ -639,8 +638,7 @@ fn encrypt_decrypt_many_clients_decryptors() -> googletest::Result<()> {
 #[gtest]
 fn encrypt_decrypt_no_dropout() -> googletest::Result<()> {
     use decryptor_traits::{
-        SecureAggregationBaseMultiDecryptor, SecureAggregationCoordinator,
-        SecureAggregationReputableDecryptor,
+        SecureAggregationBaseMultiDecryptor, SecureAggregationReputableDecryptor,
     };
     const NUM_CLIENTS: i64 = 10;
     const NUM_DECRYPTORS: i64 = 10;
