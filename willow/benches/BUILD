@@ -38,7 +38,6 @@ rust_library(
         "//willow/crypto:vahe_traits",
         "//willow/protocol:accumulator_traits",
         "//willow/protocol:client_traits",
-        "//willow/protocol:decryptor_traits",
         "//willow/protocol:messages",
         "//willow/protocol:verifier_traits",
         "//willow/protocol:willow_v1_accumulator",

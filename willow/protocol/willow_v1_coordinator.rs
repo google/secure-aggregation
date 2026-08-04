@@ -172,9 +172,7 @@ impl<Vahe: VaheBase + PartialDec> WillowV1Coordinator<Vahe> {
 mod tests {
     use crate::WillowV1Coordinator;
     use ahe_traits::AheBase;
-    use decryptor_traits::{
-        SecureAggregationBaseMultiDecryptor, SecureAggregationReputableDecryptor,
-    };
+
     use googletest::gtest;
     use googletest::prelude::*;
     use messages::{CoordinatorState, CoordinatorStatus};

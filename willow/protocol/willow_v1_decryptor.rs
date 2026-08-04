@@ -14,10 +14,6 @@
 
 use aggregation_config::AggregationConfig;
 use ahe_traits::{AheKeygen, PartialDec};
-use decryptor_traits::{
-    SecureAggregationBaseMultiDecryptor, SecureAggregationDecryptor,
-    SecureAggregationNonReputableMultiDecryptor, SecureAggregationReputableDecryptor,
-};
 use kahe_traits::KaheBase;
 use messages::{
     DecryptorPublicKey, DecryptorPublicKeyShare, KeyContribution, PartialDecryptionRequest,
@@ -35,12 +31,11 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use vahe_traits::{EncryptVerify, HasVahe, KeyGenVerify, VaheBase, VerifiableKeyGen};
 
-/// Lightweight decryptor directly exposing VAHE types.
+/// Implementation of Willow V1 Decryptor directly exposing VAHE types.
 ///
-/// This struct supports both single-decryptor mode (via `SecureAggregationDecryptor`)
-/// and multi-decryptor mode (via `SecureAggregationBaseMultiDecryptor`,
-/// `SecureAggregationReputableDecryptor`, `SecureAggregationNonReputableMultiDecryptor`).
-/// The difference between reputable and non-reputable is in which trait methods are called.
+/// This struct supports multi-decryptor committee mode via inherent methods
+/// (`create_setup_contribution`, `handle_partial_decryption_request`,
+/// `verify_and_aggregate_key_contributions`, `handle_recovery_request`).
 pub struct WillowV1Decryptor<Vahe: VaheBase> {
     pub vahe: Rc<Vahe>,
     pub prng: RefCell<Vahe::Rng>,
@@ -127,83 +122,18 @@ where
     }
 }
 
-// Shared helpers used by both single- and multi-decryptor trait implementations.
 impl<Vahe> WillowV1Decryptor<Vahe>
 where
-    Vahe: VaheBase + PartialDec,
+    Vahe: VaheBase + VerifiableKeyGen + KeyGenVerify + PartialDec + AheKeygen,
 {
-    /// Computes a partial decryption using the secret key share from the decryptor state.
-    fn compute_partial_decryption(
+    /// Creates a public key share, a ZK proof of knowledge of the secret key,
+    /// and encrypted shares of the randomness used for key generation.
+    ///
+    /// The randomness shares are encrypted for other committee members.
+    pub fn create_setup_contribution(
         &self,
-        partial_dec_ciphertext: &Vahe::PartialDecCiphertext,
-        decryptor_state: &DecryptorState<Vahe>,
-    ) -> Result<Vahe::PartialDecryption, StatusError> {
-        let sk_share = decryptor_state.sk_share.as_ref().ok_or_else(|| {
-            status::failed_precondition("decryptor_state does not contain a secret key share")
-        })?;
-        // `borrow_mut()` will not panic here because `self.prng` is not
-        // borrowed anywhere else in this call.
-        self.vahe.partial_decrypt(partial_dec_ciphertext, sk_share, &mut self.prng.borrow_mut())
-    }
-}
-
-/// Implementation of the `SecureAggregationDecryptor` trait for the generic
-/// KAHE/AHE decryptor, using WillowCommon as the common types (e.g. protocol
-/// messages are directly the AHE public key and ciphertexts).
-///
-impl<Vahe> SecureAggregationDecryptor for WillowV1Decryptor<Vahe>
-where
-    Vahe: VaheBase + EncryptVerify + PartialDec + AheKeygen,
-{
-    type DecryptorState = DecryptorState<Vahe>;
-    type Kahe = ShellKahe;
-
-    /// Creates a public key share to be sent to the Server, updating the
-    /// decryptor state.
-    fn create_public_key_share(
-        &self,
-        decryptor_state: &mut Self::DecryptorState,
-    ) -> Result<DecryptorPublicKeyShare<Vahe>, status::StatusError> {
-        let (sk_share, pk_share, _) = self.vahe.key_gen(&mut self.prng.borrow_mut())?;
-        decryptor_state.sk_share = Some(sk_share);
-        Ok(pk_share)
-    }
-
-    /// Handles a partial decryption request received from the Server. Returns a
-    /// partial decryption to the Server.
-    fn handle_partial_decryption_request(
-        &self,
-        partial_decryption_request: PartialDecryptionRequest<Vahe>,
-        decryptor_state: &mut Self::DecryptorState,
-    ) -> Result<PartialDecryptionResponse<ShellKahe, Vahe>, status::StatusError> {
-        if let Some(config) = &partial_decryption_request.aggregation_config {
-            if decryptor_state.kahe.is_none() {
-                use shell_parameters::create_shell_configs;
-                let (kahe_config, _) = create_shell_configs(config)?;
-                decryptor_state.kahe = Some(Rc::new(ShellKahe::new(kahe_config, &config.key_id)?));
-                decryptor_state.aggregation_config = Some(config.clone());
-            }
-        }
-        let pd = self.compute_partial_decryption(
-            &partial_decryption_request.partial_dec_ciphertext,
-            decryptor_state,
-        )?;
-        Ok(PartialDecryptionResponse { partial_decryption: pd, dp_ciphertext_contribution: None })
-    }
-}
-
-// --- Multi-decryptor trait implementations ---
-
-impl<Vahe> SecureAggregationBaseMultiDecryptor for WillowV1Decryptor<Vahe>
-where
-    Vahe: VaheBase + VerifiableKeyGen + PartialDec + AheKeygen,
-{
-    type DecryptorState = DecryptorState<Vahe>;
-
-    fn create_setup_contribution(
-        &self,
-        decryptor_state: &mut Self::DecryptorState,
-    ) -> Result<SetupContribution<Self::Vahe>, StatusError> {
+        decryptor_state: &mut DecryptorState<Vahe>,
+    ) -> Result<SetupContribution<Vahe>, StatusError> {
         let (sk_share, pk_share, key_gen_proof) =
             self.vahe.verifiable_key_gen(&mut self.prng.borrow_mut())?;
 
@@ -219,28 +149,20 @@ where
         })
     }
 
-    fn handle_partial_decryption_request<Kahe: KaheBase>(
+    /// Verifies the ZK proofs of knowledge of the secret key for all public key
+    /// shares, and returns the aggregated public key. Calling code should sign
+    /// the aggregated public key for the aggregation.
+    ///
+    /// Note: This method fails if any single contribution has an invalid proof,
+    /// aborting the entire key generation. This is acceptable because the
+    /// protocol does not guarantee output delivery against malicious decryptors
+    /// or a malicious coordinator — a malicious participant could equally cause
+    /// failure by refusing to provide partial decryptions and secret-sharing an
+    /// invalid state in the setup contribution.
+    pub fn verify_and_aggregate_key_contributions(
         &self,
-        partial_decryption_request: PartialDecryptionRequest<<Self as HasVahe>::Vahe>,
-        _kahe: Option<&Kahe>,
-        decryptor_state: &mut Self::DecryptorState,
-    ) -> Result<PartialDecryptionResponse<Kahe, <Self as HasVahe>::Vahe>, StatusError> {
-        let pd = self.compute_partial_decryption(
-            &partial_decryption_request.partial_dec_ciphertext,
-            decryptor_state,
-        )?;
-        Ok(PartialDecryptionResponse { partial_decryption: pd, dp_ciphertext_contribution: None })
-    }
-}
-
-impl<Vahe> SecureAggregationReputableDecryptor for WillowV1Decryptor<Vahe>
-where
-    Vahe: VaheBase + VerifiableKeyGen + KeyGenVerify + PartialDec + AheKeygen,
-{
-    fn verify_and_aggregate_key_contributions(
-        &self,
-        request: VerifyKeyContributionsRequest<<Self as HasVahe>::Vahe>,
-    ) -> Result<DecryptorPublicKey<<Self as HasVahe>::Vahe>, StatusError> {
+        request: VerifyKeyContributionsRequest<Vahe>,
+    ) -> Result<DecryptorPublicKey<Vahe>, StatusError> {
         if request.key_contributions.is_empty() {
             return Err(status::invalid_argument("key_contributions list is empty"));
         }
@@ -261,16 +183,44 @@ where
 
         self.vahe.aggregate_public_key_shares(public_key_shares.into_iter())
     }
-}
 
-impl<Vahe> SecureAggregationNonReputableMultiDecryptor for WillowV1Decryptor<Vahe>
-where
-    Vahe: VaheBase + VerifiableKeyGen + PartialDec + AheKeygen,
-{
-    fn handle_recovery_request(
+    /// Handles a partial decryption request received from the Server. Returns a
+    /// partial decryption to the Server.
+    pub fn handle_partial_decryption_request<Kahe: KaheBase>(
+        &self,
+        partial_decryption_request: PartialDecryptionRequest<Vahe>,
+        _kahe: Option<&Kahe>,
+        decryptor_state: &mut DecryptorState<Vahe>,
+    ) -> Result<PartialDecryptionResponse<Kahe, Vahe>, StatusError> {
+        if let Some(config) = &partial_decryption_request.aggregation_config {
+            if decryptor_state.kahe.is_none() {
+                use shell_parameters::create_shell_configs;
+                let (kahe_config, _) = create_shell_configs(config)?;
+                decryptor_state.kahe = Some(Rc::new(ShellKahe::new(kahe_config, &config.key_id)?));
+                decryptor_state.aggregation_config = Some(config.clone());
+            }
+        }
+        let sk_share = decryptor_state.sk_share.as_ref().ok_or_else(|| {
+            status::failed_precondition("decryptor_state does not contain a secret key share")
+        })?;
+        // `borrow_mut()` will not panic here because `self.prng` is not
+        // borrowed anywhere else in this call.
+        let pd = self.vahe.partial_decrypt(
+            &partial_decryption_request.partial_dec_ciphertext,
+            sk_share,
+            &mut self.prng.borrow_mut(),
+        )?;
+        Ok(PartialDecryptionResponse { partial_decryption: pd, dp_ciphertext_contribution: None })
+    }
+
+    /// Handles a request to decrypt shares of dropped decryptors.
+    ///
+    /// The decryptor should verify they are not being asked to decrypt more than
+    /// the allowed threshold of shares.
+    pub fn handle_recovery_request(
         &self,
         _recovery_request: RecoveryRequest,
-        _decryptor_state: &mut Self::DecryptorState,
+        _decryptor_state: &mut DecryptorState<Vahe>,
     ) -> Result<RecoveryResponse, StatusError> {
         // Secret sharing / dropout recovery is not yet implemented.
         Err(status::unimplemented("Dropout recovery is not yet implemented"))
@@ -281,7 +231,6 @@ where
 mod tests {
     use crate::{DecryptorState, WillowV1Decryptor};
     use ahe_traits::AheBase;
-    use decryptor_traits::SecureAggregationDecryptor;
     use googletest::{gtest, verify_true};
     use proto_serialization_traits::{FromProto, ToProto};
     use shell_parameters::create_shell_ahe_config;
@@ -303,7 +252,7 @@ mod tests {
         verify_true!(decryptor_state_roundtrip.sk_share.is_none())?;
 
         // Check populated state serialization.
-        decryptor.create_public_key_share(&mut decryptor_state)?;
+        decryptor.create_setup_contribution(&mut decryptor_state)?;
         verify_true!(decryptor_state.sk_share.is_some())?;
         let decryptor_state_proto = decryptor_state.to_proto(&decryptor)?;
         let decryptor_state_roundtrip =
@@ -328,7 +277,7 @@ mod tests {
         let kahe = Rc::new(ShellKahe::new(kahe_config, &config.key_id)?);
 
         let mut decryptor_state = DecryptorState::default();
-        decryptor.create_public_key_share(&mut decryptor_state)?;
+        decryptor.create_setup_contribution(&mut decryptor_state)?;
         decryptor_state.kahe = Some(kahe);
         decryptor_state.aggregation_config = Some(config);
 
@@ -350,8 +299,6 @@ mod tests {
 
     #[gtest]
     fn create_setup_contribution_generates_key_share_and_proof() -> googletest::Result<()> {
-        use decryptor_traits::SecureAggregationBaseMultiDecryptor;
-
         let vahe = Rc::new(ShellVahe::new(create_shell_ahe_config(1)?, CONTEXT_STRING)?);
         let decryptor = WillowV1Decryptor::new_with_randomly_generated_seed(vahe)?;
         let mut state = DecryptorState::default();
@@ -368,9 +315,6 @@ mod tests {
 
     #[gtest]
     fn verify_and_aggregate_key_contributions_succeeds() -> googletest::Result<()> {
-        use decryptor_traits::{
-            SecureAggregationBaseMultiDecryptor, SecureAggregationReputableDecryptor,
-        };
         use messages::VerifyKeyContributionsRequest;
 
         let vahe = Rc::new(ShellVahe::new(create_shell_ahe_config(1)?, CONTEXT_STRING)?);
@@ -393,9 +337,6 @@ mod tests {
 
     #[gtest]
     fn verify_key_contributions_fails_with_missing_proof() -> googletest::Result<()> {
-        use decryptor_traits::{
-            SecureAggregationBaseMultiDecryptor, SecureAggregationReputableDecryptor,
-        };
         use messages::VerifyKeyContributionsRequest;
 
         let vahe = Rc::new(ShellVahe::new(create_shell_ahe_config(1)?, CONTEXT_STRING)?);
@@ -416,7 +357,6 @@ mod tests {
 
     #[gtest]
     fn verify_key_contributions_fails_with_empty_list() -> googletest::Result<()> {
-        use decryptor_traits::SecureAggregationReputableDecryptor;
         use messages::VerifyKeyContributionsRequest;
 
         let vahe = Rc::new(ShellVahe::new(create_shell_ahe_config(1)?, CONTEXT_STRING)?);
@@ -431,7 +371,6 @@ mod tests {
 
     #[gtest]
     fn multi_decryptor_partial_decryption_works() -> googletest::Result<()> {
-        use decryptor_traits::SecureAggregationBaseMultiDecryptor;
         use messages::PartialDecryptionResponse;
         use prng_traits::SecurePrng;
         use shell_kahe::ShellKahe;
@@ -462,9 +401,7 @@ mod tests {
             messages::PartialDecryptionRequest { partial_dec_ciphertext, aggregation_config: None };
 
         let pd_response: PartialDecryptionResponse<ShellKahe, ShellVahe> =
-            SecureAggregationBaseMultiDecryptor::handle_partial_decryption_request(
-                &decryptor, pd_request, None, &mut state,
-            )?;
+            decryptor.handle_partial_decryption_request(pd_request, None, &mut state)?;
 
         // Verify we can recover from the partial decryption.
         let recover_ciphertext = vahe.get_recover_ciphertext(&ciphertext)?;
