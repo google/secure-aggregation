@@ -49,13 +49,17 @@ where
     Vahe: VaheBase + VerifiableKeyGen + KeyGenVerify + PartialDec + AheKeygen,
 {
     /// Generates the public key directly for single-decryptor mode.
+    ///
+    /// This method bypasses the committee setup contribution to avoid computing an expensive
+    /// zero-knowledge proof that is not verified by anyone in the single-decryptor setting.
     pub fn create_public_key(
         &self,
         decryptor_state: &mut DecryptorState<Vahe>,
     ) -> Result<DecryptorPublicKey<Vahe>, StatusError> {
-        let setup_contribution = self.decryptor.create_setup_contribution(decryptor_state)?;
-        let public_key_share = setup_contribution.key_contribution.public_key_share;
-        self.decryptor.vahe().aggregate_public_key_shares(std::iter::once(&public_key_share))
+        let (sk_share, pk_share, _) =
+            self.decryptor.vahe().key_gen(&mut self.decryptor.prng.borrow_mut())?;
+        decryptor_state.sk_share = Some(sk_share);
+        self.decryptor.vahe().aggregate_public_key_shares(std::iter::once(&pk_share))
     }
 
     /// Handles a partial decryption request by decrypting the accumulated partial dec ciphertexts.
