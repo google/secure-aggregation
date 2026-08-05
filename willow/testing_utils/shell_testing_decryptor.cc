@@ -62,6 +62,49 @@ ShellTestingDecryptor::GeneratePublicKey() {
   return public_key;
 }
 
+absl::StatusOr<willow::SetupContribution>
+ShellTestingDecryptor::CreateSetupContribution() {
+  rust::Vec<uint8_t> out;
+  SECAGG_RETURN_IF_FFI_ERROR(decryptor_->create_setup_contribution(&out));
+
+  willow::SetupContribution contribution;
+  if (!contribution.ParseFromArray(out.data(), out.size())) {
+    return absl::InternalError("Failed to parse SetupContribution");
+  }
+  return contribution;
+}
+
+absl::StatusOr<willow::ShellAhePublicKey>
+ShellTestingDecryptor::VerifyAndAggregateKeyContributions(
+    const willow::VerifyKeyContributionsRequest& request) {
+  std::string req_proto = request.SerializeAsString();
+  rust::Vec<uint8_t> out;
+  SECAGG_RETURN_IF_FFI_ERROR(decryptor_->verify_and_aggregate_key_contributions(
+      ToRustSlice(req_proto), &out));
+
+  willow::ShellAhePublicKey public_key;
+  if (!public_key.ParseFromArray(out.data(), out.size())) {
+    return absl::InternalError(
+        "Failed to parse ShellAhePublicKey from VerifyKeyContributionsRequest");
+  }
+  return public_key;
+}
+
+absl::StatusOr<willow::PartialDecryptionResponse>
+ShellTestingDecryptor::HandlePartialDecryptionRequest(
+    const willow::PartialDecryptionRequest& request) {
+  std::string req_proto = request.SerializeAsString();
+  SECAGG_ASSIGN_OR_RETURN(
+      std::string resp_proto,
+      GenerateSerializedPartialDecryptionResponse(req_proto));
+
+  willow::PartialDecryptionResponse response;
+  if (!response.ParseFromString(resp_proto)) {
+    return absl::InternalError("Failed to parse PartialDecryptionResponse");
+  }
+  return response;
+}
+
 absl::StatusOr<willow::EncodedData> ShellTestingDecryptor::Decrypt(
     const willow::ClientMessage& message) {
   std::string contribution_proto = message.SerializeAsString();

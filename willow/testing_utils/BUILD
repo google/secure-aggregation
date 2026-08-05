@@ -98,6 +98,7 @@ rust_cxx_bridge(
     deps = [
         ":shell_testing_decryptor",
         "//ffi_utils:status_cxx",
+        "//willow/crypto:vahe_traits",
     ],
 )
 
@@ -114,15 +115,14 @@ rust_library(
         "//willow/api:proto_serialization_traits",
         "//willow/crypto:ahe_traits",
         "//willow/crypto:kahe_traits",
-        "//willow/crypto:prng_traits",
         "//willow/crypto:shell_ahe",
         "//willow/crypto:shell_kahe",
         "//willow/crypto:shell_parameters",
         "//willow/crypto:shell_vahe",
-        "//willow/crypto:single_thread_hkdf",
         "//willow/crypto:vahe_traits",
         "//willow/proto/willow:aggregation_config_rust_proto",
         "//willow/proto/willow:messages_rust_proto",
+        "//willow/protocol:decryptor",
         "//willow/protocol:messages",
     ],
 )

@@ -43,9 +43,22 @@ class ShellTestingDecryptor {
   // Generates a new AHE public key, and stores the corresponding secret key.
   absl::StatusOr<willow::ShellAhePublicKey> GeneratePublicKey();
 
-  // Decrypts a client message using the stored AHE secret key, by recovering
-  // the KAHE key from the AHE ciphertext and then decrypting the KAHE
-  // ciphertext. Does not verify the client proof contained in the message.
+  // Generates a setup contribution containing key share and key gen proof.
+  absl::StatusOr<willow::SetupContribution> CreateSetupContribution();
+
+  // Verifies key generation proofs and aggregates key contributions into public
+  // key.
+  absl::StatusOr<willow::ShellAhePublicKey> VerifyAndAggregateKeyContributions(
+      const willow::VerifyKeyContributionsRequest& request);
+
+  // Handles a partial decryption request (e.g. from Coordinator).
+  absl::StatusOr<willow::PartialDecryptionResponse>
+  HandlePartialDecryptionRequest(
+      const willow::PartialDecryptionRequest& request);
+
+  // Convenience testing helper: decrypts a raw ClientMessage end-to-end by
+  // combining Decryptor partial decryption with Accumulator KAHE key recovery
+  // and payload decryption. Does not verify the client proof in the message.
   absl::StatusOr<willow::EncodedData> Decrypt(
       const willow::ClientMessage& message);
 

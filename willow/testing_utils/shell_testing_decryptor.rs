@@ -16,12 +16,16 @@
 
 use aggregation_config::AggregationConfig;
 use aggregation_config_rust_proto::AggregationConfigProto;
-use ahe_traits::{AheBase, AheKeygen, PartialDec};
+use ahe_traits::AheBase;
+use decryptor::{Decryptor, DecryptorState};
 use kahe_traits::{KaheBase, KaheDecrypt, TrySecretKeyFrom};
-use messages::{ClientMessage, PartialDecryptionRequest, PartialDecryptionResponse};
+use messages::{
+    ClientMessage, PartialDecryptionRequest, PartialDecryptionResponse,
+    VerifyKeyContributionsRequest,
+};
 use messages_rust_proto::ClientMessage as ClientMessageProto;
 use messages_rust_proto::PartialDecryptionRequest as PartialDecryptionRequestProto;
-use prng_traits::SecurePrng;
+use messages_rust_proto::VerifyKeyContributionsRequest as VerifyKeyContributionsRequestProto;
 use proto_serialization_traits::{FromProto, ToProto};
 use protobuf::prelude::*;
 use shell_ahe::Ciphertext as VaheCiphertext;
@@ -29,26 +33,27 @@ use shell_kahe::Ciphertext as KaheCiphertext;
 use shell_kahe::ShellKahe;
 use shell_parameters::create_shell_configs;
 use shell_vahe::ShellVahe;
-use single_thread_hkdf::SingleThreadHkdfPrng;
 use status::StatusError;
-use std::cell::RefCell;
-use vahe_traits::Recover;
-use vahe_traits::{HasVahe, VaheBase};
+use std::rc::Rc;
+use vahe_traits::{HasVahe, Recover, VaheBase};
 
-/// Basic implementation of a single decryptor that uses Shell operations directly. Useful for
-/// testing Shell clients, by checking that encrypted messages can be decrypted properly. Comes with
-/// a C++ interface.
+/// Basic implementation of a decryptor that uses Shell operations directly. Useful for
+/// testing Shell clients and accumulators, by checking that encrypted messages can be decrypted properly.
+///
+/// Each function is implemented in 3 layers:
+///  - Layer 1: Strongly-typed public Rust API (`pub fn`) operating on native protocol objects.
+///  - Layer 2: Safe serialization helpers (`fn *_serialized`) handling Protobuf bytes.
+///  - Layer 3: Unsafe CXX FFI bridge (`unsafe fn *_ffi`) interfacing with C++.
 pub struct ShellTestingDecryptor {
-    kahe: ShellKahe,
-    vahe: ShellVahe,
-    prng: RefCell<SingleThreadHkdfPrng>,
-    secret_key: Option<<ShellVahe as AheBase>::SecretKeyShare>,
+    kahe: Rc<ShellKahe>,
+    decryptor: Decryptor<ShellVahe>,
+    state: DecryptorState<ShellVahe>,
 }
 
 impl HasVahe for ShellTestingDecryptor {
     type Vahe = ShellVahe;
     fn vahe(&self) -> &Self::Vahe {
-        &self.vahe
+        self.decryptor.vahe()
     }
 }
 
@@ -60,62 +65,63 @@ impl kahe_traits::HasKahe for ShellTestingDecryptor {
 }
 
 impl ShellTestingDecryptor {
-    /// Creates a new ShellTestingDecryptor, using the given context string to seed KAHE and AHE
-    /// public parameters.
+    /// Creates a new `ShellTestingDecryptor`, using the given context string to seed KAHE and AHE
+    /// public parameters and initializing the underlying `Decryptor` and `DecryptorState`.
     pub fn new(
         aggregation_config: &AggregationConfig,
         context_bytes: &[u8],
     ) -> Result<ShellTestingDecryptor, StatusError> {
         let (kahe_config, ahe_config) = create_shell_configs(aggregation_config)?;
-        let kahe = ShellKahe::new(kahe_config, context_bytes)?;
-        let vahe = ShellVahe::new(ahe_config, context_bytes)?;
-        let seed = SingleThreadHkdfPrng::generate_seed()?;
-        let prng = SingleThreadHkdfPrng::create(&seed)?;
-        Ok(ShellTestingDecryptor { kahe, vahe, prng: RefCell::new(prng), secret_key: None })
+        let kahe = Rc::new(ShellKahe::new(kahe_config, context_bytes)?);
+        let vahe = Rc::new(ShellVahe::new(ahe_config, context_bytes)?);
+        let decryptor = Decryptor::new_with_randomly_generated_seed(vahe)?;
+        let state = DecryptorState {
+            sk_share: None,
+            kahe: None,
+            aggregation_config: Some(aggregation_config.clone()),
+        };
+        Ok(ShellTestingDecryptor { kahe, decryptor, state })
     }
 
-    /// Generates a new AHE public key, and stores the corresponding secret key.
+    /// Generates a new AHE public key, and stores the corresponding secret key share in `DecryptorState`.
     pub fn generate_public_key(
         &mut self,
     ) -> Result<<ShellVahe as AheBase>::PublicKey, StatusError> {
-        let (sk_share, pk_share, _) = self.vahe.key_gen(&mut self.prng.borrow_mut())?;
-        self.secret_key = Some(sk_share);
-        let public_key = self.vahe.aggregate_public_key_shares(&[pk_share])?;
-        Ok(public_key)
+        let setup = self.decryptor.create_setup_contribution(&mut self.state)?;
+        let pk_share = setup.key_contribution.public_key_share;
+        self.vahe().aggregate_public_key_shares(std::iter::once(&pk_share))
     }
 
-    /// Decrypts a client message using the stored AHE secret key, by recovering the KAHE key from
-    /// the AHE ciphertext and then decrypting the KAHE ciphertext. Does not verify the client proof
-    /// contained in the message.
+    /// Convenience testing helper: decrypts a raw `ClientMessage` end-to-end by combining
+    /// `Decryptor` partial decryption with Accumulator KAHE key recovery and payload decryption.
+    /// Does not verify ZK client proof contained in the message.
     pub fn decrypt(
-        &self,
+        &mut self,
         client_message: &ClientMessage<ShellKahe, ShellVahe>,
     ) -> Result<<ShellKahe as KaheBase>::Plaintext, StatusError> {
+        // Operations directly on the underlying KAHE and AHE primitives to avoid the overhead of
+        // instantiating a full accumulator.
         let partial_dec_ciphertext =
-            self.vahe.get_partial_dec_ciphertext(&client_message.ahe_ciphertext)?;
+            self.vahe().get_partial_dec_ciphertext(&client_message.ahe_ciphertext)?;
         let rest_of_ciphertext =
-            self.vahe.get_recover_ciphertext(&client_message.ahe_ciphertext)?;
-        match &self.secret_key {
-            None => Err(status::invalid_argument("No secret key available")),
-            Some(sk_share) => {
-                let partial_decryption = self.vahe.partial_decrypt(
-                    &partial_dec_ciphertext,
-                    sk_share,
-                    &mut self.prng.borrow_mut(),
-                )?;
-                let decrypted_kahe_key =
-                    self.vahe.recover(&partial_decryption, &rest_of_ciphertext, None)?;
-                let decrypted_kahe_key = self.kahe.try_secret_key_from(decrypted_kahe_key)?;
-                let decrypted_plaintext =
-                    self.kahe.decrypt(&client_message.kahe_ciphertext, &decrypted_kahe_key)?;
-                Ok(decrypted_plaintext)
-            }
-        }
+            self.vahe().get_recover_ciphertext(&client_message.ahe_ciphertext)?;
+        let request = PartialDecryptionRequest { partial_dec_ciphertext, aggregation_config: None };
+        let response = self.decryptor.handle_partial_decryption_request::<ShellKahe>(
+            request,
+            None,
+            &mut self.state,
+        )?;
+        let decrypted_kahe_key =
+            self.vahe().recover(&response.partial_decryption, &rest_of_ciphertext, None)?;
+        let decrypted_kahe_key = self.kahe.try_secret_key_from(decrypted_kahe_key)?;
+        let decrypted_plaintext =
+            self.kahe.decrypt(&client_message.kahe_ciphertext, &decrypted_kahe_key)?;
+        Ok(decrypted_plaintext)
     }
 
     fn generate_public_key_serialized(&mut self) -> Result<Vec<u8>, StatusError> {
         let pk = self.generate_public_key()?;
-        pk.to_proto(&self.vahe)
+        pk.to_proto(self.vahe())
             .map_err(|e| status::internal(&format!("ToProto error: {}", e)))?
             .serialize()
             .map_err(|e| status::internal(&format!("Serialize error: {}", e)))
@@ -127,16 +133,16 @@ impl ShellTestingDecryptor {
     }
 
     fn decrypt_serialized(
-        &self,
+        &mut self,
         contribution: &[u8],
     ) -> Result<Vec<ffi::EncodedDataEntry>, StatusError> {
         let client_message_proto = ClientMessageProto::parse(contribution)
             .map_err(|e| status::internal(&format!("Failed to parse ClientMessageProto: {}", e)))?;
 
         let kahe_ciphertext =
-            KaheCiphertext::from_proto(client_message_proto.kahe_ciphertext(), &self.kahe)?;
+            KaheCiphertext::from_proto(client_message_proto.kahe_ciphertext(), self.kahe.as_ref())?;
         let ahe_ciphertext =
-            VaheCiphertext::from_proto(client_message_proto.ahe_ciphertext(), &self.vahe)?;
+            VaheCiphertext::from_proto(client_message_proto.ahe_ciphertext(), self.vahe())?;
 
         let proof =
             <ShellVahe as VaheBase>::EncryptionProof::from_proto(client_message_proto.proof(), ())?;
@@ -161,49 +167,92 @@ impl ShellTestingDecryptor {
         self.decrypt_serialized(contribution).map(|result| unsafe { *out = result }).into()
     }
 
-    fn generate_partial_decryption_response(
+    /// Creates a committee setup contribution containing a key share and key gen proof.
+    pub fn create_setup_contribution(
         &mut self,
-        request: &PartialDecryptionRequest<ShellVahe>,
-    ) -> Result<PartialDecryptionResponse<ShellKahe, ShellVahe>, StatusError> {
-        match &self.secret_key {
-            None => Err(status::invalid_argument("No secret key available")),
-            Some(sk_share) => {
-                let partial_decryption = self.vahe.partial_decrypt(
-                    &request.partial_dec_ciphertext,
-                    sk_share,
-                    &mut self.prng.borrow_mut(),
-                )?;
-                Ok(PartialDecryptionResponse {
-                    partial_decryption,
-                    dp_ciphertext_contribution: None,
-                })
-            }
-        }
+    ) -> Result<messages::SetupContribution<ShellVahe>, StatusError> {
+        self.decryptor.create_setup_contribution(&mut self.state)
     }
 
-    fn generate_partial_decryption_response_serialized(
+    fn create_setup_contribution_serialized(&mut self) -> Result<Vec<u8>, StatusError> {
+        let setup_contribution = self.create_setup_contribution()?;
+        let proto = setup_contribution.to_proto(self)?;
+        proto.serialize().map_err(|e| status::internal(&format!("Serialize error: {}", e)))
+    }
+
+    /// SAFETY: `out` must be valid for writes.
+    unsafe fn create_setup_contribution_ffi(&mut self, out: *mut Vec<u8>) -> ffi::FfiStatus {
+        self.create_setup_contribution_serialized().map(|res| unsafe { *out = res }).into()
+    }
+
+    /// Verifies key generation proofs and aggregates key contributions into a public key.
+    pub fn verify_and_aggregate_key_contributions(
         &mut self,
-        request: &[u8],
+        request: VerifyKeyContributionsRequest<ShellVahe>,
+    ) -> Result<<ShellVahe as AheBase>::PublicKey, StatusError> {
+        self.decryptor.verify_and_aggregate_key_contributions(request)
+    }
+
+    fn verify_and_aggregate_key_contributions_serialized(
+        &mut self,
+        request_bytes: &[u8],
     ) -> Result<Vec<u8>, StatusError> {
-        let request_proto = PartialDecryptionRequestProto::parse(request).map_err(|e| {
+        let request_proto =
+            VerifyKeyContributionsRequestProto::parse(request_bytes).map_err(|e| {
+                status::internal(&format!("Failed to parse VerifyKeyContributionsRequest: {}", e))
+            })?;
+        let request = VerifyKeyContributionsRequest::from_proto(request_proto, self)?;
+        let public_key = self.verify_and_aggregate_key_contributions(request)?;
+        let proto = public_key.to_proto(self.vahe())?;
+        proto.serialize().map_err(|e| status::internal(&format!("Serialize error: {}", e)))
+    }
+
+    /// SAFETY: `out` must be valid for writes.
+    unsafe fn verify_and_aggregate_key_contributions_ffi(
+        &mut self,
+        request_bytes: &[u8],
+        out: *mut Vec<u8>,
+    ) -> ffi::FfiStatus {
+        self.verify_and_aggregate_key_contributions_serialized(request_bytes)
+            .map(|res| unsafe { *out = res })
+            .into()
+    }
+
+    /// Handles a partial decryption request from a Coordinator, returning a partial decryption response.
+    pub fn handle_partial_decryption_request(
+        &mut self,
+        request: PartialDecryptionRequest<ShellVahe>,
+    ) -> Result<PartialDecryptionResponse<ShellKahe, ShellVahe>, StatusError> {
+        self.decryptor.handle_partial_decryption_request::<ShellKahe>(
+            request,
+            None,
+            &mut self.state,
+        )
+    }
+
+    fn handle_partial_decryption_request_serialized(
+        &mut self,
+        request_bytes: &[u8],
+    ) -> Result<Vec<u8>, StatusError> {
+        let request_proto = PartialDecryptionRequestProto::parse(request_bytes).map_err(|e| {
             status::internal(&format!("Failed to parse PartialDecryptionRequestProto: {}", e))
         })?;
         let request = PartialDecryptionRequest::from_proto(request_proto, self)?;
-        let response = self.generate_partial_decryption_response(&request)?;
+        let response = self.handle_partial_decryption_request(request)?;
         response
-            .to_proto((self, Some(&self.kahe)))
+            .to_proto((self, Some(self.kahe.as_ref())))
             .map_err(|e| status::internal(&format!("ToProto error: {}", e)))?
             .serialize()
             .map_err(|e| status::internal(&format!("Serialize error: {}", e)))
     }
 
     /// SAFETY: `out` must be valid for writes.
-    unsafe fn generate_partial_decryption_response_ffi(
+    unsafe fn handle_partial_decryption_request_ffi(
         &mut self,
-        request: &[u8],
+        request_bytes: &[u8],
         out: *mut Vec<u8>,
     ) -> ffi::FfiStatus {
-        self.generate_partial_decryption_response_serialized(request)
+        self.handle_partial_decryption_request_serialized(request_bytes)
             .map(|response| unsafe { *out = response })
             .into()
     }
@@ -242,6 +291,19 @@ pub mod ffi {
             out: *mut Vec<u8>,
         ) -> FfiStatus;
 
+        #[rust_name = "create_setup_contribution_ffi"]
+        unsafe fn create_setup_contribution(
+            self: &mut ShellTestingDecryptor,
+            out: *mut Vec<u8>,
+        ) -> FfiStatus;
+
+        #[rust_name = "verify_and_aggregate_key_contributions_ffi"]
+        unsafe fn verify_and_aggregate_key_contributions(
+            self: &mut ShellTestingDecryptor,
+            request: &[u8],
+            out: *mut Vec<u8>,
+        ) -> FfiStatus;
+
         #[rust_name = "decrypt_ffi"]
         unsafe fn decrypt(
             self: &mut ShellTestingDecryptor,
@@ -249,7 +311,7 @@ pub mod ffi {
             out: *mut Vec<EncodedDataEntry>,
         ) -> FfiStatus;
 
-        #[rust_name = "generate_partial_decryption_response_ffi"]
+        #[rust_name = "handle_partial_decryption_request_ffi"]
         unsafe fn generate_partial_decryption_response(
             self: &mut ShellTestingDecryptor,
             request: &[u8],
