@@ -36,7 +36,7 @@ rust_library(
     srcs = ["status.rs"],
     deps = [
         ":status_cc",
-        ":status_cxx",  # fixdeps: keep
+        ":status_cxx",
         "@cxx.rs//:cxx",
     ],
 )
@@ -67,7 +67,6 @@ cc_library(
         ":status_cxx/include",
         "@abseil-cpp//absl/status",
         "@abseil-cpp//absl/strings:string_view",
-        "@cxx.rs//:cxx",  # fixdeps: keep
         "@cxx.rs//:core",
     ],
 )

@@ -33,7 +33,6 @@
 #include "shell_wrapper/shell_types.h"
 #include "shell_wrapper/shell_types.rs.h"
 #include "shell_wrapper/single_thread_hkdf.h"
-#include "shell_wrapper/single_thread_hkdf.rs.h"
 
 namespace secure_aggregation {
 namespace {

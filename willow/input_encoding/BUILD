@@ -71,7 +71,6 @@ cc_test(
     srcs = ["codec_test.cc"],
     deps = [
         ":codec",
-        ":time_utils",
         "@protobuf//:duration_cc_proto",
         "@googletest//:gtest_main",
         "@abseil-cpp//absl/container:flat_hash_map",

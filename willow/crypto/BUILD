@@ -80,7 +80,7 @@ rust_library(
         "//ffi_utils:status",
         "//shell_wrapper:kahe",
         "//shell_wrapper:shell_serialization",
-        "//shell_wrapper:shell_serialization_cxx",  # fixdeps: keep
+        "//shell_wrapper:shell_serialization_cxx",
         "//shell_wrapper:shell_types",
         "//willow/api:proto_serialization_traits",
         "//willow/proto/shell:shell_ciphertexts_rust_proto",
@@ -112,9 +112,9 @@ rust_library(
         "@protobuf//rust:protobuf",
         "//ffi_utils:status",
         "//shell_wrapper:ahe",
-        "//shell_wrapper:ahe_cxx",  # fixdeps: keep
+        "//shell_wrapper:ahe_cxx",
         "//shell_wrapper:shell_serialization",
-        "//shell_wrapper:shell_serialization_cxx",  # fixdeps: keep
+        "//shell_wrapper:shell_serialization_cxx",
         "//shell_wrapper:shell_types",
         "//willow/api:proto_serialization_traits",
         "//willow/proto/shell:shell_ciphertexts_rust_proto",
@@ -154,7 +154,7 @@ rust_library(
         "//shell_wrapper:kahe",
         "//shell_wrapper:kahe_cxx",
         "//shell_wrapper:shell_serialization",
-        "//shell_wrapper:shell_serialization_cxx",  # fixdeps: keep
+        "//shell_wrapper:shell_serialization_cxx",
         "//shell_wrapper:shell_types",
         "//willow/api:proto_serialization_traits",
         "//willow/proto/zk:proofs_rust_proto",
@@ -288,7 +288,7 @@ rust_library(
         ":prng_traits",
         "//ffi_utils:status",
         "//shell_wrapper:single_thread_hkdf",
-        "//shell_wrapper:single_thread_hkdf_cxx",  # fixdeps: keep
+        "//shell_wrapper:single_thread_hkdf_cxx",
     ],
 )
 
@@ -398,7 +398,7 @@ rust_test(
         "@crate_index//:sha3",
         "//ffi_utils:status_matchers_rs",
         "//shell_wrapper:ahe",
-        "//shell_wrapper:ahe_cxx",  # fixdeps: keep
+        "//shell_wrapper:ahe_cxx",
         "//shell_wrapper:single_thread_hkdf",
         "//shell_wrapper:single_thread_hkdf_cxx",
         "//willow/testing_utils:shell_testing_parameters",

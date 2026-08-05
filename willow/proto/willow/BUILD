@@ -55,10 +55,6 @@ cc_proto_library(
 proto_library(
     name = "aggregation_config_proto",
     srcs = ["aggregation_config.proto"],
-    deps = [
-        "//willow/proto/shell:shell_ciphertexts_proto",
-        "//willow/proto/zk:proofs_proto",
-    ],
 )
 
 cc_proto_library(

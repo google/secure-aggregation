@@ -62,8 +62,7 @@ cc_library(
     srcs = ["server_accumulator.cc"],
     hdrs = ["server_accumulator.h"],
     deps = [
-        ":server_accumulator_cxx/include",  # fixdeps: keep
-        ":server_accumulator_rust",  # fixdeps: keep
+        ":server_accumulator_cxx",
         "@abseil-cpp//absl/memory",
         "@abseil-cpp//absl/status",
         "@abseil-cpp//absl/status:statusor",
@@ -82,7 +81,6 @@ cc_test(
     deps = [
         ":client_cc",
         ":server_accumulator",
-        ":server_accumulator_cxx",  # fixdeps: keep
         "@googletest//:gtest_main",
         "@abseil-cpp//absl/status",
         "@abseil-cpp//absl/status:statusor",
@@ -99,7 +97,7 @@ rust_cxx_bridge(
     name = "server_accumulator_cxx",
     src = "server_accumulator.rs",
     deps = [
-        ":server_accumulator",
+        ":server_accumulator_rust",
         "//ffi_utils:status_cxx",
     ],
 )
@@ -243,8 +241,6 @@ cc_library(
     hdrs = ["coordinator.h"],
     deps = [
         ":coordinator_cxx",
-        ":coordinator_cxx/include",  # fixdeps: keep
-        ":coordinator_rust",  # fixdeps: keep
         "@abseil-cpp//absl/status",
         "@abseil-cpp//absl/status:statusor",
         "@abseil-cpp//absl/types:span",
@@ -262,9 +258,7 @@ cc_test(
     srcs = ["coordinator_test.cc"],
     deps = [
         ":coordinator",
-        ":coordinator_cxx",  # fixdeps: keep
         "@googletest//:gtest_main",
-        "@abseil-cpp//absl/status",
         "@abseil-cpp//absl/status:statusor",
         "//ffi_utils:status_matchers",
         "//willow/proto/shell:shell_ciphertexts_cc_proto",
@@ -278,15 +272,9 @@ cc_test(
     srcs = ["api_e2e_test.cc"],
     deps = [
         ":client_cc",
-        ":client_cxx",  # fixdeps: keep
         ":coordinator",
-        ":coordinator_cxx",  # fixdeps: keep
         ":server_accumulator",
-        ":server_accumulator_cxx",  # fixdeps: keep
         "@googletest//:gtest_main",
-        "@abseil-cpp//absl/status",
-        "@abseil-cpp//absl/status:statusor",
-        "//ffi_utils:status_macros",
         "//ffi_utils:status_matchers",
         "//willow/input_encoding:codec",
         "//willow/proto/willow:aggregation_config_cc_proto",
