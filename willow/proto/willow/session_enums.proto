@@ -33,3 +33,11 @@ enum SessionStatus {
   FAILED = 4;
   CANCELLED = 5;
 }
+
+enum KeyStatus {
+  KEY_STATUS_UNSPECIFIED = 0;
+  KEY_STATUS_PENDING = 1;
+  KEY_STATUS_COMPLETED = 2;
+  KEY_STATUS_FAILED = 3;
+}
+
