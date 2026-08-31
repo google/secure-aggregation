@@ -31,6 +31,7 @@ message ProtocolMessage {
   google.protobuf.Any payload = 4;  // Protocol-specific message content.
   // Unique ID assigned to the message. Output only (client should not set).
   string message_id = 5;
+  google.protobuf.Timestamp timestamp = 6;
 }
 
 // Request to check for active protocols for the member's committee.
@@ -114,6 +115,8 @@ message GetProtocolMessagesRequest {
   // If unspecified, at most 50 messages will be returned.
   // The maximum value is 1000; values above 1000 will be coerced to 1000.
   int32 max_num_messages_to_return = 4;
+  // The timestamp of the last message received by the client.
+  google.protobuf.Timestamp since_timestamp = 5;
 }
 
 // Response containing messages for the member.
