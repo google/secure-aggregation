@@ -567,8 +567,8 @@ fn generate_range_product_for_verification_and_verify_z_bound(
 // it suffices to prove that there exists small degree n polynomials r,e and v such that
 // -ar+e+vp = c mod q where p = X^n + 1.
 //
-// We will prove this by first committing to r,e and v and selecting a random challenge rho in Z_q and
-// checking that -a(rho) *r(rho) + e(rho) + v(rho)*p(rho) + q*wrho = c mod P
+// We will prove this by first committing to r,e and v and selecting a random challenge rho in Z_q
+// and checking that -a(rho) *r(rho) + e(rho) + v(rho)*p(rho) + q*wrho = c mod P
 // for some integer wrho, with P the modulus of the ristretto group.
 // And then proving that r,e,v and wrho are small so there is no wrap around mod P.
 #[derive(Clone)]
@@ -680,10 +680,11 @@ impl<'a> ZeroKnowledgeProver<RlweRelationProofStatement<'a>, RlweRelationProofWi
         for j in 0..samples_required {
             let rho = rho_vec[j];
             // Evaluate the private polynomials at rho.
-            // Unlike the other polynomials we are evaluating (a*r) and (v*p) can exceed 2^128 (for large q) so we
-            // split the polynomials in this section into upper and lower parts to avoid overflow.
-            // We use base q as this will  be convenient in the following calculations and we don't
-            // mind the smaller part exceeding q so long as it doesn't overflow the 128bit type.
+            // Unlike the other polynomials we are evaluating (a*r) and (v*p) can exceed 2^128 (for
+            // large q) so we split the polynomials in this section into upper and lower
+            // parts to avoid overflow. We use base q as this will  be convenient in the
+            // following calculations and we don't mind the smaller part exceeding q so
+            // long as it doesn't overflow the 128bit type.
             //
             // We make the upper part signed so we can represent negative numbers.
             let mut arrho_upper = 0i128;
@@ -751,8 +752,9 @@ impl<'a> ZeroKnowledgeProver<RlweRelationProofStatement<'a>, RlweRelationProofWi
         // We can do similarly for v(rho)*p(rho) and e(rho) is just a private vector times the
         // powers of rho.
         // The concatenation of these public vectors we now write into the public_vec for the inner
-        // product proof. Followed by the public half of -q*wrho i.e. just the scalar -q (with the relevant tau powers).
-        // The expected result of the inner product is also computed here.
+        // product proof. Followed by the public half of -q*wrho i.e. just the scalar -q (with the
+        // relevant tau powers). The expected result of the inner product is also computed
+        // here.
         let (mut public_vec, mut result) = create_public_vec(
             &rho_vec,
             &arho_vec,
@@ -930,7 +932,8 @@ impl<'a> ZeroKnowledgeVerifier<RlweRelationProofStatement<'a>, RlweRelationProof
         let (arho_vec, crho_vec, prho_vec) =
             evaluate_public_polynomials(&rho_vec, &a, &c, n, q, samples_required);
 
-        // We will use powers of tau to linearly combine the require polynomial evaluations into one vector.
+        // We will use powers of tau to linearly combine the require polynomial evaluations into one
+        // vector.
         let mut buf = [0u8; 16];
         transcript.challenge_bytes(b"tau", &mut buf);
         let tau = Scalar::from(u128::from_le_bytes(buf));

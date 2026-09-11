@@ -184,9 +184,9 @@ impl<Vahe: VaheBase> Debug for PartialDecryptionRequest<Vahe> {
 
 pub struct PartialDecryptionResponse<Kahe: KaheBase, Vahe: VaheBase> {
     pub partial_decryption: Vahe::PartialDecryption,
-    // This contribution just contains encrypted DP noise. The server will be forced to include this
-    // contribution in the result because the randomness of the AHE encryption was included in the
-    // partial decryption request.
+    // This contribution just contains encrypted DP noise. The server will be forced to include
+    // this contribution in the result because the randomness of the AHE encryption was
+    // included in the partial decryption request.
     pub dp_ciphertext_contribution: Option<CiphertextContribution<Kahe, Vahe>>,
 }
 

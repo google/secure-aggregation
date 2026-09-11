@@ -109,8 +109,8 @@ pub struct QuadraticInnerProductProofWitness<T> {
 // 1) there exist degree n polynomials r and e such that ar+e = c in the ring Z_q[X]/(X^n+1)
 // 2) e < bound_e*2500*sqrt(n)
 // 3) r < bound_r*2500*sqrt(n).
-// Note a and c must have degree n and e and r must less than or euqal to bound_e and bound_r respectively.
-// If flip_a is true, then a is replaced with -a.
+// Note a and c must have degree n and e and r must less than or euqal to bound_e and bound_r
+// respectively. If flip_a is true, then a is replaced with -a.
 pub struct RlweRelationProofStatement<'a> {
     pub n: usize,
     pub context: RnsContextRef<'a>,
