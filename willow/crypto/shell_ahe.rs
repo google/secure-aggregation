@@ -317,7 +317,7 @@ impl ShellAhe {
         status::StatusError,
     > {
         let (pd, metadata) =
-            self.partial_decrypt_impl(ct_a, &sk_share.0, prng, /*compute_metadata=*/ true)?;
+            self.partial_decrypt_impl(ct_a, &sk_share.0, prng, /* compute_metadata= */ true)?;
         let metadata = metadata.ok_or_else(|| status::internal("Failed to compute metadata."))?;
         Ok((PartialDecryption(pd), metadata))
     }
@@ -637,7 +637,7 @@ impl PartialDec for ShellAhe {
         prng: &mut Self::Rng,
     ) -> Result<Self::PartialDecryption, status::StatusError> {
         let (pd, _) =
-            self.partial_decrypt_impl(&ct_a, &sk_share.0, prng, /*compute_metadata=*/ false)?;
+            self.partial_decrypt_impl(&ct_a, &sk_share.0, prng, /* compute_metadata= */ false)?;
         Ok(PartialDecryption(pd))
     }
 }
