@@ -124,8 +124,8 @@ pub struct ServerAccumulator {
     accumulator_state: CiphertextAccumulatorState<ShellKahe, ShellVahe>,
     // Verifier struct used to verify client contributions.
     verifier: DefaultVerifier<ShellVahe>,
-    // Verifier states, one for each range of nonces processed. The map is keyed by the start of the
-    // range.
+    // Verifier states, one for each range of nonces processed. The map is keyed by the start of
+    // the range.
     verifier_states: BTreeMap<Vec<u8>, VerifierState<ShellVahe>>,
     // The set of ranges processed. Used to determine when verifier states of adjacent ranges can
     // be merged.
@@ -176,7 +176,8 @@ impl ServerAccumulator {
     }
 
     // Updates the accumulator and verifier states with the given client message. In case of error,
-    // the states are UNDEFINED, and callers should not assume that they are in any particular state.
+    // the states are UNDEFINED, and callers should not assume that they are in any particular
+    // state.
     fn process_client_message(
         &self,
         accumulator_state: &mut CiphertextAccumulatorState<ShellKahe, ShellVahe>,
@@ -535,7 +536,8 @@ pub struct FinalResultDecryptor {
     ///
     /// NOTE: We technically only need client_sum, not decryptor_public_key_shares or
     /// partial_decryption_sum, but because of the monolithic SecureAggregationServer trait
-    /// (b/476137863) we need a complete CiphertextAccumulatorState to call the decryption functions.
+    /// (b/476137863) we need a complete CiphertextAccumulatorState to call the decryption
+    /// functions.
     accumulator_state: CiphertextAccumulatorState<ShellKahe, ShellVahe>,
 
     /// Accumulator used to hold the necessary KAHE and AHE contexts.
@@ -603,7 +605,8 @@ impl FinalResultDecryptor {
         let accumulator_state_proto = final_result_decryptor_state_proto.server_state();
         let aggregation_config_proto = final_result_decryptor_state_proto.aggregation_config();
 
-        // Build accumulator that holds the necessary KAHE and AHE contexts, and recover accumulator state.
+        // Build accumulator that holds the necessary KAHE and AHE contexts, and recover accumulator
+        // state.
         let aggregation_config = AggregationConfig::from_proto(aggregation_config_proto, ())?;
         let (kahe_config, vahe_config) = create_shell_configs(&aggregation_config)?;
         let context_bytes = &aggregation_config.key_id;

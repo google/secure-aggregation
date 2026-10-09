@@ -164,8 +164,10 @@ where
 {
     type VerifierState = VerifierState<Vahe>;
 
-    /// Verifies the proof and if verification succeeds, adds the partial decryption ciphertext to the sum. If verification fails, returns a PermissionDenied error and does not modify the state.
-    /// On success, expands the interval `state.nonce_bounds` to include `contribution.nonce`. Fails if `state.nonce_bounds` already contains `contribution.nonce`.
+    /// Verifies the proof and if verification succeeds, adds the partial decryption ciphertext to
+    /// the sum. If verification fails, returns a PermissionDenied error and does not modify the
+    /// state. On success, expands the interval `state.nonce_bounds` to include
+    /// `contribution.nonce`. Fails if `state.nonce_bounds` already contains `contribution.nonce`.
     /// It is therefore best to call this function on contributions in nonce order.
     fn verify_and_include(
         &self,
@@ -212,7 +214,8 @@ where
                 state1.validate()?;
                 state2.validate()?;
                 // Check for overlap between nonce intervals. Overlap occurs if
-                // state1.nonce_bounds.0 <= state2.nonce_bounds.1 AND state2.nonce_bounds.0 <= state1.nonce_bounds.1.
+                // state1.nonce_bounds.0 <= state2.nonce_bounds.1 AND state2.nonce_bounds.0 <=
+                // state1.nonce_bounds.1.
                 if state1.nonce_bounds.0 <= state2.nonce_bounds.1
                     && state2.nonce_bounds.0 <= state1.nonce_bounds.1
                 {

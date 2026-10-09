@@ -17,7 +17,6 @@ use status::StatusError;
 use vahe_traits::HasVahe;
 
 /// Base trait for the secure aggregation verifier.
-///
 pub trait Verifier: HasVahe {
     /// The state held by the verifier between messages.
     type VerifierState: Default;

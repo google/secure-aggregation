@@ -53,8 +53,8 @@ pub fn rns_polynomial_to_proto(
 ) -> Result<SerializedRnsPolynomial, status::StatusError> {
     let mut out = cxx::UniquePtr::null();
     // SAFETY: No lifetime constraints (no references are kept by the C++ function).
-    // `SerializeRnsPolynomialToBytes` allocates a C++ string to write the proto bytes to, and assigns
-    // the string to `out`.
+    // `SerializeRnsPolynomialToBytes` allocates a C++ string to write the proto bytes to, and
+    // assigns the string to `out`.
     rust_status_from_cpp(unsafe {
         ffi::SerializeRnsPolynomialToBytes(poly, moduli.moduli, &mut out)
     })?;
@@ -77,7 +77,8 @@ pub fn rns_polynomial_from_proto(
     let mut poly = create_empty_rns_polynomial();
 
     // SAFETY: No lifetime constraints (no references are kept by the C++ function).
-    // `DeserializeRnsPolynomialFromBytes` allocates a C++ RnsPolynomial object and assigns it to `poly`.
+    // `DeserializeRnsPolynomialFromBytes` allocates a C++ RnsPolynomial object and assigns it to
+    // `poly`.
     rust_status_from_cpp(unsafe {
         ffi::DeserializeRnsPolynomialFromBytes(&serialized_bytes, moduli.moduli, &mut poly)
     })?;
