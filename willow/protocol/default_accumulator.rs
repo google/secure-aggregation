@@ -74,7 +74,10 @@ where
     C: HasKahe<Kahe = Kahe> + HasVahe<Vahe = Vahe>,
     Kahe: KaheBase + 'a,
     Vahe: VaheBase + PartialDec + 'a,
-    Kahe::Ciphertext: ToProto<&'a Kahe, Proto = ShellKaheCiphertext>, // TODO: Rename protos to be generic once cl/836370582 has landed.
+    Kahe::Ciphertext: ToProto<&'a Kahe, Proto = ShellKaheCiphertext>, /* TODO: Rename protos to
+                                                                       * be generic once
+                                                                       * cl/836370582 has
+                                                                       * landed. */
     Vahe::RecoverCiphertext: ToProto<&'a Vahe, Proto = ShellAheRecoverCiphertext>,
 {
     type Proto = ServerStateProto;
