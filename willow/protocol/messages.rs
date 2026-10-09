@@ -17,8 +17,10 @@ use ahe_traits::AheBase;
 use kahe_traits::{HasKahe, KaheBase};
 use messages_rust_proto::{
     CiphertextContribution as CiphertextContributionProto, ClientMessage as ClientMessageProto,
+    CoordinatorState as CoordinatorStateProto, CoordinatorStatus as CoordinatorStatusProto,
     DPSetupContribution as DPSetupContributionProto,
     DecryptionRequestContribution as DecryptionRequestContributionProto,
+    EncryptedRandomnessShares as EncryptedRandomnessSharesProto,
     FinalizedPartialDecryption as FinalizedPartialDecryptionProto,
     KeyContribution as KeyContributionProto,
     PartialDecryptionRequest as PartialDecryptionRequestProto,
@@ -184,9 +186,9 @@ impl<Vahe: VaheBase> Debug for PartialDecryptionRequest<Vahe> {
 
 pub struct PartialDecryptionResponse<Kahe: KaheBase, Vahe: VaheBase> {
     pub partial_decryption: Vahe::PartialDecryption,
-    // This contribution just contains encrypted DP noise. The server will be forced to include this
-    // contribution in the result because the randomness of the AHE encryption was included in the
-    // partial decryption request.
+    // This contribution just contains encrypted DP noise. The server will be forced to include
+    // this contribution in the result because the randomness of the AHE encryption was
+    // included in the partial decryption request.
     pub dp_ciphertext_contribution: Option<CiphertextContribution<Kahe, Vahe>>,
 }
 
@@ -821,5 +823,172 @@ impl<Vahe: VaheBase> Default for CoordinatorState<Vahe> {
             setup_contributions: None,
             partial_decryption_sum: None,
         }
+    }
+}
+
+impl ToProto for CoordinatorStatus {
+    type Proto = CoordinatorStatusProto;
+
+    fn to_proto(&self, _ctx: ()) -> Result<Self::Proto, StatusError> {
+        Ok(match self {
+            CoordinatorStatus::PreSetup => CoordinatorStatusProto::PreSetup,
+            CoordinatorStatus::KeySharesReceived => CoordinatorStatusProto::KeySharesReceived,
+            CoordinatorStatus::AwaitingContributions => {
+                CoordinatorStatusProto::AwaitingContributions
+            }
+            CoordinatorStatus::AwaitingPartialDecryptions => {
+                CoordinatorStatusProto::AwaitingPartialDecryptions
+            }
+            CoordinatorStatus::AwaitingRecovery => CoordinatorStatusProto::AwaitingRecovery,
+            CoordinatorStatus::OutputReady => CoordinatorStatusProto::OutputReady,
+            CoordinatorStatus::Finished => CoordinatorStatusProto::Finished,
+        })
+    }
+}
+
+impl FromProto for CoordinatorStatus {
+    type Proto = CoordinatorStatusProto;
+
+    fn from_proto(
+        proto: impl AsView<Proxied = Self::Proto>,
+        _ctx: (),
+    ) -> Result<Self, StatusError> {
+        match proto.as_view() {
+            CoordinatorStatusProto::PreSetup => Ok(CoordinatorStatus::PreSetup),
+            CoordinatorStatusProto::KeySharesReceived => Ok(CoordinatorStatus::KeySharesReceived),
+            CoordinatorStatusProto::AwaitingContributions => {
+                Ok(CoordinatorStatus::AwaitingContributions)
+            }
+            CoordinatorStatusProto::AwaitingPartialDecryptions => {
+                Ok(CoordinatorStatus::AwaitingPartialDecryptions)
+            }
+            CoordinatorStatusProto::AwaitingRecovery => Ok(CoordinatorStatus::AwaitingRecovery),
+            CoordinatorStatusProto::OutputReady => Ok(CoordinatorStatus::OutputReady),
+            CoordinatorStatusProto::Finished => Ok(CoordinatorStatus::Finished),
+            CoordinatorStatusProto::Unspecified => {
+                Err(status::invalid_argument("CoordinatorStatus is unspecified"))
+            }
+            _ => Err(status::invalid_argument("Unknown CoordinatorStatus")),
+        }
+    }
+}
+
+impl<'a, C, Vahe> ToProto<&'a C> for CoordinatorState<Vahe>
+where
+    C: HasVahe<Vahe = Vahe>,
+    Vahe: VaheBase + 'a,
+    Vahe::PublicKeyShare: ToProto<&'a Vahe, Proto = ShellAhePublicKeyShare>,
+    Vahe::PartialDecCiphertext: ToProto<&'a Vahe, Proto = ShellAhePartialDecCiphertext>,
+    Vahe::KeyGenProof: ToProto<Proto = RlweRelationProofProto>,
+    Vahe::EncryptionProof: ToProto<Proto = RlweRelationProofListProto>,
+    Vahe::PartialDecryption: ToProto<&'a Vahe, Proto = ShellAhePartialDecryption>,
+{
+    type Proto = CoordinatorStateProto;
+
+    fn to_proto(&self, context: &'a C) -> Result<Self::Proto, StatusError> {
+        let mut proto = proto!(CoordinatorStateProto { status: self.status.to_proto(())? });
+        for shares in &self.encrypted_randomness_shares {
+            let mut shares_proto = proto!(EncryptedRandomnessSharesProto {});
+            for share in shares {
+                shares_proto.shares_mut().push(share.to_proto(())?);
+            }
+            proto.encrypted_randomness_shares_mut().push(shares_proto);
+        }
+        if let Some(dp_sum) = &self.dp_noise_component_sum {
+            proto.set_dp_noise_component_sum(dp_sum.to_proto(context.vahe())?);
+        }
+        if let Some(contributions) = &self.setup_contributions {
+            for contribution in contributions {
+                proto.setup_contributions_mut().push(contribution.to_proto(context)?);
+            }
+        }
+        if let Some(pd_sum) = &self.partial_decryption_sum {
+            proto.set_partial_decryption_sum(pd_sum.to_proto(context.vahe())?);
+        }
+        Ok(proto)
+    }
+}
+
+impl<'a, C, Vahe> FromProto<&'a C> for CoordinatorState<Vahe>
+where
+    C: HasVahe<Vahe = Vahe>,
+    Vahe: VaheBase + 'a,
+    Vahe::PublicKeyShare: FromProto<&'a Vahe, Proto = ShellAhePublicKeyShare>,
+    Vahe::PartialDecCiphertext: FromProto<&'a Vahe, Proto = ShellAhePartialDecCiphertext>,
+    Vahe::KeyGenProof: FromProto<Proto = RlweRelationProofProto>,
+    Vahe::EncryptionProof: FromProto<Proto = RlweRelationProofListProto>,
+    Vahe::PartialDecryption: FromProto<&'a Vahe, Proto = ShellAhePartialDecryption>,
+{
+    type Proto = CoordinatorStateProto;
+
+    fn from_proto(
+        proto: impl AsView<Proxied = Self::Proto>,
+        context: &'a C,
+    ) -> Result<Self, StatusError> {
+        let proto = proto.as_view();
+        let status = CoordinatorStatus::from_proto(proto.status(), ())?;
+        let encrypted_randomness_shares: Result<Vec<Vec<_>>, StatusError> = proto
+            .encrypted_randomness_shares()
+            .iter()
+            .map(|shares_proto| {
+                shares_proto
+                    .shares()
+                    .iter()
+                    .map(|s| SecretSharingContribution::from_proto(s, ()))
+                    .collect()
+            })
+            .collect();
+        let encrypted_randomness_shares = encrypted_randomness_shares?;
+        let dp_noise_component_sum = if proto.has_dp_noise_component_sum() {
+            Some(Vahe::PartialDecCiphertext::from_proto(
+                proto.dp_noise_component_sum(),
+                context.vahe(),
+            )?)
+        } else {
+            None
+        };
+        let setup_contributions = {
+            let contributions: Result<Vec<_>, _> = proto
+                .setup_contributions()
+                .iter()
+                .map(|c| SetupContribution::from_proto(c, context))
+                .collect();
+            let contributions = contributions?;
+            if contributions.is_empty() {
+                None
+            } else {
+                Some(contributions)
+            }
+        };
+        let partial_decryption_sum = if proto.has_partial_decryption_sum() {
+            Some(Vahe::PartialDecryption::from_proto(
+                proto.partial_decryption_sum(),
+                context.vahe(),
+            )?)
+        } else {
+            None
+        };
+        if status == CoordinatorStatus::PreSetup
+            && (!encrypted_randomness_shares.is_empty()
+                || dp_noise_component_sum.is_some()
+                || setup_contributions.is_some()
+                || partial_decryption_sum.is_some())
+        {
+            return Err(status::invalid_argument(
+                "CoordinatorState in PreSetup status must not have populated protocol fields",
+            ));
+        }
+        if status == CoordinatorStatus::OutputReady && partial_decryption_sum.is_none() {
+            return Err(status::invalid_argument(
+                "CoordinatorState in OutputReady status is missing partial_decryption_sum",
+            ));
+        }
+        Ok(CoordinatorState {
+            status,
+            encrypted_randomness_shares,
+            dp_noise_component_sum,
+            setup_contributions,
+            partial_decryption_sum,
+        })
     }
 }

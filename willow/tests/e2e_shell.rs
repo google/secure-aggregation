@@ -304,7 +304,8 @@ fn encrypt_decrypt_multiple_clients() -> googletest::Result<()> {
     }
     let verifier_state_merged = verifier.merge_states(verifier_state_1, verifier_state_2)?;
 
-    // Run the rest of the protocol twice, once with each of the the two copies of the verifier state.
+    // Run the rest of the protocol twice, once with each of the the two copies of the verifier
+    // state.
     for (accumulator_state, verifier_state) in
         [(accumulator_state.clone(), verifier_state), (accumulator_state, verifier_state_merged)]
     {

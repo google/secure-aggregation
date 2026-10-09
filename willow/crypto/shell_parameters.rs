@@ -29,7 +29,6 @@ use shell_parameters_generation::{divide_and_roundup, generate_packing_config};
 /// in the respective implementation. Here we define their underlying rings and
 /// encoding parameters. In addition we define the noise flooding parameter for
 /// AHE, as it depends on the AHE's plaintext space.
-///
 
 /// ----------------------------------------------------------------------------
 /// AHE parameters are fixed across all input settings.
@@ -37,8 +36,7 @@ use shell_parameters_generation::{divide_and_roundup, generate_packing_config};
 /// This set of AHE parameters are good for the following assumption:
 /// - there are at most 10^7 clients, and at least 99.999% of them are honest;
 /// - there are at most 100 decryptors, and all of them are honest;
-/// - verifiable key gen, encryption, and partial decryption use approximate L_inf
-///   range proofs.
+/// - verifiable key gen, encryption, and partial decryption use approximate L_inf range proofs.
 const AHE_FIXED_LOG_N: u64 = 12;
 const AHE_FIXED_T: u64 = 262145; // 2^18 + 1
 const AHE_FIXED_QS: [u64; 2] = [281474976546817, 281474975662081]; // 96 bits total

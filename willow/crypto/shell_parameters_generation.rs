@@ -124,7 +124,7 @@ mod test {
     #[gtest]
     fn test_generate_packing_config_invalid_input_length_or_bound() -> googletest::Result<()> {
         let plaintext_bits = 100;
-        let bad_agg_inputs = HashMap::from([(String::from("vec0"), (/*length=*/ 0, 1 << 16))]);
+        let bad_agg_inputs = HashMap::from([(String::from("vec0"), (/* length= */ 0, 1 << 16))]);
         let mut bad_agg_config = AggregationConfig {
             vector_lengths_and_bounds: bad_agg_inputs,
             max_number_of_decryptors: 1,
@@ -135,7 +135,7 @@ mod test {
         let result = generate_packing_config(plaintext_bits, &bad_agg_config);
         expect_true!(result.is_err());
 
-        let bad_agg_inputs = HashMap::from([(String::from("vec0"), (32, /*bound=*/ 0))]);
+        let bad_agg_inputs = HashMap::from([(String::from("vec0"), (32, /* bound= */ 0))]);
         bad_agg_config.vector_lengths_and_bounds = bad_agg_inputs;
         let result = generate_packing_config(plaintext_bits, &bad_agg_config);
         expect_true!(result.is_err());

@@ -46,7 +46,8 @@ pub trait KaheBase: Sized {
         right: &mut Self::Plaintext,
     ) -> Result<(), StatusError>;
 
-    /// Plaintext slice, when underlying data (e.g. different fields of the plaintext) is itself owned by the caller.
+    /// Plaintext slice, when underlying data (e.g. different fields of the plaintext) is itself
+    /// owned by the caller.
     type PlaintextSlice<'a>;
     /// Ciphertext. Supports addition.
     type Ciphertext: Clone;
