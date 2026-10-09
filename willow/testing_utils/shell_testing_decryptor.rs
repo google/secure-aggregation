@@ -38,7 +38,8 @@ use std::rc::Rc;
 use vahe_traits::{HasVahe, Recover, VaheBase};
 
 /// Basic implementation of a decryptor that uses Shell operations directly. Useful for
-/// testing Shell clients and accumulators, by checking that encrypted messages can be decrypted properly.
+/// testing Shell clients and accumulators, by checking that encrypted messages can be decrypted
+/// properly.
 ///
 /// Each function is implemented in 3 layers:
 ///  - Layer 1: Strongly-typed public Rust API (`pub fn`) operating on native protocol objects.
@@ -83,7 +84,8 @@ impl ShellTestingDecryptor {
         Ok(ShellTestingDecryptor { kahe, decryptor, state })
     }
 
-    /// Generates a new AHE public key, and stores the corresponding secret key share in `DecryptorState`.
+    /// Generates a new AHE public key, and stores the corresponding secret key share in
+    /// `DecryptorState`.
     pub fn generate_public_key(
         &mut self,
     ) -> Result<<ShellVahe as AheBase>::PublicKey, StatusError> {
@@ -218,7 +220,8 @@ impl ShellTestingDecryptor {
             .into()
     }
 
-    /// Handles a partial decryption request from a Coordinator, returning a partial decryption response.
+    /// Handles a partial decryption request from a Coordinator, returning a partial decryption
+    /// response.
     pub fn handle_partial_decryption_request(
         &mut self,
         request: PartialDecryptionRequest<ShellVahe>,

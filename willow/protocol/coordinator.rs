@@ -163,7 +163,7 @@ impl<Vahe: VaheBase + PartialDec> Coordinator<Vahe> {
             partial_decryption_sum: coordinator_state
                 .partial_decryption_sum
                 .clone()
-                .expect("partial_decryption_sum should be set"),
+                .ok_or_else(|| status::failed_precondition("partial_decryption_sum is not set"))?,
         })
     }
 }
@@ -176,8 +176,11 @@ mod tests {
     use decryptor::{Decryptor, DecryptorState};
     use googletest::gtest;
     use googletest::prelude::*;
-    use messages::{CoordinatorState, CoordinatorStatus};
+    use messages::{CoordinatorState, CoordinatorStatus, SecretSharingContribution};
+    use messages_rust_proto::CoordinatorStatus as CoordinatorStatusProto;
     use prng_traits::SecurePrng;
+    use proto_serialization_traits::{FromProto, ToProto};
+    use protobuf::prelude::*;
     use shell_kahe::ShellKahe;
     use shell_parameters::create_shell_ahe_config;
     use shell_vahe::ShellVahe;
@@ -243,7 +246,8 @@ mod tests {
     }
 
     /// End-to-end test: setup -> encryption -> partial decryption -> recovery
-    /// using the multi-decryptor protocol with a coordinator and reputable decryptor.
+    /// using the multi-decryptor protocol with a coordinator and reputable decryptor,
+    /// serializing and deserializing CoordinatorState at every protocol transition.
     #[gtest]
     fn end_to_end_multi_decryptor_protocol() -> googletest::Result<()> {
         let vahe = Rc::new(ShellVahe::new(create_shell_ahe_config(1)?, CONTEXT_STRING)?);
@@ -261,13 +265,33 @@ mod tests {
         let contribution1 = decryptor1.create_setup_contribution(&mut dec_state1)?;
         let contribution2 = decryptor2.create_setup_contribution(&mut dec_state2)?;
 
-        // Coordinator processes setup.
+        // Attach encrypted randomness shares to non-reputable decryptor1's contribution.
+        let mut contribution1 = contribution1;
+        contribution1.encrypted_randomness_shares = Some(vec![SecretSharingContribution {
+            encrypted_share: b"test_encrypted_share".to_vec(),
+        }]);
+
+        // Coordinator processes setup (round-trip default PreSetup state first).
         let coordinator = Coordinator { vahe: vahe.clone() };
-        let mut coord_state = CoordinatorState::default();
+        let coord_state = CoordinatorState::default();
+        let coord_state_proto = coord_state.to_proto(&coordinator)?;
+        let mut coord_state = CoordinatorState::from_proto(coord_state_proto, &coordinator)?;
+        verify_that!(coord_state.status, eq(CoordinatorStatus::PreSetup))?;
+
         let verify_request = coordinator.handle_setup_submissions(
-            vec![],
-            vec![contribution1, contribution2],
+            vec![contribution1],
+            vec![contribution2],
             &mut coord_state,
+        )?;
+
+        // Round-trip CoordinatorState after setup submissions.
+        let coord_state_proto = coord_state.to_proto(&coordinator)?;
+        let mut coord_state = CoordinatorState::from_proto(coord_state_proto, &coordinator)?;
+        verify_that!(coord_state.status, eq(CoordinatorStatus::KeySharesReceived))?;
+        verify_that!(coord_state.encrypted_randomness_shares.len(), eq(1))?;
+        verify_that!(
+            coord_state.encrypted_randomness_shares[0][0].encrypted_share,
+            eq(b"test_encrypted_share")
         )?;
 
         // Reputable decryptor verifies and aggregates the public key.
@@ -290,6 +314,11 @@ mod tests {
         let pd_request =
             coordinator.prepare_decryption_request(&partial_dec_ciphertext, &mut coord_state)?;
 
+        // Round-trip CoordinatorState after preparing decryption request.
+        let coord_state_proto = coord_state.to_proto(&coordinator)?;
+        let mut coord_state = CoordinatorState::from_proto(coord_state_proto, &coordinator)?;
+        verify_that!(coord_state.status, eq(CoordinatorStatus::AwaitingPartialDecryptions))?;
+
         // Each decryptor computes a partial decryption.
         let pd_response1: messages::PartialDecryptionResponse<ShellKahe, ShellVahe> = decryptor1
             .handle_partial_decryption_request(pd_request.clone(), None, &mut dec_state1)?;
@@ -303,7 +332,10 @@ mod tests {
             &mut coord_state,
         )?;
 
-        verify_true!(coord_state.status == CoordinatorStatus::OutputReady)?;
+        // Round-trip CoordinatorState after aggregating partial decryptions.
+        let coord_state_proto = coord_state.to_proto(&coordinator)?;
+        let mut coord_state = CoordinatorState::from_proto(coord_state_proto, &coordinator)?;
+        verify_that!(coord_state.status, eq(CoordinatorStatus::OutputReady))?;
 
         // Recover the plaintext using the finalized state.
         let finalized_state = coordinator.finalize_partial_decryption(&mut coord_state)?;
@@ -314,6 +346,102 @@ mod tests {
         )?;
 
         verify_that!(&recovered[..], eq(&plaintext[..]))?;
+
+        Ok(())
+    }
+
+    #[gtest]
+    fn coordinator_state_statuses_roundtrip() -> googletest::Result<()> {
+        let vahe = Rc::new(ShellVahe::new(create_shell_ahe_config(1)?, CONTEXT_STRING)?);
+        let coordinator = Coordinator { vahe };
+
+        for status in [
+            CoordinatorStatus::PreSetup,
+            CoordinatorStatus::KeySharesReceived,
+            CoordinatorStatus::AwaitingContributions,
+            CoordinatorStatus::AwaitingPartialDecryptions,
+            CoordinatorStatus::AwaitingRecovery,
+            CoordinatorStatus::Finished,
+        ] {
+            let state = CoordinatorState { status, ..CoordinatorState::default() };
+            let proto = state.to_proto(&coordinator)?;
+            let roundtrip = CoordinatorState::from_proto(proto.as_view(), &coordinator)?;
+            verify_that!(roundtrip.status, eq(status))?;
+            verify_that!(roundtrip.to_proto(&coordinator)?.serialize()?, eq(&proto.serialize()?))?;
+        }
+
+        Ok(())
+    }
+
+    #[gtest]
+    fn coordinator_state_rejects_invalid_statuses_and_invariants() -> googletest::Result<()> {
+        let vahe = Rc::new(ShellVahe::new(create_shell_ahe_config(1)?, CONTEXT_STRING)?);
+        let coordinator = Coordinator { vahe };
+
+        // Unspecified CoordinatorStatusProto must fail deserialization with InvalidArgument.
+        let err = CoordinatorStatus::from_proto(CoordinatorStatusProto::Unspecified, ())
+            .expect_err("expected error for Unspecified CoordinatorStatus");
+        verify_that!(err.message(), contains_substring("CoordinatorStatus"))?;
+
+        // OutputReady without partial_decryption_sum must fail deserialization.
+        let invalid_output_ready = CoordinatorState {
+            status: CoordinatorStatus::OutputReady,
+            ..CoordinatorState::default()
+        };
+        let invalid_proto = invalid_output_ready.to_proto(&coordinator)?;
+        let err = CoordinatorState::from_proto(invalid_proto, &coordinator)
+            .err()
+            .expect("expected error for OutputReady without partial_decryption_sum");
+        verify_that!(err.message(), contains_substring("partial_decryption_sum"))?;
+
+        // PreSetup with populated encrypted_randomness_shares must fail deserialization.
+        let invalid_pre_setup = CoordinatorState {
+            status: CoordinatorStatus::PreSetup,
+            encrypted_randomness_shares: vec![vec![SecretSharingContribution {
+                encrypted_share: b"unexpected_share".to_vec(),
+            }]],
+            ..CoordinatorState::default()
+        };
+        let invalid_pre_setup_proto = invalid_pre_setup.to_proto(&coordinator)?;
+        let err = CoordinatorState::from_proto(invalid_pre_setup_proto, &coordinator)
+            .err()
+            .expect("expected error for PreSetup with populated fields");
+        verify_that!(err.message(), contains_substring("PreSetup"))?;
+
+        Ok(())
+    }
+
+    #[gtest]
+    fn coordinator_state_optional_fields_roundtrip() -> googletest::Result<()> {
+        let vahe = Rc::new(ShellVahe::new(create_shell_ahe_config(1)?, CONTEXT_STRING)?);
+        let decryptor = Decryptor::new_with_randomly_generated_seed(vahe.clone())?;
+        let mut dec_state = DecryptorState::default();
+        let contribution = decryptor.create_setup_contribution(&mut dec_state)?;
+        let coordinator = Coordinator { vahe: vahe.clone() };
+
+        let public_key = vahe.aggregate_public_key_shares(std::iter::once(
+            &contribution.key_contribution.public_key_share,
+        ))?;
+        let seed = SingleThreadHkdfPrng::generate_seed()?;
+        let mut prng = SingleThreadHkdfPrng::create(&seed)?;
+        let (ciphertext, _proof) =
+            vahe.verifiable_encrypt(&vec![1i64; 8], &public_key, b"0123456789ABCDEF", &mut prng)?;
+        let dp_noise_ct = vahe.get_partial_dec_ciphertext(&ciphertext)?;
+
+        let state = CoordinatorState {
+            status: CoordinatorStatus::KeySharesReceived,
+            encrypted_randomness_shares: vec![vec![SecretSharingContribution {
+                encrypted_share: b"share_bytes".to_vec(),
+            }]],
+            dp_noise_component_sum: Some(dp_noise_ct),
+            setup_contributions: Some(vec![contribution]),
+            partial_decryption_sum: None,
+        };
+        let proto = state.to_proto(&coordinator)?;
+        let roundtrip = CoordinatorState::from_proto(proto.as_view(), &coordinator)?;
+        verify_true!(roundtrip.dp_noise_component_sum.is_some())?;
+        verify_that!(roundtrip.setup_contributions.as_ref().map(|v| v.len()), eq(Some(1)))?;
+        verify_that!(roundtrip.to_proto(&coordinator)?.serialize()?, eq(&proto.serialize()?))?;
 
         Ok(())
     }

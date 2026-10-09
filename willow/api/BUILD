@@ -243,6 +243,7 @@ cc_library(
         ":coordinator_cxx",
         "@abseil-cpp//absl/status",
         "@abseil-cpp//absl/status:statusor",
+        "@abseil-cpp//absl/strings:string_view",
         "@abseil-cpp//absl/types:span",
         "@cxx.rs//:core",
         "//ffi_utils:cxx_utils",
@@ -259,11 +260,13 @@ cc_test(
     deps = [
         ":coordinator",
         "@googletest//:gtest_main",
+        "@abseil-cpp//absl/status",
         "@abseil-cpp//absl/status:statusor",
         "//ffi_utils:status_matchers",
         "//willow/proto/shell:shell_ciphertexts_cc_proto",
         "//willow/proto/willow:aggregation_config_cc_proto",
         "//willow/proto/willow:messages_cc_proto",
+        "//willow/testing_utils:shell_testing_decryptor_cc",
     ],
 )
 

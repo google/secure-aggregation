@@ -22,6 +22,7 @@
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/string_view.h"
 #include "absl/types/span.h"
 #include "ffi_utils/cxx_utils.h"
 #include "ffi_utils/status_macros.h"
@@ -64,6 +65,32 @@ absl::StatusOr<std::unique_ptr<Coordinator>> Coordinator::Create(
       ToRustSlice(config_str), &coord_ptr));
   auto coord_box = WillowShellCoordinatorIntoBox(coord_ptr);
   return std::unique_ptr<Coordinator>(new Coordinator(std::move(coord_box)));
+}
+
+absl::StatusOr<std::unique_ptr<Coordinator>>
+Coordinator::CreateFromSerializedState(absl::string_view serialized_state) {
+  CoordinatorState state_proto;
+  if (!state_proto.ParseFromString(serialized_state)) {
+    return absl::InvalidArgumentError(
+        "Failed to parse CoordinatorState from serialized bytes.");
+  }
+  if (!state_proto.has_aggregation_config()) {
+    return absl::InvalidArgumentError(
+        "CoordinatorState is missing aggregation_config.");
+  }
+  SECAGG_ASSIGN_OR_RETURN(
+      auto coordinator, Coordinator::Create(state_proto.aggregation_config()));
+  SECAGG_RETURN_IF_FFI_ERROR(
+      coordinator->coordinator_->RestoreFromSerializedState(
+          ToRustSlice(serialized_state)));
+  return coordinator;
+}
+
+absl::StatusOr<std::string> Coordinator::ToSerializedState() const {
+  rust::Vec<uint8_t> serialized_state;
+  SECAGG_RETURN_IF_FFI_ERROR(coordinator_->ToSerializedState(serialized_state));
+  return std::string(reinterpret_cast<const char*>(serialized_state.data()),
+                     serialized_state.size());
 }
 
 absl::StatusOr<VerifyKeyContributionsRequest>

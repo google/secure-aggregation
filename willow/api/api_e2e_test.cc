@@ -105,6 +105,13 @@ TEST(WillowV1ApiE2ETest, MultiDecryptorCoordinatorFullPipelineWithCodec) {
                               coordinator->HandleSetupSubmissions(
                                   non_reputable_contribs, reputable_contribs));
 
+  // Serialize and reinstantiate Coordinator after setup round.
+  SECAGG_ASSERT_OK_AND_ASSIGN(std::string serialized_coord_state,
+                              coordinator->ToSerializedState());
+  SECAGG_ASSERT_OK_AND_ASSIGN(
+      coordinator,
+      Coordinator::CreateFromSerializedState(serialized_coord_state));
+
   // Reputable decryptor verifies contributions and aggregates global public
   // key.
   SECAGG_ASSERT_OK_AND_ASSIGN(
@@ -187,6 +194,13 @@ TEST(WillowV1ApiE2ETest, MultiDecryptorCoordinatorFullPipelineWithCodec) {
                               coordinator->PrepareDecryptionRequest(
                                   acc_dec_req.partial_dec_ciphertext()));
 
+  // Serialize and reinstantiate Coordinator while awaiting partial decryptions.
+  SECAGG_ASSERT_OK_AND_ASSIGN(serialized_coord_state,
+                              coordinator->ToSerializedState());
+  SECAGG_ASSERT_OK_AND_ASSIGN(
+      coordinator,
+      Coordinator::CreateFromSerializedState(serialized_coord_state));
+
   // Multi-decryptors each produce a partial decryption response.
   SECAGG_ASSERT_OK_AND_ASSIGN(
       PartialDecryptionResponse response_reputable,
@@ -207,6 +221,16 @@ TEST(WillowV1ApiE2ETest, MultiDecryptorCoordinatorFullPipelineWithCodec) {
   SECAGG_ASSERT_OK_AND_ASSIGN(
       FinalizedPartialDecryption finalized_pd,
       coordinator->AggregateAndFinalizePartialDecryptions(partial_responses));
+
+  // Serialize and reinstantiate Coordinator in OutputReady state.
+  SECAGG_ASSERT_OK_AND_ASSIGN(serialized_coord_state,
+                              coordinator->ToSerializedState());
+  SECAGG_ASSERT_OK_AND_ASSIGN(
+      coordinator,
+      Coordinator::CreateFromSerializedState(serialized_coord_state));
+  SECAGG_ASSERT_OK_AND_ASSIGN(std::string roundtrip_output_ready_state,
+                              coordinator->ToSerializedState());
+  EXPECT_EQ(roundtrip_output_ready_state, serialized_coord_state);
 
   // Recover final result using FinalResultDecryptor.
   // In production, this code runs within the pipeline, using the serialized

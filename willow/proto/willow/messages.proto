@@ -132,3 +132,40 @@ message VerifyKeyContributionsRequest {
 message FinalizedPartialDecryption {
   ShellAhePartialDecryption partial_decryption_sum = 1;
 }
+
+// Tracks the coordinator's progress through the multi-decryptor protocol.
+enum CoordinatorStatus {
+  COORDINATOR_STATUS_UNSPECIFIED = 0;
+  COORDINATOR_STATUS_PRE_SETUP = 1;
+  COORDINATOR_STATUS_KEY_SHARES_RECEIVED = 2;
+  COORDINATOR_STATUS_AWAITING_CONTRIBUTIONS = 3;
+  COORDINATOR_STATUS_AWAITING_PARTIAL_DECRYPTIONS = 4;
+  COORDINATOR_STATUS_AWAITING_RECOVERY = 5;
+  COORDINATOR_STATUS_OUTPUT_READY = 6;
+  COORDINATOR_STATUS_FINISHED = 7;
+}
+
+// Encrypted randomness shares from a single non-reputable decryptor, one per
+// recipient decryptor.
+message EncryptedRandomnessShares {
+  repeated SecretSharingContribution shares = 1;
+}
+
+// State stored by the coordinator between protocol rounds.
+message CoordinatorState {
+  CoordinatorStatus status = 1;
+  // Encrypted secret shares received from non-reputable decryptors during
+  // setup. Each entry contains shares from one non-reputable decryptor,
+  // encrypted for each other decryptor.
+  repeated EncryptedRandomnessShares encrypted_randomness_shares = 2;
+  // Accumulated public-key-independent components for DP noise, if applicable.
+  ShellAhePartialDecCiphertext dp_noise_component_sum = 3;
+  // Public key shares and proofs from all contributions, for sending back to
+  // decryptors for signing requests when multiple reputable decryptors are
+  // used.
+  repeated SetupContribution setup_contributions = 4;
+  // Sum of partial decryptions received from decryptors.
+  ShellAhePartialDecryption partial_decryption_sum = 5;
+  // Aggregation configuration used to initialize the coordinator.
+  AggregationConfigProto aggregation_config = 6;
+}
