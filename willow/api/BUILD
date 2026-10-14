@@ -226,6 +226,15 @@ rust_library(
     ],
 )
 
+rust_test(
+    name = "coordinator_rust_test",
+    crate = ":coordinator_rust",
+    deps = [
+        "@crate_index//:googletest",
+        "//willow/testing_utils",
+    ],
+)
+
 rust_cxx_bridge(
     name = "coordinator_cxx",
     src = "coordinator.rs",

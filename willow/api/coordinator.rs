@@ -18,6 +18,7 @@ use ahe_traits::AheBase;
 use coordinator::Coordinator;
 use kahe_traits::{HasKahe, KaheBase};
 use messages::CoordinatorState;
+use messages_rust_proto::CoordinatorState as CoordinatorStateProto;
 use proto_serialization_traits::{FromProto, ToProto};
 use protobuf::prelude::*;
 use shell_ciphertexts_rust_proto::ShellAhePartialDecCiphertext as ShellAhePartialDecCiphertextProto;
@@ -56,6 +57,18 @@ pub mod ffi {
             ptr: *mut WillowShellCoordinator,
         ) -> Box<WillowShellCoordinator>;
 
+        #[cxx_name = "ToSerializedState"]
+        fn to_serialized_state_ffi(
+            self: &WillowShellCoordinator,
+            out_serialized_state: &mut Vec<u8>,
+        ) -> FfiStatus;
+
+        #[cxx_name = "RestoreFromSerializedState"]
+        fn restore_from_serialized_state_ffi(
+            self: &mut WillowShellCoordinator,
+            serialized_state: &[u8],
+        ) -> FfiStatus;
+
         #[cxx_name = "HandleSetupSubmissions"]
         fn handle_setup_submissions_ffi(
             self: &mut WillowShellCoordinator,
@@ -84,6 +97,7 @@ pub struct WillowShellCoordinator {
     kahe: Rc<ShellKahe>,
     coord: Coordinator<ShellVahe>,
     coord_state: CoordinatorState<ShellVahe>,
+    aggregation_config: AggregationConfig,
 }
 
 impl HasKahe for WillowShellCoordinator {
@@ -126,13 +140,57 @@ impl WillowShellCoordinator {
             status::internal(&format!("Failed to parse AggregationConfigProto: {}", e))
         })?;
         let aggregation_config = AggregationConfig::from_proto(aggregation_config_proto, ())?;
+
         let (kahe_config, ahe_config) = create_shell_configs(&aggregation_config)?;
         let context_bytes = &aggregation_config.key_id;
         let kahe = Rc::new(ShellKahe::new(kahe_config, context_bytes)?);
         let vahe = Rc::new(ShellVahe::new(ahe_config, context_bytes)?);
         let coord = Coordinator { vahe };
         let coord_state = CoordinatorState::default();
-        Ok(WillowShellCoordinator { kahe, coord, coord_state })
+
+        Ok(WillowShellCoordinator { kahe, coord, coord_state, aggregation_config })
+    }
+
+    fn to_serialized_state(&self) -> Result<Vec<u8>, StatusError> {
+        let mut proto = self.coord_state.to_proto(self)?;
+        proto.set_aggregation_config(self.aggregation_config.to_proto(())?);
+        proto
+            .serialize()
+            .map_err(|e| status::internal(&format!("Failed to serialize CoordinatorState: {}", e)))
+    }
+
+    fn to_serialized_state_ffi(&self, out_serialized_state: &mut Vec<u8>) -> ffi::FfiStatus {
+        self.to_serialized_state()
+            .map(|serialized| {
+                *out_serialized_state = serialized;
+            })
+            .into()
+    }
+
+    /// Restores the protocol state of this coordinator from a serialized CoordinatorState proto.
+    ///
+    /// The AggregationConfig embedded in `state` must match the one this coordinator was created
+    /// with; otherwise an `InvalidArgument` error is returned and the coordinator is unchanged.
+    fn restore_from_serialized_state(&mut self, state: &[u8]) -> Result<(), StatusError> {
+        let state_proto = CoordinatorStateProto::parse(state).map_err(|e| {
+            status::invalid_argument(&format!("Failed to parse CoordinatorState: {}", e))
+        })?;
+        if !state_proto.has_aggregation_config() {
+            return Err(status::invalid_argument("CoordinatorState is missing aggregation_config"));
+        }
+        let embedded_config = AggregationConfig::from_proto(state_proto.aggregation_config(), ())?;
+        if embedded_config != self.aggregation_config {
+            return Err(status::invalid_argument(
+                "CoordinatorState aggregation_config does not match the coordinator's \
+                 aggregation_config",
+            ));
+        }
+        self.coord_state = CoordinatorState::from_proto(state_proto, self)?;
+        Ok(())
+    }
+
+    fn restore_from_serialized_state_ffi(&mut self, serialized_state: &[u8]) -> ffi::FfiStatus {
+        self.restore_from_serialized_state(serialized_state).into()
     }
 
     /// Helper function to parse protobuf views using the coordinator's context.
@@ -241,5 +299,32 @@ impl WillowShellCoordinator {
                 *out_finalized_pd = serialized;
             })
             .into()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use googletest::prelude::*;
+    use status::StatusErrorCode;
+    use testing_utils::generate_aggregation_config;
+
+    fn new_coordinator(config: &AggregationConfig) -> Result<WillowShellCoordinator, StatusError> {
+        let serialized_config = config.to_proto(())?.serialize().map_err(|e| {
+            status::internal(&format!("Failed to serialize AggregationConfigProto: {}", e))
+        })?;
+        WillowShellCoordinator::new_from_serialized_config(&serialized_config)
+    }
+
+    #[gtest]
+    fn restore_from_serialized_state_fails_with_mismatched_config() -> googletest::Result<()> {
+        let config = generate_aggregation_config("default".to_string(), 16, 10, 1, 1);
+        let serialized_state = new_coordinator(&config)?.to_serialized_state()?;
+
+        let mut other_config = config.clone();
+        other_config.key_id = b"other_key_id".to_vec();
+        let mut coordinator = new_coordinator(&other_config)?;
+        let result = coordinator.restore_from_serialized_state(&serialized_state);
+        verify_true!(matches!(result.map_err(|e| e.code()), Err(StatusErrorCode::INVALID_ARGUMENT)))
     }
 }
