@@ -263,6 +263,8 @@ rust_test(
         ":decryptor",
         ":messages",
         "@crate_index//:googletest",
+        "@protobuf//rust:protobuf",
+        "//willow/api:proto_serialization_traits",
         "//willow/crypto:ahe_traits",
         "//willow/crypto:prng_traits",
         "//willow/crypto:shell_kahe",
@@ -270,6 +272,7 @@ rust_test(
         "//willow/crypto:shell_vahe",
         "//willow/crypto:single_thread_hkdf",
         "//willow/crypto:vahe_traits",
+        "//willow/proto/willow:messages_rust_proto",
     ],
 )
 
