@@ -16,9 +16,11 @@
 #define SECURE_AGGREGATION_WILLOW_API_COORDINATOR_H_
 
 #include <memory>
+#include <string>
 #include <utility>
 
 #include "absl/status/statusor.h"
+#include "absl/strings/string_view.h"
 #include "absl/types/span.h"
 #include "include/cxx.h"
 #include "willow/api/coordinator.rs.h"
@@ -36,6 +38,16 @@ class Coordinator {
   // Creates a new coordinator with the given aggregation_config.
   static absl::StatusOr<std::unique_ptr<Coordinator>> Create(
       const AggregationConfigProto& aggregation_config);
+
+  // Creates a new coordinator from the given serialized state, which must
+  // correspond to a serialized CoordinatorState proto produced by
+  // ToSerializedState() (including its embedded AggregationConfig).
+  static absl::StatusOr<std::unique_ptr<Coordinator>> CreateFromSerializedState(
+      absl::string_view serialized_state);
+
+  // Converts the current state of the coordinator to a serialized
+  // CoordinatorState proto.
+  absl::StatusOr<std::string> ToSerializedState() const;
 
   // Stores setup contributions from all decryptors during key generation and
   // creates a request for reputable decryptors to verify and aggregate key

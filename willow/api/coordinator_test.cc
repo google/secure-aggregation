@@ -15,8 +15,11 @@
 #include "willow/api/coordinator.h"
 
 #include <memory>
+#include <string>
+#include <utility>
 #include <vector>
 
+#include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "ffi_utils/status_matchers.h"
 #include "gmock/gmock.h"
@@ -24,12 +27,17 @@
 #include "willow/proto/shell/ciphertexts.pb.h"
 #include "willow/proto/willow/aggregation_config.pb.h"
 #include "willow/proto/willow/messages.pb.h"
+#include "willow/testing_utils/shell_testing_decryptor.h"
 
 namespace secure_aggregation {
 namespace willow {
 namespace {
 
+using ::secure_aggregation::secagg_internal::StatusIs;
+using ::secure_aggregation::testing::ShellTestingDecryptor;
+using ::testing::HasSubstr;
 using ::testing::IsEmpty;
+using ::testing::SizeIs;
 
 AggregationConfigProto CreateValidConfig() {
   AggregationConfigProto config;
@@ -64,9 +72,83 @@ TEST(CoordinatorTest, HandleSetupSubmissionsSucceedsAndTransitionsState) {
 
   // Calling HandleSetupSubmissions a second time should fail because the
   // coordinator is no longer in PreSetup status.
-  auto second_attempt =
-      coordinator->HandleSetupSubmissions(non_reputable, reputable);
-  EXPECT_FALSE(second_attempt.ok());
+  EXPECT_THAT(
+      coordinator->HandleSetupSubmissions(non_reputable, reputable),
+      StatusIs(absl::StatusCode::kFailedPrecondition, HasSubstr("PreSetup")));
+}
+
+TEST(CoordinatorTest, SerializeAndReinstantiatePreservesState) {
+  AggregationConfigProto config = CreateValidConfig();
+  SECAGG_ASSERT_OK_AND_ASSIGN(auto coordinator, Coordinator::Create(config));
+
+  // Serialize and reinstantiate in PreSetup state.
+  SECAGG_ASSERT_OK_AND_ASSIGN(std::string pre_setup_state,
+                              coordinator->ToSerializedState());
+  SECAGG_ASSERT_OK_AND_ASSIGN(
+      coordinator, Coordinator::CreateFromSerializedState(pre_setup_state));
+
+  SECAGG_ASSERT_OK_AND_ASSIGN(auto decryptor,
+                              ShellTestingDecryptor::Create(config));
+  SECAGG_ASSERT_OK_AND_ASSIGN(SetupContribution contrib,
+                              decryptor->CreateSetupContribution());
+  contrib.add_encrypted_randomness_shares()->set_encrypted_share("test_share");
+
+  std::vector<SetupContribution> non_reputable = {std::move(contrib)};
+  std::vector<SetupContribution> reputable;
+  SECAGG_ASSERT_OK_AND_ASSIGN(
+      auto verify_request,
+      coordinator->HandleSetupSubmissions(non_reputable, reputable));
+  EXPECT_THAT(verify_request.key_contributions(), SizeIs(1));
+
+  // Serialize and reinstantiate in KeySharesReceived state with populated
+  // encrypted_randomness_shares.
+  SECAGG_ASSERT_OK_AND_ASSIGN(std::string post_setup_state,
+                              coordinator->ToSerializedState());
+  SECAGG_ASSERT_OK_AND_ASSIGN(
+      coordinator, Coordinator::CreateFromSerializedState(post_setup_state));
+  SECAGG_ASSERT_OK_AND_ASSIGN(std::string roundtrip_post_setup_state,
+                              coordinator->ToSerializedState());
+  EXPECT_EQ(roundtrip_post_setup_state, post_setup_state);
+
+  CoordinatorState parsed_state;
+  ASSERT_TRUE(parsed_state.ParseFromString(roundtrip_post_setup_state));
+  EXPECT_EQ(parsed_state.status(), COORDINATOR_STATUS_KEY_SHARES_RECEIVED);
+  ASSERT_THAT(parsed_state.encrypted_randomness_shares(), SizeIs(1));
+  ASSERT_THAT(parsed_state.encrypted_randomness_shares(0).shares(), SizeIs(1));
+  EXPECT_EQ(
+      parsed_state.encrypted_randomness_shares(0).shares(0).encrypted_share(),
+      "test_share");
+
+  // Reinstantiated coordinator must preserve KeySharesReceived status and
+  // reject a duplicate HandleSetupSubmissions call.
+  EXPECT_THAT(
+      coordinator->HandleSetupSubmissions(non_reputable, reputable),
+      StatusIs(absl::StatusCode::kFailedPrecondition, HasSubstr("PreSetup")));
+}
+
+TEST(CoordinatorTest, CreateFromSerializedStateFailsWithInvalidBytes) {
+  EXPECT_THAT(Coordinator::CreateFromSerializedState("not_a_valid_proto"),
+              StatusIs(absl::StatusCode::kInvalidArgument,
+                       HasSubstr("Failed to parse CoordinatorState")));
+}
+
+TEST(CoordinatorTest, CreateFromSerializedStateFailsWithoutAggregationConfig) {
+  CoordinatorState state_without_config;
+  state_without_config.set_status(COORDINATOR_STATUS_PRE_SETUP);
+  EXPECT_THAT(Coordinator::CreateFromSerializedState(
+                  state_without_config.SerializeAsString()),
+              StatusIs(absl::StatusCode::kInvalidArgument,
+                       HasSubstr("missing aggregation_config")));
+}
+
+TEST(CoordinatorTest, CreateFromSerializedStateFailsWithUnspecifiedStatus) {
+  CoordinatorState state_with_unspecified_status;
+  *state_with_unspecified_status.mutable_aggregation_config() =
+      CreateValidConfig();
+  EXPECT_THAT(Coordinator::CreateFromSerializedState(
+                  state_with_unspecified_status.SerializeAsString()),
+              StatusIs(absl::StatusCode::kInvalidArgument,
+                       HasSubstr("CoordinatorStatus")));
 }
 
 TEST(CoordinatorTest, PrepareDecryptionRequestFailsWhenNotInCorrectState) {
