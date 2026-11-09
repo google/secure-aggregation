@@ -681,10 +681,10 @@ impl<'a> ZeroKnowledgeProver<RlweRelationProofStatement<'a>, RlweRelationProofWi
             let rho = rho_vec[j];
             // Evaluate the private polynomials at rho.
             // Unlike the other polynomials we are evaluating (a*r) and (v*p) can exceed 2^128 (for
-            // large q) so we split the polynomials in this section into upper and lower
-            // parts to avoid overflow. We use base q as this will  be convenient in the
-            // following calculations and we don't mind the smaller part exceeding q so
-            // long as it doesn't overflow the 128bit type.
+            // large q) so we split the polynomials in this section into upper and lower parts to
+            // avoid overflow. We use base q as this will  be convenient in the following
+            // calculations and we don't mind the smaller part exceeding q so long as it doesn't
+            // overflow the 128bit type.
             //
             // We make the upper part signed so we can represent negative numbers.
             let mut arrho_upper = 0i128;
@@ -753,8 +753,7 @@ impl<'a> ZeroKnowledgeProver<RlweRelationProofStatement<'a>, RlweRelationProofWi
         // powers of rho.
         // The concatenation of these public vectors we now write into the public_vec for the inner
         // product proof. Followed by the public half of -q*wrho i.e. just the scalar -q (with the
-        // relevant tau powers). The expected result of the inner product is also computed
-        // here.
+        // relevant tau powers). The expected result of the inner product is also computed here.
         let (mut public_vec, mut result) = create_public_vec(
             &rho_vec,
             &arho_vec,
