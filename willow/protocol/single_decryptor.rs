@@ -14,7 +14,9 @@
 
 use ahe_traits::{AheKeygen, PartialDec};
 use decryptor::{Decryptor, DecryptorState};
-use messages::{DecryptorPublicKey, PartialDecryptionRequest, PartialDecryptionResponse};
+use messages::{
+    DecryptorPublicKey, DecryptorStatus, PartialDecryptionRequest, PartialDecryptionResponse,
+};
 use shell_kahe::ShellKahe;
 use status::StatusError;
 use std::rc::Rc;
@@ -59,6 +61,8 @@ where
         let (sk_share, pk_share, _) =
             self.decryptor.vahe().key_gen(&mut self.decryptor.prng.borrow_mut())?;
         decryptor_state.sk_share = Some(sk_share);
+        decryptor_state.pk_share = Some(pk_share.clone());
+        decryptor_state.status = DecryptorStatus::AwaitingDecryptionRequest;
         self.decryptor.vahe().aggregate_public_key_shares(std::iter::once(&pk_share))
     }
 
@@ -68,11 +72,18 @@ where
         partial_decryption_request: PartialDecryptionRequest<Vahe>,
         decryptor_state: &mut DecryptorState<Vahe>,
     ) -> Result<PartialDecryptionResponse<ShellKahe, Vahe>, StatusError> {
-        self.decryptor.handle_partial_decryption_request(
+        let response = self.decryptor.handle_partial_decryption_request(
             partial_decryption_request,
             None::<&ShellKahe>,
             decryptor_state,
-        )
+        )?;
+        // In single-decryptor mode (`committee_config.is_none()`), keep status in
+        // `AwaitingDecryptionRequest` so single-decryptor callers/benchmarks can evaluate
+        // partial decryptions across multiple verifier slices.
+        if decryptor_state.committee_config.is_none() {
+            decryptor_state.status = DecryptorStatus::AwaitingDecryptionRequest;
+        }
+        Ok(response)
     }
 }
 

@@ -87,6 +87,11 @@ pub mod ffi {
             poly: *const RnsPolynomialWrapper,
         ) -> RnsPolynomialWrapper;
 
+        pub unsafe fn RnsPolynomialWrapperEquals(
+            lhs: *const RnsPolynomialWrapper,
+            rhs: *const RnsPolynomialWrapper,
+        ) -> bool;
+
         pub unsafe fn CloneRnsPolynomialVecWrapper(
             poly: *const RnsPolynomialVecWrapper,
         ) -> RnsPolynomialVecWrapper;
@@ -138,6 +143,15 @@ impl Clone for RnsPolynomial {
         unsafe { ffi::CloneRnsPolynomialWrapper(self) }
     }
 }
+
+impl PartialEq for RnsPolynomial {
+    fn eq(&self, other: &Self) -> bool {
+        // SAFETY: `self` and `other` are valid `RnsPolynomialWrapper` references.
+        unsafe { ffi::RnsPolynomialWrapperEquals(self, other) }
+    }
+}
+
+impl Eq for RnsPolynomial {}
 
 pub use ffi::CreateEmptyRnsPolynomialWrapper as create_empty_rns_polynomial;
 
