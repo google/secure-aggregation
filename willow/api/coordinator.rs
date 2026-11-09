@@ -17,8 +17,8 @@ use aggregation_config_rust_proto::AggregationConfigProto;
 use ahe_traits::AheBase;
 use coordinator::Coordinator;
 use kahe_traits::{HasKahe, KaheBase};
-use messages::CoordinatorState;
-use messages_rust_proto::CoordinatorState as CoordinatorStateProto;
+use messages::{CommitteeConfig, CoordinatorState, RecoveryResponse};
+use messages_rust_proto::{CommitteeConfigProto, CoordinatorState as CoordinatorStateProto};
 use proto_serialization_traits::{FromProto, ToProto};
 use protobuf::prelude::*;
 use shell_ciphertexts_rust_proto::ShellAhePartialDecCiphertext as ShellAhePartialDecCiphertextProto;
@@ -36,6 +36,11 @@ pub mod ffi {
     // SerializedProtoSpan object.
     struct SerializedProtoView<'a> {
         data: &'a [u8],
+    }
+
+    struct IndexedSerializedRecoveryRequest {
+        survivor_index: u32,
+        request_bytes: Vec<u8>,
     }
 
     unsafe extern "C++" {
@@ -69,6 +74,12 @@ pub mod ffi {
             serialized_state: &[u8],
         ) -> FfiStatus;
 
+        #[cxx_name = "ConfigureCommittee"]
+        fn configure_committee_ffi(
+            self: &mut WillowShellCoordinator,
+            serialized_committee_config: &[u8],
+        ) -> FfiStatus;
+
         #[cxx_name = "HandleSetupSubmissions"]
         fn handle_setup_submissions_ffi(
             self: &mut WillowShellCoordinator,
@@ -82,6 +93,30 @@ pub mod ffi {
             self: &mut WillowShellCoordinator,
             verifier_ciphertext: &[u8],
             out_decryption_request: &mut Vec<u8>,
+        ) -> FfiStatus;
+
+        #[cxx_name = "AggregatePartialDecryptions"]
+        fn aggregate_partial_decryptions_ffi(
+            self: &mut WillowShellCoordinator,
+            partial_responses: &[SerializedProtoView],
+        ) -> FfiStatus;
+
+        #[cxx_name = "CreateIndexedRecoveryRequests"]
+        fn create_indexed_recovery_requests_ffi(
+            self: &WillowShellCoordinator,
+            out_requests: &mut Vec<IndexedSerializedRecoveryRequest>,
+        ) -> FfiStatus;
+
+        #[cxx_name = "RecoverDroppedDecryptors"]
+        fn recover_dropped_decryptors_ffi(
+            self: &mut WillowShellCoordinator,
+            recovery_responses: &[SerializedProtoView],
+        ) -> FfiStatus;
+
+        #[cxx_name = "FinalizePartialDecryption"]
+        fn finalize_partial_decryption_ffi(
+            self: &mut WillowShellCoordinator,
+            out_finalized_pd: &mut Vec<u8>,
         ) -> FfiStatus;
 
         #[cxx_name = "AggregateAndFinalizePartialDecryptions"]
@@ -193,6 +228,21 @@ impl WillowShellCoordinator {
         self.restore_from_serialized_state(serialized_state).into()
     }
 
+    fn configure_committee(
+        &mut self,
+        serialized_committee_config: &[u8],
+    ) -> Result<(), StatusError> {
+        let proto = CommitteeConfigProto::parse(serialized_committee_config).map_err(|e| {
+            status::invalid_argument(&format!("Failed to parse CommitteeConfigProto: {}", e))
+        })?;
+        let committee_config = CommitteeConfig::from_proto(proto, ())?;
+        self.coord.configure_committee(committee_config, &mut self.coord_state)
+    }
+
+    fn configure_committee_ffi(&mut self, serialized_committee_config: &[u8]) -> ffi::FfiStatus {
+        self.configure_committee(serialized_committee_config).into()
+    }
+
     /// Helper function to parse protobuf views using the coordinator's context.
     fn parse_views<'a, T>(
         &'a self,
@@ -270,23 +320,101 @@ impl WillowShellCoordinator {
             .into()
     }
 
-    fn aggregate_and_finalize_partial_decryptions(
+    fn aggregate_partial_decryptions(
         &mut self,
         partial_response_views: &[ffi::SerializedProtoView],
-    ) -> Result<Vec<u8>, StatusError> {
+    ) -> Result<(), StatusError> {
         let responses = self.parse_views(partial_response_views)?;
-
         self.coord.aggregate_partial_decryptions(
             responses,
             Some(self.kahe.as_ref()),
             &mut self.coord_state,
-        )?;
+        )
+    }
 
+    fn aggregate_partial_decryptions_ffi(
+        &mut self,
+        partial_responses: &[ffi::SerializedProtoView],
+    ) -> ffi::FfiStatus {
+        self.aggregate_partial_decryptions(partial_responses).into()
+    }
+
+    fn create_indexed_recovery_requests(
+        &self,
+    ) -> Result<Vec<ffi::IndexedSerializedRecoveryRequest>, StatusError> {
+        let indexed = self.coord.create_indexed_recovery_requests(&self.coord_state)?;
+        let mut out = Vec::with_capacity(indexed.len());
+        for (survivor_idx, req) in indexed {
+            let proto = req.to_proto(())?;
+            let request_bytes = proto.serialize().map_err(|e| {
+                status::internal(&format!("Failed to serialize RecoveryRequest: {}", e))
+            })?;
+            out.push(ffi::IndexedSerializedRecoveryRequest {
+                survivor_index: survivor_idx.get(),
+                request_bytes,
+            });
+        }
+        Ok(out)
+    }
+
+    fn create_indexed_recovery_requests_ffi(
+        &self,
+        out_requests: &mut Vec<ffi::IndexedSerializedRecoveryRequest>,
+    ) -> ffi::FfiStatus {
+        self.create_indexed_recovery_requests()
+            .map(|requests| {
+                *out_requests = requests;
+            })
+            .into()
+    }
+
+    fn recover_dropped_decryptors(
+        &mut self,
+        recovery_response_views: &[ffi::SerializedProtoView],
+    ) -> Result<(), StatusError> {
+        let mut responses = Vec::with_capacity(recovery_response_views.len());
+        for view in recovery_response_views {
+            let proto =
+                <RecoveryResponse as FromProto<()>>::Proto::parse(view.data).map_err(|e| {
+                    status::invalid_argument(&format!("Failed to parse RecoveryResponse: {}", e))
+                })?;
+            responses.push(RecoveryResponse::from_proto(proto, ())?);
+        }
+        self.coord.recover_dropped_decryptors(responses, &mut self.coord_state)
+    }
+
+    fn recover_dropped_decryptors_ffi(
+        &mut self,
+        recovery_responses: &[ffi::SerializedProtoView],
+    ) -> ffi::FfiStatus {
+        self.recover_dropped_decryptors(recovery_responses).into()
+    }
+
+    fn finalize_partial_decryption(&mut self) -> Result<Vec<u8>, StatusError> {
         let finalized_pd = self.coord.finalize_partial_decryption(&mut self.coord_state)?;
         let proto = finalized_pd.to_proto(&*self)?;
         proto.serialize().map_err(|e| {
             status::internal(&format!("Failed to serialize FinalizedPartialDecryption: {}", e))
         })
+    }
+
+    fn finalize_partial_decryption_ffi(
+        &mut self,
+        out_finalized_pd: &mut Vec<u8>,
+    ) -> ffi::FfiStatus {
+        self.finalize_partial_decryption()
+            .map(|serialized| {
+                *out_finalized_pd = serialized;
+            })
+            .into()
+    }
+
+    fn aggregate_and_finalize_partial_decryptions(
+        &mut self,
+        partial_response_views: &[ffi::SerializedProtoView],
+    ) -> Result<Vec<u8>, StatusError> {
+        self.aggregate_partial_decryptions(partial_response_views)?;
+        self.finalize_partial_decryption()
     }
 
     fn aggregate_and_finalize_partial_decryptions_ffi(

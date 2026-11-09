@@ -40,6 +40,9 @@ message PartialDecryptionResponse {
   ShellAhePartialDecryption partial_decryption = 1;
   // Noise contribution to the final aggregated result.
   CiphertextContribution dp_ciphertext_contribution = 2;
+  // 1-based committee index of the responding decryptor (1..=MAX_SHARES) in
+  // recoverable multi-decryptor mode (0 if unindexed / reputable / single).
+  uint32 decryptor_index = 3;
 }
 
 message CiphertextContribution {
@@ -53,9 +56,47 @@ message DecryptionRequestContribution {
   bytes nonce = 3;
 }
 
+// Tracks a decryptor's progress through the protocol for strict one-shot
+// state transition enforcement.
+enum DecryptorStatus {
+  DECRYPTOR_STATUS_UNSPECIFIED = 0;
+  DECRYPTOR_STATUS_PRE_SETUP = 1;
+  DECRYPTOR_STATUS_AWAITING_DECRYPTION_REQUEST = 2;
+  DECRYPTOR_STATUS_AWAITING_RECOVERY_REQUEST = 3;
+  DECRYPTOR_STATUS_FINISHED = 4;
+}
+
+// Configuration for a non-reputable decryptor committee member participating
+// in Feldman VSS + HPKE dropout recovery.
+message CommitteeConfigProto {
+  // 1-based index of this decryptor in 1..=num_decryptors.
+  uint32 my_index = 1;
+  // Total number of decryptors in the committee (2 <= num_decryptors <= MAX_SHARES).
+  uint32 num_decryptors = 2;
+  // Reconstruction threshold t (1 <= threshold <= num_decryptors - 1).
+  uint32 threshold = 3;
+  // 32-byte hash over the pre-setup committee roster
+  // (threshold, num_decryptors, sorted [(decryptor_index, hpke_public_key)]).
+  bytes roster_hash = 4;
+  // Session context / key_id binding shares and seeds to this aggregation session.
+  bytes session_context = 5;
+}
+
 message DecryptorState {
   ShellAheSecretKeyShare sk_share = 1;
   AggregationConfigProto aggregation_config = 2;
+  DecryptorStatus status = 3;
+  CommitteeConfigProto committee_config = 4;
+  // Optional encrypted Tink HPKE private keyset (`EncryptedKeysetFormat` produced
+  // by `TinkHpkePrivateKey::to_encrypted_keyset`) for decrypting peer shares
+  // during dropout recovery.
+  bytes hpke_private_keyset = 5;
+  // Broadcast Feldman VSS polynomial commitments keyed by 1-based dealer_index
+  // (1..=MAX_SHARES), bound in the setup transcript.
+  map<uint32, FeldmanCommitmentProto> dealer_commitments = 6;
+  // Optional 32-byte setup transcript hash binding all broadcast
+  // (dealer_index, FeldmanCommitment) pairs.
+  bytes setup_transcript_hash = 7;
 }
 
 message ServerState {
@@ -86,6 +127,23 @@ message FinalizedAccumulatorResult {
 // An encrypted share of the PRNG state for secret sharing.
 message SecretSharingContribution {
   bytes encrypted_share = 1;
+  // 1-based recipient decryptor index (1..=MAX_SHARES) for which this share
+  // was encrypted (0 if unindexed).
+  uint32 recipient_index = 2;
+}
+
+// A plaintext Feldman VSS share (index, f(index)) over Ristretto255.
+message FeldmanShareProto {
+  // 1-based share evaluation index in 1..=MAX_SHARES.
+  uint32 index = 1;
+  // Canonical 32-byte little-endian Ristretto255 scalar encoding.
+  bytes value = 2;
+}
+
+// Public Feldman VSS polynomial commitment (C_0, ..., C_{t-1}) over Ristretto255.
+message FeldmanCommitmentProto {
+  // Canonical 32-byte compressed Ristretto255 points C_k = a_k * G.
+  repeated bytes commitments = 1;
 }
 
 // Public key independent half of ciphertext for DP noise.
@@ -110,16 +168,37 @@ message SetupContribution {
   DPSetupContribution dp_setup = 2;
   // Encrypted randomness shares, only used by non-reputable decryptors.
   repeated SecretSharingContribution encrypted_randomness_shares = 3;
+  // 1-based committee index of this decryptor (1..=MAX_SHARES) in
+  // recoverable multi-decryptor mode (0 if unindexed / reputable).
+  uint32 decryptor_index = 4;
+  // Public Feldman VSS polynomial commitment (C_0, ..., C_{t-1}) from this
+  // dealer in recoverable multi-decryptor mode.
+  FeldmanCommitmentProto feldman_commitment = 5;
+  // Encrypted randomness shares keyed by 1-based recipient_index
+  // (1..=MAX_SHARES).
+  map<uint32, bytes> indexed_encrypted_shares = 6;
 }
 
 // A request to a surviving decryptor to decrypt shares of dropped decryptors.
 message RecoveryRequest {
   repeated SecretSharingContribution encrypted_shares = 1;
+  // Encrypted shares keyed by 1-based dropped dealer_index (1..=MAX_SHARES).
+  map<uint32, bytes> indexed_encrypted_shares = 2;
+  // Broadcast Feldman VSS commitments keyed by 1-based dealer_index
+  // (1..=MAX_SHARES), used by the surviving decryptor to verify the setup
+  // commitment transcript and each decrypted share (`feldman_vss::verify_share`).
+  map<uint32, FeldmanCommitmentProto> dealer_commitments = 3;
 }
 
 // A response containing the decrypted shares of dropped decryptors.
 message RecoveryResponse {
   repeated bytes decrypted_shares = 1;
+  // 1-based committee index of the surviving decryptor (1..=MAX_SHARES)
+  // sending this response.
+  uint32 survivor_index = 2;
+  // Decrypted Feldman VSS shares keyed by 1-based dropped dealer_index
+  // (1..=MAX_SHARES).
+  map<uint32, FeldmanShareProto> indexed_decrypted_shares = 3;
 }
 
 // A request from the coordinator to reputable decryptors to verify key
@@ -151,6 +230,21 @@ message EncryptedRandomnessShares {
   repeated SecretSharingContribution shares = 1;
 }
 
+// Per-dealer recoverable setup metadata stored by the coordinator for
+// Feldman VSS dropout recovery.
+message DealerSetupInfoProto {
+  // 1-based committee index of the dealer (1..=MAX_SHARES).
+  uint32 dealer_index = 1;
+  // Broadcast Feldman VSS polynomial commitment (C_0, ..., C_{t-1}).
+  FeldmanCommitmentProto feldman_commitment = 2;
+  // Public key share submitted by this dealer during setup (used to verify
+  // regenerated pk_share == expected_pk_share during recovery).
+  ShellAhePublicKeyShare public_key_share = 3;
+  // Encrypted randomness shares dealt by this dealer, keyed by 1-based
+  // recipient_index (1..=MAX_SHARES).
+  map<uint32, bytes> encrypted_shares = 4;
+}
+
 // State stored by the coordinator between protocol rounds.
 message CoordinatorState {
   CoordinatorStatus status = 1;
@@ -168,4 +262,20 @@ message CoordinatorState {
   ShellAhePartialDecryption partial_decryption_sum = 5;
   // Aggregation configuration used to initialize the coordinator.
   AggregationConfigProto aggregation_config = 6;
+  // 1-based committee indices of non-reputable decryptors that have
+  // responded with a PartialDecryptionResponse.
+  repeated uint32 responded_decryptor_indices = 7;
+  // Saved partial decryption request ciphertext (ct_1) from
+  // prepare_decryption_request, needed to compute simulated partial
+  // decryptions for dropped decryptors during recovery.
+  ShellAhePartialDecCiphertext partial_dec_ciphertext = 8;
+  // Per-dealer Feldman VSS commitment, setup PublicKeyShare, and encrypted
+  // shares keyed by 1-based dealer_index (1..=MAX_SHARES).
+  map<uint32, DealerSetupInfoProto> dealer_setup_info = 9;
+  // Committee configuration (num_decryptors, threshold, roster_hash,
+  // session_context) when running with a recoverable committee.
+  CommitteeConfigProto committee_config = 10;
+  // 32-byte setup transcript hash binding all broadcast
+  // (dealer_index, FeldmanCommitment) pairs.
+  bytes setup_transcript_hash = 11;
 }
