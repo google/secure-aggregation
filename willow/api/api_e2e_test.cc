@@ -269,6 +269,250 @@ TEST(WillowV1ApiE2ETest, MultiDecryptorCoordinatorFullPipelineWithCodec) {
                   Pair("lang", ElementsAre("es", "en", "en", "en", "es"))));
 }
 
+TEST(WillowV1ApiE2ETest,
+     RecoverableMultiDecryptorCoordinatorFullPipelineWithDropoutRecovery) {
+  InputSpec input_spec = CreateTestInputSpecProto();
+  SECAGG_ASSERT_OK_AND_ASSIGN(auto encoder,
+                              CodecFactory::CreateExplicitCodec(input_spec));
+
+  constexpr int64_t kMaxClients = 10;
+  constexpr int64_t kMaxDecryptors = 1;
+  constexpr int64_t kMaxDecryptorDropouts = 0;
+  constexpr int64_t kDefaultMaxMetricValue = 100;
+
+  SECAGG_ASSERT_OK_AND_ASSIGN(
+      AggregationConfigProto config,
+      CreateAggregationConfig(input_spec, "test_key_recoverable", kMaxClients,
+                              kMaxDecryptors, kMaxDecryptorDropouts,
+                              kDefaultMaxMetricValue));
+
+  // Configure a 3-of-5 recoverable committee (tolerating up to d = 5 - 3 = 2
+  // dropped non-reputable decryptors) plus 1 reputable decryptor.
+  constexpr uint32_t kNumCommitteeDecryptors = 5;
+  constexpr uint32_t kThreshold = 3;
+  constexpr absl::string_view kSessionContext =
+      "api_e2e_recoverable_3_of_5_session";
+
+  SECAGG_ASSERT_OK_AND_ASSIGN(auto coordinator, Coordinator::Create(config));
+  SECAGG_ASSERT_OK_AND_ASSIGN(auto reputable_decryptor,
+                              ShellTestingDecryptor::Create(config));
+
+  std::vector<std::unique_ptr<ShellTestingDecryptor>> committee_decryptors;
+  std::vector<std::string> roster_pks;
+  for (uint32_t i = 1; i <= kNumCommitteeDecryptors; ++i) {
+    SECAGG_ASSERT_OK_AND_ASSIGN(auto dec,
+                                ShellTestingDecryptor::Create(config));
+    SECAGG_ASSERT_OK_AND_ASSIGN(std::string pk, dec->GenerateHpkePublicKey());
+    roster_pks.push_back(std::move(pk));
+    committee_decryptors.push_back(std::move(dec));
+  }
+
+  SECAGG_ASSERT_OK_AND_ASSIGN(CommitteeConfigProto coord_committee_cfg,
+                              ShellTestingDecryptor::BuildCommitteeConfig(
+                                  /*my_index=*/1, kNumCommitteeDecryptors,
+                                  kThreshold, kSessionContext, roster_pks));
+  SECAGG_ASSERT_OK(coordinator->ConfigureCommittee(coord_committee_cfg));
+
+  // Generate setup contributions (1 reputable + 5 recoverable committee).
+  SECAGG_ASSERT_OK_AND_ASSIGN(SetupContribution reputable_contrib,
+                              reputable_decryptor->CreateSetupContribution());
+  std::vector<SetupContribution> reputable_contribs = {
+      std::move(reputable_contrib)};
+
+  std::vector<SetupContribution> non_reputable_contribs;
+  for (uint32_t i = 1; i <= kNumCommitteeDecryptors; ++i) {
+    SECAGG_ASSERT_OK_AND_ASSIGN(CommitteeConfigProto dec_cfg,
+                                ShellTestingDecryptor::BuildCommitteeConfig(
+                                    i, kNumCommitteeDecryptors, kThreshold,
+                                    kSessionContext, roster_pks));
+    SECAGG_ASSERT_OK_AND_ASSIGN(
+        SetupContribution contrib,
+        committee_decryptors[i - 1]->CreateRecoverableSetupContribution(
+            dec_cfg, roster_pks));
+    non_reputable_contribs.push_back(std::move(contrib));
+  }
+
+  SECAGG_ASSERT_OK_AND_ASSIGN(VerifyKeyContributionsRequest verify_request,
+                              coordinator->HandleSetupSubmissions(
+                                  non_reputable_contribs, reputable_contribs));
+
+  // Serialize and reinstantiate Coordinator after setup round.
+  SECAGG_ASSERT_OK_AND_ASSIGN(std::string serialized_coord_state,
+                              coordinator->ToSerializedState());
+  SECAGG_ASSERT_OK_AND_ASSIGN(
+      coordinator,
+      Coordinator::CreateFromSerializedState(serialized_coord_state));
+
+  // Reputable decryptor verifies all 6 ZK proofs and aggregates global PK.
+  SECAGG_ASSERT_OK_AND_ASSIGN(
+      ShellAhePublicKey public_key,
+      reputable_decryptor->VerifyAndAggregateKeyContributions(verify_request));
+
+  // Encode inputs for 3 clients and accumulate across 2 ServerAccumulators.
+  GroupData group_by_data0 = {{"country", {"US", "CA", "MX"}},
+                              {"lang", {"en", "es", "en"}}};
+  MetricData metric_data0 = {{"metric1", {17, 42, 10}}};
+
+  GroupData group_by_data1 = {{"country", {"US", "US", "MX"}},
+                              {"lang", {"en", "es", "en"}}};
+  MetricData metric_data1 = {{"metric1", {23, 83, 29}}};
+
+  GroupData group_by_data2 = {{"country", {"CA", "GB", "US"}},
+                              {"lang", {"es", "en", "es"}}};
+  MetricData metric_data2 = {{"metric1", {54, 61, 15}}};
+
+  SECAGG_ASSERT_OK_AND_ASSIGN(EncodedData encoded0,
+                              encoder->Encode(group_by_data0, metric_data0));
+  SECAGG_ASSERT_OK_AND_ASSIGN(EncodedData encoded1,
+                              encoder->Encode(group_by_data1, metric_data1));
+  SECAGG_ASSERT_OK_AND_ASSIGN(EncodedData encoded2,
+                              encoder->Encode(group_by_data2, metric_data2));
+
+  SECAGG_ASSERT_OK_AND_ASSIGN(
+      ClientMessage msg0,
+      GenerateClientContribution(config, encoded0, public_key,
+                                 PrefixedNonce("nonce0")));
+  SECAGG_ASSERT_OK_AND_ASSIGN(
+      ClientMessage msg1,
+      GenerateClientContribution(config, encoded1, public_key,
+                                 PrefixedNonce("nonce1")));
+  SECAGG_ASSERT_OK_AND_ASSIGN(
+      ClientMessage msg2,
+      GenerateClientContribution(config, encoded2, public_key,
+                                 PrefixedNonce("nonce2")));
+
+  SECAGG_ASSERT_OK_AND_ASSIGN(auto acc1, ServerAccumulator::Create(config));
+  SECAGG_ASSERT_OK_AND_ASSIGN(auto acc2, ServerAccumulator::Create(config));
+
+  ClientMessageRange range1;
+  *range1.add_client_messages() = std::move(msg0);
+  *range1.add_client_messages() = std::move(msg1);
+  range1.mutable_nonce_range()->set_start("nonce0");
+  range1.mutable_nonce_range()->set_end("nonce2");
+
+  ClientMessageRange range2;
+  *range2.add_client_messages() = std::move(msg2);
+  range2.mutable_nonce_range()->set_start("nonce2");
+  range2.mutable_nonce_range()->set_end("nonce3");
+
+  SECAGG_ASSERT_OK(acc1->ProcessClientMessages(range1));
+  SECAGG_ASSERT_OK(acc2->ProcessClientMessages(range2));
+  SECAGG_ASSERT_OK(acc1->Merge(std::move(acc2)));
+
+  SECAGG_ASSERT_OK_AND_ASSIGN(
+      FinalizedAccumulatorResult finalized_accumulator_result,
+      std::move(*acc1).Finalize());
+
+  PartialDecryptionRequest acc_dec_req;
+  ASSERT_TRUE(acc_dec_req.ParseFromString(
+      finalized_accumulator_result.decryption_request()));
+
+  SECAGG_ASSERT_OK_AND_ASSIGN(PartialDecryptionRequest dec_request,
+                              coordinator->PrepareDecryptionRequest(
+                                  acc_dec_req.partial_dec_ciphertext()));
+
+  // Serialize and reinstantiate Coordinator while awaiting partial decryptions.
+  SECAGG_ASSERT_OK_AND_ASSIGN(serialized_coord_state,
+                              coordinator->ToSerializedState());
+  SECAGG_ASSERT_OK_AND_ASSIGN(
+      coordinator,
+      Coordinator::CreateFromSerializedState(serialized_coord_state));
+
+  // Committee decryptors {2, 5} DROP OUT! Only survivors {1, 3, 4} (t = 3)
+  // and the reputable decryptor respond to the partial decryption request.
+  std::vector<PartialDecryptionResponse> partial_responses;
+  SECAGG_ASSERT_OK_AND_ASSIGN(
+      PartialDecryptionResponse response_reputable,
+      reputable_decryptor->HandlePartialDecryptionRequest(dec_request));
+  partial_responses.push_back(std::move(response_reputable));
+
+  for (uint32_t survivor_idx : {1u, 3u, 4u}) {
+    SECAGG_ASSERT_OK_AND_ASSIGN(
+        PartialDecryptionResponse resp,
+        committee_decryptors[survivor_idx - 1]->HandlePartialDecryptionRequest(
+            dec_request));
+    EXPECT_EQ(resp.decryptor_index(), survivor_idx);
+    partial_responses.push_back(std::move(resp));
+  }
+
+  SECAGG_ASSERT_OK(coordinator->AggregatePartialDecryptions(partial_responses));
+
+  // Serialize and reinstantiate Coordinator in AwaitingRecovery state!
+  SECAGG_ASSERT_OK_AND_ASSIGN(serialized_coord_state,
+                              coordinator->ToSerializedState());
+  CoordinatorState parsed_awaiting_recovery;
+  ASSERT_TRUE(parsed_awaiting_recovery.ParseFromString(serialized_coord_state));
+  EXPECT_EQ(parsed_awaiting_recovery.status(),
+            COORDINATOR_STATUS_AWAITING_RECOVERY);
+  EXPECT_THAT(parsed_awaiting_recovery.responded_decryptor_indices(),
+              ElementsAre(1, 3, 4));
+
+  SECAGG_ASSERT_OK_AND_ASSIGN(
+      coordinator,
+      Coordinator::CreateFromSerializedState(serialized_coord_state));
+
+  // Create indexed recovery requests for survivors {1, 3, 4} to recover dropped
+  // committee decryptors {2, 5}.
+  SECAGG_ASSERT_OK_AND_ASSIGN(auto indexed_recovery_requests,
+                              coordinator->CreateIndexedRecoveryRequests());
+  ASSERT_EQ(indexed_recovery_requests.size(), 3u);
+
+  std::vector<RecoveryResponse> recovery_responses;
+  for (const auto& [survivor_idx, rec_req] : indexed_recovery_requests) {
+    EXPECT_EQ(rec_req.indexed_encrypted_shares().size(), 2u);
+    EXPECT_TRUE(rec_req.indexed_encrypted_shares().contains(2));
+    EXPECT_TRUE(rec_req.indexed_encrypted_shares().contains(5));
+
+    SECAGG_ASSERT_OK_AND_ASSIGN(
+        RecoveryResponse rec_resp,
+        committee_decryptors[survivor_idx - 1]->HandleRecoveryRequest(rec_req));
+    // One-shot enforcement: a second recovery request on the same survivor must
+    // fail because its state is now burned to Finished.
+    EXPECT_FALSE(committee_decryptors[survivor_idx - 1]
+                     ->HandleRecoveryRequest(rec_req)
+                     .ok());
+    recovery_responses.push_back(std::move(rec_resp));
+  }
+
+  // Coordinator reconstructs dropped decryptors {2, 5}, verifies Step 14 PK
+  // binding, and accumulates their simulated partial decryptions.
+  SECAGG_ASSERT_OK(coordinator->RecoverDroppedDecryptors(recovery_responses));
+
+  // Serialize and reinstantiate Coordinator in OutputReady state.
+  SECAGG_ASSERT_OK_AND_ASSIGN(serialized_coord_state,
+                              coordinator->ToSerializedState());
+  SECAGG_ASSERT_OK_AND_ASSIGN(
+      coordinator,
+      Coordinator::CreateFromSerializedState(serialized_coord_state));
+
+  SECAGG_ASSERT_OK_AND_ASSIGN(FinalizedPartialDecryption finalized_pd,
+                              coordinator->FinalizePartialDecryption());
+
+  SECAGG_ASSERT_OK_AND_ASSIGN(
+      auto final_result_decryptor,
+      FinalResultDecryptor::CreateFromSerialized(
+          finalized_accumulator_result.final_result_decryptor_state()));
+
+  PartialDecryptionResponse full_pd_response;
+  *full_pd_response.mutable_partial_decryption() =
+      finalized_pd.partial_decryption_sum();
+
+  SECAGG_ASSERT_OK_AND_ASSIGN(
+      EncodedData recovered_data,
+      final_result_decryptor->Decrypt(full_pd_response.SerializeAsString()));
+
+  SECAGG_ASSERT_OK_AND_ASSIGN(DecodedData decoded_results,
+                              encoder->Decode(recovered_data));
+
+  EXPECT_THAT(
+      decoded_results.metric_data,
+      UnorderedElementsAre(Pair("metric1", ElementsAre(96, 61, 39, 40, 98))));
+  EXPECT_THAT(decoded_results.group_data,
+              UnorderedElementsAre(
+                  Pair("country", ElementsAre("CA", "GB", "MX", "US", "US")),
+                  Pair("lang", ElementsAre("es", "en", "en", "en", "es"))));
+}
+
 }  // namespace
 }  // namespace willow
 }  // namespace secure_aggregation
