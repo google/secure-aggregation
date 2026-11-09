@@ -289,6 +289,7 @@ mod tests {
         let mut contribution1 = contribution1;
         contribution1.encrypted_randomness_shares = Some(vec![SecretSharingContribution {
             encrypted_share: b"test_encrypted_share".to_vec(),
+            recipient_index: None,
         }]);
 
         // Coordinator processes setup (round-trip default PreSetup state first).
@@ -419,6 +420,7 @@ mod tests {
             status: CoordinatorStatus::PreSetup,
             encrypted_randomness_shares: vec![vec![SecretSharingContribution {
                 encrypted_share: b"unexpected_share".to_vec(),
+                recipient_index: None,
             }]],
             ..CoordinatorState::default()
         };
@@ -452,10 +454,12 @@ mod tests {
             status: CoordinatorStatus::KeySharesReceived,
             encrypted_randomness_shares: vec![vec![SecretSharingContribution {
                 encrypted_share: b"share_bytes".to_vec(),
+                recipient_index: None,
             }]],
             dp_noise_component_sum: Some(dp_noise_ct),
             setup_contributions: Some(vec![contribution]),
             partial_decryption_sum: None,
+            ..CoordinatorState::default()
         };
         let proto = state.to_proto(&coordinator)?;
         let roundtrip = CoordinatorState::from_proto(proto.as_view(), &coordinator)?;
