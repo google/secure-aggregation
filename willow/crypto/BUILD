@@ -300,6 +300,30 @@ rust_test(
     ],
 )
 
+# Feldman Verifiable Secret Sharing (VSS)
+rust_library(
+    name = "feldman_vss",
+    srcs = ["feldman_vss.rs"],
+    deps = [
+        ":prng_traits",
+        "@protobuf//rust:protobuf",
+        "@crate_index//:curve25519-dalek",
+        "//ffi_utils:status",
+        "//willow/api:proto_serialization_traits",
+        "//willow/proto/willow:messages_rust_proto",
+    ],
+)
+
+rust_test(
+    name = "feldman_vss_test",
+    crate = ":feldman_vss",
+    deps = [
+        ":single_thread_hkdf",
+        "@crate_index//:googletest",
+        "//ffi_utils:status_matchers_rs",
+    ],
+)
+
 # Zero knowledge
 
 rust_library(
