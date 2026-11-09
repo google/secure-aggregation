@@ -76,11 +76,8 @@ impl ShellTestingDecryptor {
         let kahe = Rc::new(ShellKahe::new(kahe_config, context_bytes)?);
         let vahe = Rc::new(ShellVahe::new(ahe_config, context_bytes)?);
         let decryptor = Decryptor::new_with_randomly_generated_seed(vahe)?;
-        let state = DecryptorState {
-            sk_share: None,
-            kahe: None,
-            aggregation_config: Some(aggregation_config.clone()),
-        };
+        let mut state = DecryptorState::default();
+        state.aggregation_config = Some(aggregation_config.clone());
         Ok(ShellTestingDecryptor { kahe, decryptor, state })
     }
 
