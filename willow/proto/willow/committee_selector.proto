@@ -198,6 +198,11 @@ message CheckVolunteerStatusResponse {
 
   // Authorization token to use for future requests.
   string auth_token = 4 ;
+
+  // Optional: If the member was selected, the member's identifier within the
+  // committee, in the range [1, committee_size]. The member sends it as
+  // `member_id` or `sender_member_id` in its later requests.
+  int64 member_id = 5 ;
 }
 
 // Generic error status returned from the TEE to the untrusted frontend for the
