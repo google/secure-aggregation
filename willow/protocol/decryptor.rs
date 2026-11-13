@@ -16,8 +16,9 @@ use aggregation_config::AggregationConfig;
 use ahe_traits::{AheKeygen, PartialDec};
 use kahe_traits::KaheBase;
 use messages::{
-    DecryptorPublicKey, KeyContribution, PartialDecryptionRequest, PartialDecryptionResponse,
-    RecoveryRequest, RecoveryResponse, SetupContribution, VerifyKeyContributionsRequest,
+    CommitteeConfig, DecryptorPublicKey, DecryptorStatus, KeyContribution,
+    PartialDecryptionRequest, PartialDecryptionResponse, RecoveryRequest, RecoveryResponse,
+    SetupContribution, VerifyKeyContributionsRequest,
 };
 use messages_rust_proto::DecryptorState as DecryptorStateProto;
 use prng_traits::SecurePrng;
@@ -27,6 +28,7 @@ use shell_ciphertexts_rust_proto::ShellAheSecretKeyShare;
 use shell_kahe::ShellKahe;
 use status::StatusError;
 use std::cell::RefCell;
+use std::collections::BTreeMap;
 use std::rc::Rc;
 use vahe_traits::{HasVahe, KeyGenVerify, VaheBase, VerifiableKeyGen};
 
@@ -59,11 +61,21 @@ pub struct DecryptorState<Vahe: VaheBase> {
     pub sk_share: Option<Vahe::SecretKeyShare>,
     pub kahe: Option<Rc<ShellKahe>>,
     pub aggregation_config: Option<AggregationConfig>,
+    pub status: DecryptorStatus,
+    pub committee_config: Option<CommitteeConfig>,
+    pub hpke_private_keyset: Option<Vec<u8>>,
 }
 
 impl<Vahe: VaheBase> Default for DecryptorState<Vahe> {
     fn default() -> Self {
-        Self { sk_share: None, kahe: None, aggregation_config: None }
+        Self {
+            sk_share: None,
+            kahe: None,
+            aggregation_config: None,
+            status: DecryptorStatus::PreSetup,
+            committee_config: None,
+            hpke_private_keyset: None,
+        }
     }
 }
 
@@ -77,11 +89,18 @@ where
 
     fn to_proto(&self, context: &'a C) -> Result<Self::Proto, StatusError> {
         let mut proto = DecryptorStateProto::new();
+        proto.set_status(self.status.to_proto(())?);
         if let Some(sk) = &self.sk_share {
             proto.set_sk_share(sk.to_proto(context.vahe())?);
         }
         if let Some(config) = &self.aggregation_config {
             proto.set_aggregation_config(config.to_proto(())?);
+        }
+        if let Some(committee_config) = &self.committee_config {
+            proto.set_committee_config(committee_config.to_proto(())?);
+        }
+        if let Some(hpke_sk) = &self.hpke_private_keyset {
+            proto.set_hpke_private_keyset(hpke_sk.as_slice());
         }
         Ok(proto)
     }
@@ -105,6 +124,50 @@ where
         } else {
             None
         };
+        let committee_config = if proto.has_committee_config() {
+            Some(CommitteeConfig::from_proto(proto.committee_config(), ())?)
+        } else {
+            None
+        };
+        let hpke_private_keyset = if proto.hpke_private_keyset().is_empty() {
+            None
+        } else {
+            Some(proto.hpke_private_keyset().to_vec())
+        };
+        // Backward compatibility for legacy single-decryptor `DecryptorStateProto`
+        // messages (`committee_config.is_none() && hpke_private_keyset.is_none()`)
+        // where proto3 `status` defaults to `DECRYPTOR_STATUS_UNSPECIFIED` (0):
+        // infer `AwaitingDecryptionRequest` when `sk_share` is present and `PreSetup`
+        // when `sk_share` is absent. Recoverable committee states (`committee_config`
+        // or `hpke_private_keyset` present) strictly reject `Unspecified` (`B7`).
+        let status = match proto.status() {
+            messages_rust_proto::DecryptorStatus::Unspecified => {
+                if committee_config.is_some() || hpke_private_keyset.is_some() {
+                    return Err(status::invalid_argument(
+                        "DecryptorStatus is unspecified for recoverable committee state",
+                    ));
+                }
+                if sk_share.is_some() {
+                    DecryptorStatus::AwaitingDecryptionRequest
+                } else {
+                    DecryptorStatus::PreSetup
+                }
+            }
+            raw_status => DecryptorStatus::from_proto(raw_status, ())?,
+        };
+        if status == DecryptorStatus::PreSetup && sk_share.is_some() {
+            return Err(status::invalid_argument(
+                "DecryptorState in PreSetup status must not have sk_share",
+            ));
+        }
+        if (status == DecryptorStatus::AwaitingDecryptionRequest
+            || status == DecryptorStatus::AwaitingRecoveryRequest)
+            && sk_share.is_none()
+        {
+            return Err(status::invalid_argument(
+                "DecryptorState in active status is missing sk_share",
+            ));
+        }
         let aggregation_config = if proto.has_aggregation_config() {
             Some(AggregationConfig::from_proto(proto.aggregation_config(), ())?)
         } else {
@@ -117,7 +180,14 @@ where
         } else {
             None
         };
-        Ok(DecryptorState { sk_share, kahe, aggregation_config })
+        Ok(DecryptorState {
+            sk_share,
+            kahe,
+            aggregation_config,
+            status,
+            committee_config,
+            hpke_private_keyset,
+        })
     }
 }
 
@@ -137,6 +207,7 @@ where
             self.vahe.verifiable_key_gen(&mut self.prng.borrow_mut())?;
 
         decryptor_state.sk_share = Some(sk_share);
+        decryptor_state.status = DecryptorStatus::AwaitingDecryptionRequest;
 
         Ok(SetupContribution {
             key_contribution: KeyContribution {
@@ -145,6 +216,9 @@ where
             },
             dp_setup: None,
             encrypted_randomness_shares: None,
+            decryptor_index: decryptor_state.committee_config.as_ref().map(|c| c.my_index),
+            feldman_commitment: None,
+            indexed_encrypted_shares: BTreeMap::new(),
         })
     }
 
@@ -209,7 +283,11 @@ where
             sk_share,
             &mut self.prng.borrow_mut(),
         )?;
-        Ok(PartialDecryptionResponse { partial_decryption: pd, dp_ciphertext_contribution: None })
+        Ok(PartialDecryptionResponse {
+            partial_decryption: pd,
+            dp_ciphertext_contribution: None,
+            decryptor_index: decryptor_state.committee_config.as_ref().map(|c| c.my_index),
+        })
     }
 
     /// Handles a request to decrypt shares of dropped decryptors.
@@ -410,6 +488,85 @@ mod tests {
             Some(plaintext.len()),
         )?;
         verify_true!(recovered == plaintext)?;
+
+        Ok(())
+    }
+
+    #[gtest]
+    fn decryptor_state_with_committee_config_and_status_roundtrip() -> googletest::Result<()> {
+        use messages::{CommitteeConfig, DecryptorStatus};
+        use std::num::NonZeroU32;
+
+        let vahe = Rc::new(ShellVahe::new(create_shell_ahe_config(1)?, CONTEXT_STRING)?);
+        let decryptor = Decryptor::new_with_randomly_generated_seed(vahe)?;
+
+        let cfg = CommitteeConfig::new(
+            NonZeroU32::new(2).unwrap(),
+            3,
+            2,
+            [0x33u8; 32],
+            b"sess_ctx".to_vec(),
+        )?;
+        let mut state = DecryptorState::default();
+        state.committee_config = Some(cfg.clone());
+        state.hpke_private_keyset = Some(b"serialized_hpke_private_keyset".to_vec());
+        verify_true!(state.status == DecryptorStatus::PreSetup)?;
+
+        // PreSetup roundtrip with committee_config and hpke_private_keyset.
+        let proto = state.to_proto(&decryptor)?;
+        let roundtrip = DecryptorState::from_proto(proto, &decryptor)?;
+        verify_true!(roundtrip.status == DecryptorStatus::PreSetup)?;
+        verify_true!(roundtrip.committee_config.as_ref() == Some(&cfg))?;
+        verify_true!(
+            roundtrip.hpke_private_keyset.as_deref()
+                == Some(b"serialized_hpke_private_keyset".as_slice())
+        )?;
+
+        // Setup transitions status to AwaitingDecryptionRequest and sets decryptor_index on
+        // contribution.
+        let contrib = decryptor.create_setup_contribution(&mut state)?;
+        verify_true!(state.status == DecryptorStatus::AwaitingDecryptionRequest)?;
+        verify_true!(contrib.decryptor_index == Some(NonZeroU32::new(2).unwrap()))?;
+
+        let proto = state.to_proto(&decryptor)?;
+        let roundtrip = DecryptorState::from_proto(proto, &decryptor)?;
+        verify_true!(roundtrip.status == DecryptorStatus::AwaitingDecryptionRequest)?;
+        verify_true!(roundtrip.sk_share.is_some())?;
+        verify_true!(roundtrip.committee_config.as_ref() == Some(&cfg))?;
+
+        // Rejects PreSetup when sk_share is present.
+        let mut invalid_proto = state.to_proto(&decryptor)?;
+        invalid_proto.set_status(messages_rust_proto::DecryptorStatus::PreSetup);
+        verify_true!(DecryptorState::from_proto(invalid_proto, &decryptor).is_err())?;
+
+        // Rejects AwaitingDecryptionRequest when sk_share is missing.
+        let mut missing_sk_proto = DecryptorState::default().to_proto(&decryptor)?;
+        missing_sk_proto
+            .set_status(messages_rust_proto::DecryptorStatus::AwaitingDecryptionRequest);
+        verify_true!(DecryptorState::from_proto(missing_sk_proto, &decryptor).is_err())?;
+
+        // Legacy backward compatibility: Unspecified status (proto3 default 0) on a
+        // single-decryptor state (`committee_config == None && hpke_private_keyset == None`)
+        // infers PreSetup when sk_share is absent and AwaitingDecryptionRequest when sk_share is
+        // present.
+        let mut legacy_empty_proto = DecryptorState::default().to_proto(&decryptor)?;
+        legacy_empty_proto.set_status(messages_rust_proto::DecryptorStatus::Unspecified);
+        let legacy_empty = DecryptorState::from_proto(legacy_empty_proto, &decryptor)?;
+        verify_true!(legacy_empty.status == DecryptorStatus::PreSetup)?;
+
+        let mut single_dec_state = DecryptorState::default();
+        decryptor.create_setup_contribution(&mut single_dec_state)?;
+        let mut legacy_sk_proto = single_dec_state.to_proto(&decryptor)?;
+        legacy_sk_proto.set_status(messages_rust_proto::DecryptorStatus::Unspecified);
+        let legacy_sk = DecryptorState::from_proto(legacy_sk_proto, &decryptor)?;
+        verify_true!(legacy_sk.status == DecryptorStatus::AwaitingDecryptionRequest)?;
+        verify_true!(legacy_sk.sk_share.is_some())?;
+
+        // Recoverable committee state (`committee_config` or `hpke_private_keyset` present)
+        // strictly rejects Unspecified status (`B7`).
+        let mut committee_unspec_proto = state.to_proto(&decryptor)?;
+        committee_unspec_proto.set_status(messages_rust_proto::DecryptorStatus::Unspecified);
+        verify_true!(DecryptorState::from_proto(committee_unspec_proto, &decryptor).is_err())?;
 
         Ok(())
     }
