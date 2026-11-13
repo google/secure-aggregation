@@ -408,3 +408,61 @@ rust_test(
         "@crate_index//:googletest",
     ],
 )
+
+# Tink HPKE Hybrid Encryption for peer share encryption
+cc_library(
+    name = "hpke_cc",
+    srcs = ["hpke.cc"],
+    hdrs = ["hpke.h"],
+    deps = [
+        ":hpke_cxx/include",
+        "@abseil-cpp//absl/base",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:statusor",
+        "@abseil-cpp//absl/strings:string_view",
+        "@cxx.rs//:core",
+        "//ffi_utils:cxx_utils",
+        "//ffi_utils:status_cc",
+        "//ffi_utils:status_cxx",
+        "@tink_cc//tink:aead",
+        "@tink_cc//tink:hybrid_decrypt",
+        "@tink_cc//tink:hybrid_encrypt",
+        "@tink_cc//tink:keyset_handle",
+        "@tink_cc//tink:proto_keyset_format",
+        "@tink_cc//tink/aead:aead_config",
+        "@tink_cc//tink/aead:aead_key_templates",
+        "@tink_cc//tink/config:global_registry",
+        "@tink_cc//tink/hybrid:hpke_config",
+        "@tink_cc//tink/hybrid:hybrid_key_templates",
+    ],
+)
+
+rust_cxx_bridge(
+    name = "hpke_cxx",
+    src = "hpke.rs",
+    deps = [
+        ":hpke",
+        ":hpke_cc",
+        "//ffi_utils:status_cxx",
+        "@tink_cc//tink:keyset_handle",
+    ],
+)
+
+rust_library(
+    name = "hpke",
+    srcs = ["hpke.rs"],
+    deps = [
+        "@cxx.rs//:cxx",
+        "//ffi_utils:status",
+    ],
+)
+
+rust_test(
+    name = "hpke_test",
+    crate = ":hpke",
+    deps = [
+        ":hpke_cxx",
+        "@crate_index//:googletest",
+        "//ffi_utils:status_matchers_rs",
+    ],
+)
