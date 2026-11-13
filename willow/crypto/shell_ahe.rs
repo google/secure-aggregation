@@ -350,7 +350,7 @@ impl ShellAhe {
 #[derive(Clone)]
 pub struct SecretKeyShare(pub RnsPolynomial);
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct PublicKeyShare(pub RnsPolynomial);
 
 #[derive(Clone)]

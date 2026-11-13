@@ -57,6 +57,10 @@ inline RnsPolynomialWrapper CreateEmptyRnsPolynomialWrapper() {
 // must only be called from there.
 RnsPolynomialWrapper CloneRnsPolynomialWrapper(const RnsPolynomialWrapper* in);
 
+// Returns true iff `lhs` and `rhs` wrap equal `RnsPolynomial` instances.
+bool RnsPolynomialWrapperEquals(const RnsPolynomialWrapper* lhs,
+                                const RnsPolynomialWrapper* rhs);
+
 // Clones the RnsPolynomialVecWrapper. Used to implement Rust's Clone trait, and
 // must only be called from there.
 RnsPolynomialVecWrapper CloneRnsPolynomialVecWrapper(
