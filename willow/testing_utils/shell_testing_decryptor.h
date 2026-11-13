@@ -17,10 +17,13 @@
 #ifndef SECURE_AGGREGATION_WILLOW_TESTING_UTILS_SHELL_TESTING_DECRYPTOR_H_
 #define SECURE_AGGREGATION_WILLOW_TESTING_UTILS_SHELL_TESTING_DECRYPTOR_H_
 
+#include <cstdint>
 #include <memory>
 #include <string>
 
 #include "absl/status/statusor.h"
+#include "absl/strings/string_view.h"
+#include "absl/types/span.h"
 #include "willow/input_encoding/codec.h"
 #include "willow/proto/shell/ciphertexts.pb.h"
 #include "willow/proto/willow/aggregation_config.pb.h"
@@ -45,6 +48,34 @@ class ShellTestingDecryptor {
 
   // Generates a setup contribution containing key share and key gen proof.
   absl::StatusOr<willow::SetupContribution> CreateSetupContribution();
+
+  // Generates a 32-byte raw X25519 HPKE public key for recoverable committee
+  // secret sharing and stores the corresponding HPKE keypair in this decryptor.
+  absl::StatusOr<std::string> GenerateHpkePublicKey();
+
+  // Builds a validated CommitteeConfigProto for `my_index` (1-based in
+  // `1..=num_decryptors`) given the ordered 1..=num_decryptors roster of raw
+  // 32-byte HPKE public keys (`roster_hpke_public_keys[i - 1]` for index `i`),
+  // computing the canonical SHA-256 `roster_hash`.
+  static absl::StatusOr<willow::CommitteeConfigProto> BuildCommitteeConfig(
+      uint32_t my_index, uint32_t num_decryptors, uint32_t threshold,
+      absl::string_view session_context,
+      absl::Span<const std::string> roster_hpke_public_keys);
+
+  // Generates a recoverable committee setup contribution containing the
+  // 1-based `decryptor_index`, `FeldmanCommitment`, `KeyContribution` (derived
+  // deterministically from the Feldman VSS secret), and HPKE-encrypted shares
+  // for all peer committee members (`{1..=num_decryptors} \ {my_index}`).
+  // Requires `GenerateHpkePublicKey()` to have been called first on this
+  // decryptor.
+  absl::StatusOr<willow::SetupContribution> CreateRecoverableSetupContribution(
+      const willow::CommitteeConfigProto& committee_config,
+      absl::Span<const std::string> roster_hpke_public_keys);
+
+  // Handles a one-shot RecoveryRequest from the Coordinator to decrypt Feldman
+  // VSS shares of dropped committee members.
+  absl::StatusOr<willow::RecoveryResponse> HandleRecoveryRequest(
+      const willow::RecoveryRequest& request);
 
   // Verifies key generation proofs and aggregates key contributions into public
   // key.
