@@ -25,17 +25,25 @@ use googletest::prelude::container_eq;
 use googletest::{gtest, verify_eq, verify_that};
 use kahe_traits::KaheBase;
 use messages::{
-    CiphertextContribution, ClientMessage, CoordinatorState, DecryptionRequestContribution,
-    PartialDecryptionRequest, PartialDecryptionResponse,
+    compute_roster_hash, CiphertextContribution, ClientMessage, CommitteeConfig, CoordinatorState,
+    CoordinatorStatus, DecryptionRequestContribution, DecryptorStatus,
+    NonEmptyReputableContributions, PartialDecryptionRequest, PartialDecryptionResponse,
+    RecoverableSetupContribution, RecoveryRequest, RecoveryResponse, ReputableSetupContribution,
+    SetupContribution,
 };
 use proto_serialization_traits::{FromProto, ToProto};
+use share_cipher::{
+    ShareCipher, TinkHpkeKeysetWrappingKey, TinkHpkePrivateKey, TinkHpkePublicKey,
+    TinkHpkeShareCipher,
+};
 use shell_kahe::ShellKahe;
 use shell_parameters::{create_shell_ahe_config, create_shell_kahe_config};
 use shell_vahe::ShellVahe;
 use single_decryptor::SingleDecryptor;
 use status::StatusErrorCode;
 use status_matchers_rs::status_is;
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
+use std::num::NonZeroU32;
 use std::rc::Rc;
 use testing_utils::{
     generate_aggregation_config, generate_random_nonce, generate_random_unsigned_vector,
@@ -486,10 +494,7 @@ fn encrypt_decrypt_many_clients_decryptors() -> googletest::Result<()> {
         MAX_NUM_DECRYPTORS,
         MAX_NUM_CLIENTS,
     );
-    // The parameters used by `create_shell_ahe_config` below is secure for only a single
-    // decryptor when assuming all clients are corrupted. As we are testing functionality
-    // here anyway, we set `max_number_of_decryptors` to 1 just to obtain the AHE parameters.
-    let max_number_of_decryptors = 1;
+    let max_number_of_decryptors = aggregation_config.max_number_of_decryptors;
 
     // Create common KAHE/VAHE instances.
     let vahe = Rc::new(
@@ -616,10 +621,7 @@ fn encrypt_decrypt_no_dropout() -> googletest::Result<()> {
     let default_id = String::from("default");
     let aggregation_config =
         generate_aggregation_config(default_id.clone(), 16, 10, NUM_DECRYPTORS, NUM_CLIENTS);
-    // The parameters used by `create_shell_ahe_config` below is secure for only a single
-    // decryptor when assuming all clients are corrupted. As we are testing functionality
-    // here anyway, we set `max_number_of_decryptors` to 1 just to obtain the AHE parameters.
-    let max_number_of_decryptors = 1;
+    let max_number_of_decryptors = aggregation_config.max_number_of_decryptors;
 
     // Create common KAHE/VAHE instances.
     let vahe = Rc::new(ShellVahe::new(
@@ -733,6 +735,227 @@ fn encrypt_decrypt_no_dropout() -> googletest::Result<()> {
         accumulator.recover_aggregation_result(&accumulator_state, &finalized_pd)?;
 
     // Check that the (padded) result matches the client plaintext.
+    verify_that!(aggregation_result.keys().collect::<Vec<_>>(), container_eq([&default_id]))?;
+    verify_eq!(
+        aggregation_result.get(default_id.as_str()).unwrap()[..expected_output.len()],
+        expected_output
+    )
+}
+
+/// End-to-end recoverable committee test with multiple clients, 5 decryptors (t = 3),
+/// 2 decryptor dropouts during partial decryption, full Feldman VSS + Tink HPKE share
+/// recovery, and proto serialization round-trips for DecryptorState (using
+/// set_encrypted_hpke_private_key / restore_encrypted_hpke_private_key), CoordinatorState,
+/// SetupContribution, RecoveryRequest, and RecoveryResponse.
+#[gtest]
+fn encrypt_decrypt_recoverable_committee_with_dropouts_and_serialized_state(
+) -> googletest::Result<()> {
+    const NUM_CLIENTS: i64 = 6;
+    const NUM_DECRYPTORS: u32 = 5;
+    const THRESHOLD: u32 = 3;
+    let default_id = String::from("default");
+    let aggregation_config = generate_aggregation_config(
+        default_id.clone(),
+        16,
+        10,
+        (NUM_DECRYPTORS + 1) as i64,
+        NUM_CLIENTS,
+    );
+    let max_number_of_decryptors = aggregation_config.max_number_of_decryptors;
+
+    let vahe = Rc::new(ShellVahe::new(
+        create_shell_ahe_config(max_number_of_decryptors)?,
+        CONTEXT_STRING,
+    )?);
+    let kahe =
+        Rc::new(ShellKahe::new(create_shell_kahe_config(&aggregation_config)?, CONTEXT_STRING)?);
+
+    let mut hpke_sks: BTreeMap<NonZeroU32, TinkHpkePrivateKey> = BTreeMap::new();
+    let mut roster_pks: BTreeMap<NonZeroU32, TinkHpkePublicKey> = BTreeMap::new();
+    let mut raw_roster = BTreeMap::new();
+    for idx_raw in 1..=NUM_DECRYPTORS {
+        let idx = NonZeroU32::new(idx_raw).unwrap();
+        let (sk, pk) = TinkHpkeShareCipher::generate_keypair()?;
+        raw_roster.insert(idx, pk.as_bytes().to_vec());
+        hpke_sks.insert(idx, sk);
+        roster_pks.insert(idx, pk);
+    }
+    let roster_hash = compute_roster_hash(NUM_DECRYPTORS, THRESHOLD, &raw_roster)?;
+    let session_context = CONTEXT_STRING.to_vec();
+    let wrapping_key = TinkHpkeKeysetWrappingKey::generate()?;
+    let wrapping_aad = b"e2e_decryptor_state_aad";
+
+    // Create decryptors and recoverable setup contributions, exercising
+    // set_encrypted_hpke_private_key + to_proto + from_proto + restore_encrypted_hpke_private_key.
+    let mut decryptors = Vec::with_capacity(NUM_DECRYPTORS as usize);
+    let mut decryptor_states = Vec::with_capacity(NUM_DECRYPTORS as usize);
+    let mut setup_contributions = Vec::with_capacity(NUM_DECRYPTORS as usize);
+    for i in 0..(NUM_DECRYPTORS as usize) {
+        let idx = NonZeroU32::new((i + 1) as u32).unwrap();
+        let decryptor = Decryptor::new_with_randomly_generated_seed(Rc::clone(&vahe))?;
+        let mut state = DecryptorState::default();
+        let cfg = CommitteeConfig::new(
+            idx,
+            NUM_DECRYPTORS,
+            THRESHOLD,
+            roster_hash,
+            session_context.clone(),
+        )?;
+        let contrib = decryptor.create_recoverable_setup_contribution(
+            cfg,
+            &roster_pks,
+            &hpke_sks[&idx],
+            &mut state,
+        )?;
+
+        // Wrap the HPKE private key before persisting DecryptorState via to_proto.
+        state.set_encrypted_hpke_private_key(&hpke_sks[&idx], &wrapping_key, wrapping_aad)?;
+        let state_proto = state.to_proto(&decryptor)?;
+        let mut restored_state = DecryptorState::from_proto(state_proto, &decryptor)?;
+        restored_state.restore_encrypted_hpke_private_key(&wrapping_key, wrapping_aad)?;
+
+        // Round-trip SetupContribution through proto and parse as typed
+        // RecoverableSetupContribution.
+        let contrib_proto = contrib.to_proto(&decryptor)?;
+        let restored_contrib = RecoverableSetupContribution::from_proto(contrib_proto, &decryptor)?;
+
+        decryptors.push(decryptor);
+        decryptor_states.push(restored_state);
+        setup_contributions.push(restored_contrib);
+    }
+
+    // Create the Reputable Decryptor (required in recoverable committee mode).
+    let reputable_decryptor = Decryptor::new_with_randomly_generated_seed(Rc::clone(&vahe))?;
+    let mut reputable_state = DecryptorState::default();
+    let reputable_contrib = ReputableSetupContribution::try_from(
+        reputable_decryptor.create_setup_contribution(&mut reputable_state)?,
+    )?;
+
+    // Create coordinator, accumulator, and verifier.
+    let coord = Coordinator { vahe: Rc::clone(&vahe) };
+    let mut coord_state = CoordinatorState::default();
+    let coord_committee_config = CommitteeConfig::new(
+        NonZeroU32::new(1).unwrap(),
+        NUM_DECRYPTORS,
+        THRESHOLD,
+        roster_hash,
+        session_context,
+    )?;
+    coord.configure_committee(coord_committee_config, &mut coord_state)?;
+
+    let verify_request = coord.handle_recoverable_setup_submissions(
+        setup_contributions,
+        NonEmptyReputableContributions::single(reputable_contrib),
+        &mut coord_state,
+    )?;
+    let coord_state_proto = coord_state.to_proto(&coord)?;
+    let mut coord_state = CoordinatorState::from_proto(coord_state_proto, &coord)?;
+
+    let public_key = reputable_decryptor.verify_and_aggregate_key_contributions_with_state(
+        verify_request,
+        &reputable_state,
+        (NUM_DECRYPTORS + 1) as usize,
+    )?;
+
+    let accumulator =
+        DefaultCiphertextAccumulator { kahe: Rc::clone(&kahe), vahe: Rc::clone(&vahe) };
+    let mut accumulator_state = CiphertextAccumulatorState::default();
+    let verifier = DefaultVerifier { vahe: Rc::clone(&vahe) };
+    let mut verifier_state = VerifierState::default();
+
+    let mut expected_output = vec![0u64; 15];
+    let mut client_messages = Vec::with_capacity(NUM_CLIENTS as usize);
+    for _ in 0..NUM_CLIENTS {
+        let client =
+            DefaultClient::new_with_randomly_generated_seed(Rc::clone(&kahe), Rc::clone(&vahe))?;
+        let client_input_values = vec![1, 2, 3, 4, 5, 6, 7, 8, 7, 6, 5, 4, 3, 2, 1];
+        for j in 0..expected_output.len() {
+            expected_output[j] += client_input_values[j];
+        }
+        let client_plaintext =
+            HashMap::from([(default_id.as_str(), client_input_values.as_slice())]);
+        let nonce = generate_random_nonce();
+        let client_message =
+            client.create_client_message(&client_plaintext, &public_key, &nonce)?;
+        client_messages.push(client_message);
+    }
+    client_messages.sort_by(|a, b| a.nonce.cmp(&b.nonce));
+
+    for client_message in client_messages {
+        let (ciphertext_contribution, decryption_request_contribution) =
+            accumulator.split_client_message(client_message)?;
+        verifier.verify_and_include(decryption_request_contribution, &mut verifier_state)?;
+        accumulator
+            .accumulate_ciphertext_contribution(ciphertext_contribution, &mut accumulator_state)?;
+    }
+
+    let pd_ct = verifier.create_partial_decryption_request(verifier_state)?;
+    let pd_request =
+        coord.prepare_decryption_request(&pd_ct.partial_dec_ciphertext, &mut coord_state)?;
+    let coord_state_proto = coord_state.to_proto(&coord)?;
+    let mut coord_state = CoordinatorState::from_proto(coord_state_proto, &coord)?;
+
+    // Decryptors 2 and 4 drop out (d = 2 <= n - t = 2); survivors are 1, 3, 5 (plus reputable).
+    let survivors = [1u32, 3, 5];
+    let mut partial_responses = Vec::with_capacity(survivors.len() + 1);
+    partial_responses.push(reputable_decryptor.handle_partial_decryption_request(
+        pd_request.clone(),
+        Some(kahe.as_ref()),
+        &mut reputable_state,
+    )?);
+    for &idx_raw in &survivors {
+        let idx = NonZeroU32::new(idx_raw).unwrap();
+        let i = (idx_raw - 1) as usize;
+        let mut pd = decryptors[i].handle_partial_decryption_request(
+            pd_request.clone(),
+            Some(kahe.as_ref()),
+            &mut decryptor_states[i],
+        )?;
+        pd.decryptor_index = Some(idx);
+        verify_eq!(decryptor_states[i].status, DecryptorStatus::AwaitingRecoveryRequest)?;
+
+        // Round-trip DecryptorState in AwaitingRecoveryRequest.
+        let state_proto = decryptor_states[i].to_proto(&decryptors[i])?;
+        let mut restored_state = DecryptorState::from_proto(state_proto, &decryptors[i])?;
+        restored_state.restore_encrypted_hpke_private_key(&wrapping_key, wrapping_aad)?;
+        decryptor_states[i] = restored_state;
+
+        partial_responses.push(pd);
+    }
+
+    coord.aggregate_partial_decryptions(
+        partial_responses,
+        Some(kahe.as_ref()),
+        &mut coord_state,
+    )?;
+    verify_eq!(coord_state.status, CoordinatorStatus::AwaitingRecovery)?;
+
+    // Round-trip CoordinatorState in AwaitingRecovery.
+    let coord_state_proto = coord_state.to_proto(&coord)?;
+    let mut coord_state = CoordinatorState::from_proto(coord_state_proto, &coord)?;
+
+    let indexed_recovery_requests = coord.create_indexed_recovery_requests(&coord_state)?;
+    verify_eq!(indexed_recovery_requests.len(), 3)?;
+
+    let mut recovery_responses = Vec::with_capacity(indexed_recovery_requests.len());
+    for (survivor_idx, req) in indexed_recovery_requests {
+        let req_proto = req.to_proto(())?;
+        let req = RecoveryRequest::from_proto(req_proto, ())?;
+        let i = (survivor_idx.get() - 1) as usize;
+        let resp = decryptors[i].handle_recovery_request(req, &mut decryptor_states[i])?;
+        verify_eq!(decryptor_states[i].status, DecryptorStatus::Finished)?;
+        let resp_proto = resp.to_proto(())?;
+        let resp = RecoveryResponse::from_proto(resp_proto, ())?;
+        recovery_responses.push(resp);
+    }
+
+    coord.recover_dropped_decryptors(recovery_responses, &mut coord_state)?;
+    verify_eq!(coord_state.status, CoordinatorStatus::OutputReady)?;
+
+    let finalized_pd = coord.finalize_partial_decryption(&mut coord_state)?;
+    let aggregation_result =
+        accumulator.recover_aggregation_result(&accumulator_state, &finalized_pd)?;
+
     verify_that!(aggregation_result.keys().collect::<Vec<_>>(), container_eq([&default_id]))?;
     verify_eq!(
         aggregation_result.get(default_id.as_str()).unwrap()[..expected_output.len()],
