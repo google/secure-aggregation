@@ -20,20 +20,25 @@ use ahe_traits::AheBase;
 use decryptor::{Decryptor, DecryptorState};
 use kahe_traits::{KaheBase, KaheDecrypt, TrySecretKeyFrom};
 use messages::{
-    ClientMessage, PartialDecryptionRequest, PartialDecryptionResponse,
-    VerifyKeyContributionsRequest,
+    compute_roster_hash, ClientMessage, CommitteeConfig, PartialDecryptionRequest,
+    PartialDecryptionResponse, RecoveryRequest, RecoveryResponse, VerifyKeyContributionsRequest,
 };
 use messages_rust_proto::ClientMessage as ClientMessageProto;
+use messages_rust_proto::CommitteeConfigProto;
 use messages_rust_proto::PartialDecryptionRequest as PartialDecryptionRequestProto;
+use messages_rust_proto::RecoveryRequest as RecoveryRequestProto;
 use messages_rust_proto::VerifyKeyContributionsRequest as VerifyKeyContributionsRequestProto;
 use proto_serialization_traits::{FromProto, ToProto};
 use protobuf::prelude::*;
+use share_cipher::{ShareCipher, TinkHpkePrivateKey, TinkHpkePublicKey, TinkHpkeShareCipher};
 use shell_ahe::Ciphertext as VaheCiphertext;
 use shell_kahe::Ciphertext as KaheCiphertext;
 use shell_kahe::ShellKahe;
 use shell_parameters::create_shell_configs;
 use shell_vahe::ShellVahe;
 use status::StatusError;
+use std::collections::BTreeMap;
+use std::num::NonZeroU32;
 use std::rc::Rc;
 use vahe_traits::{HasVahe, Recover, VaheBase};
 
@@ -49,6 +54,7 @@ pub struct ShellTestingDecryptor {
     kahe: Rc<ShellKahe>,
     decryptor: Decryptor<ShellVahe>,
     state: DecryptorState<ShellVahe>,
+    hpke_keypair: Option<(TinkHpkePrivateKey, TinkHpkePublicKey)>,
 }
 
 impl HasVahe for ShellTestingDecryptor {
@@ -76,12 +82,9 @@ impl ShellTestingDecryptor {
         let kahe = Rc::new(ShellKahe::new(kahe_config, context_bytes)?);
         let vahe = Rc::new(ShellVahe::new(ahe_config, context_bytes)?);
         let decryptor = Decryptor::new_with_randomly_generated_seed(vahe)?;
-        let state = DecryptorState {
-            sk_share: None,
-            kahe: None,
-            aggregation_config: Some(aggregation_config.clone()),
-        };
-        Ok(ShellTestingDecryptor { kahe, decryptor, state })
+        let mut state = DecryptorState::default();
+        state.aggregation_config = Some(aggregation_config.clone());
+        Ok(ShellTestingDecryptor { kahe, decryptor, state, hpke_keypair: None })
     }
 
     /// Generates a new AHE public key, and stores the corresponding secret key share in
@@ -187,12 +190,127 @@ impl ShellTestingDecryptor {
         self.create_setup_contribution_serialized().map(|res| unsafe { *out = res }).into()
     }
 
+    /// Generates an HPKE keypair for recoverable committee secret sharing, stores it in
+    /// `self.hpke_keypair`, and returns the 32-byte raw X25519 public key.
+    pub fn generate_hpke_public_key(&mut self) -> Result<Vec<u8>, StatusError> {
+        let (sk, pk) = TinkHpkeShareCipher::generate_keypair()?;
+        let pk_bytes = pk.as_bytes().to_vec();
+        self.hpke_keypair = Some((sk, pk));
+        Ok(pk_bytes)
+    }
+
+    /// SAFETY: `out` must be valid for writes.
+    unsafe fn generate_hpke_public_key_ffi(&mut self, out: *mut Vec<u8>) -> ffi::FfiStatus {
+        self.generate_hpke_public_key().map(|res| unsafe { *out = res }).into()
+    }
+
+    /// Creates a recoverable committee setup contribution.
+    pub fn create_recoverable_setup_contribution(
+        &mut self,
+        committee_config: CommitteeConfig,
+        roster_pks: &BTreeMap<NonZeroU32, TinkHpkePublicKey>,
+    ) -> Result<messages::SetupContribution<ShellVahe>, StatusError> {
+        let (hpke_sk, _) = self.hpke_keypair.as_ref().ok_or_else(|| {
+            status::failed_precondition(
+                "ShellTestingDecryptor has no HPKE keypair (call GenerateHpkePublicKey first)",
+            )
+        })?;
+        self.decryptor.create_recoverable_setup_contribution(
+            committee_config,
+            roster_pks,
+            hpke_sk,
+            &mut self.state,
+        )
+    }
+
+    fn create_recoverable_setup_contribution_serialized(
+        &mut self,
+        committee_config_bytes: &[u8],
+        roster_views: &[ffi::ByteSliceView],
+    ) -> Result<Vec<u8>, StatusError> {
+        let cfg_proto = CommitteeConfigProto::parse(committee_config_bytes).map_err(|e| {
+            status::invalid_argument(&format!("Failed to parse CommitteeConfigProto: {}", e))
+        })?;
+        let cfg = CommitteeConfig::from_proto(cfg_proto, ())?;
+        if roster_views.len() != cfg.num_decryptors as usize {
+            return Err(status::invalid_argument(
+                "roster_hpke_public_keys count must equal committee_config.num_decryptors",
+            ));
+        }
+        let mut roster_pks = BTreeMap::new();
+        for (i, view) in roster_views.iter().enumerate() {
+            let idx = NonZeroU32::new((i + 1) as u32)
+                .ok_or_else(|| status::internal("1-based roster index must be non-zero"))?;
+            let pk = TinkHpkePublicKey::from_bytes(view.data.to_vec())?;
+            roster_pks.insert(idx, pk);
+        }
+        let contrib = self.create_recoverable_setup_contribution(cfg, &roster_pks)?;
+        let proto = contrib.to_proto(self)?;
+        proto.serialize().map_err(|e| status::internal(&format!("Serialize error: {}", e)))
+    }
+
+    /// SAFETY: `out` must be valid for writes.
+    unsafe fn create_recoverable_setup_contribution_ffi(
+        &mut self,
+        committee_config_bytes: &[u8],
+        roster_views: &[ffi::ByteSliceView],
+        out: *mut Vec<u8>,
+    ) -> ffi::FfiStatus {
+        self.create_recoverable_setup_contribution_serialized(committee_config_bytes, roster_views)
+            .map(|res| unsafe { *out = res })
+            .into()
+    }
+
+    /// Handles a one-shot recovery request from the Coordinator.
+    pub fn handle_recovery_request(
+        &mut self,
+        request: RecoveryRequest,
+    ) -> Result<RecoveryResponse, StatusError> {
+        self.decryptor.handle_recovery_request(request, &mut self.state)
+    }
+
+    fn handle_recovery_request_serialized(
+        &mut self,
+        request_bytes: &[u8],
+    ) -> Result<Vec<u8>, StatusError> {
+        let req_proto = RecoveryRequestProto::parse(request_bytes).map_err(|e| {
+            status::invalid_argument(&format!("Failed to parse RecoveryRequestProto: {}", e))
+        })?;
+        let req = RecoveryRequest::from_proto(req_proto, ())?;
+        let resp = self.handle_recovery_request(req)?;
+        let proto = resp.to_proto(())?;
+        proto.serialize().map_err(|e| status::internal(&format!("Serialize error: {}", e)))
+    }
+
+    /// SAFETY: `out` must be valid for writes.
+    unsafe fn handle_recovery_request_ffi(
+        &mut self,
+        request_bytes: &[u8],
+        out: *mut Vec<u8>,
+    ) -> ffi::FfiStatus {
+        self.handle_recovery_request_serialized(request_bytes)
+            .map(|res| unsafe { *out = res })
+            .into()
+    }
+
     /// Verifies key generation proofs and aggregates key contributions into a public key.
+    ///
+    /// When this `ShellTestingDecryptor` has already generated a setup contribution
+    /// (`self.state.pk_share.is_some()`), enforces that its own `public_key_share` is
+    /// included in `request` via [`Decryptor::verify_and_aggregate_key_contributions_with_state`].
     pub fn verify_and_aggregate_key_contributions(
         &mut self,
         request: VerifyKeyContributionsRequest<ShellVahe>,
     ) -> Result<<ShellVahe as AheBase>::PublicKey, StatusError> {
-        self.decryptor.verify_and_aggregate_key_contributions(request)
+        if self.state.pk_share.is_some() {
+            self.decryptor.verify_and_aggregate_key_contributions_with_state(
+                request,
+                &self.state,
+                1,
+            )
+        } else {
+            self.decryptor.verify_and_aggregate_key_contributions(request)
+        }
     }
 
     fn verify_and_aggregate_key_contributions_serialized(
@@ -273,6 +391,10 @@ pub mod ffi {
         values: Vec<u64>,
     }
 
+    struct ByteSliceView<'a> {
+        data: &'a [u8],
+    }
+
     unsafe extern "C++" {
         include!("ffi_utils/status.rs.h");
         #[namespace = "secure_aggregation"]
@@ -288,6 +410,15 @@ pub mod ffi {
             out: *mut *mut ShellTestingDecryptor,
         ) -> FfiStatus;
 
+        unsafe fn build_committee_config(
+            my_index: u32,
+            num_decryptors: u32,
+            threshold: u32,
+            session_context: &[u8],
+            roster_views: &[ByteSliceView],
+            out: *mut Vec<u8>,
+        ) -> FfiStatus;
+
         #[rust_name = "generate_public_key_ffi"]
         unsafe fn generate_public_key(
             self: &mut ShellTestingDecryptor,
@@ -297,6 +428,27 @@ pub mod ffi {
         #[rust_name = "create_setup_contribution_ffi"]
         unsafe fn create_setup_contribution(
             self: &mut ShellTestingDecryptor,
+            out: *mut Vec<u8>,
+        ) -> FfiStatus;
+
+        #[rust_name = "generate_hpke_public_key_ffi"]
+        unsafe fn generate_hpke_public_key(
+            self: &mut ShellTestingDecryptor,
+            out: *mut Vec<u8>,
+        ) -> FfiStatus;
+
+        #[rust_name = "create_recoverable_setup_contribution_ffi"]
+        unsafe fn create_recoverable_setup_contribution(
+            self: &mut ShellTestingDecryptor,
+            committee_config_bytes: &[u8],
+            roster_views: &[ByteSliceView],
+            out: *mut Vec<u8>,
+        ) -> FfiStatus;
+
+        #[rust_name = "handle_recovery_request_ffi"]
+        unsafe fn handle_recovery_request(
+            self: &mut ShellTestingDecryptor,
+            request: &[u8],
             out: *mut Vec<u8>,
         ) -> FfiStatus;
 
@@ -344,6 +496,53 @@ unsafe fn create_shell_testing_decryptor(
 ) -> ffi::FfiStatus {
     create_shell_testing_decryptor_impl(config)
         .map(|decryptor| unsafe { *out = Box::into_raw(decryptor) })
+        .into()
+}
+
+fn build_committee_config_impl(
+    my_index: u32,
+    num_decryptors: u32,
+    threshold: u32,
+    session_context: &[u8],
+    roster_views: &[ffi::ByteSliceView],
+) -> Result<Vec<u8>, StatusError> {
+    let my_idx = NonZeroU32::new(my_index).ok_or_else(|| {
+        status::invalid_argument("build_committee_config: my_index must be non-zero")
+    })?;
+    if roster_views.len() != num_decryptors as usize {
+        return Err(status::invalid_argument(
+            "build_committee_config: roster_hpke_public_keys count must equal num_decryptors",
+        ));
+    }
+    let mut raw_roster = BTreeMap::new();
+    for (i, view) in roster_views.iter().enumerate() {
+        let idx = NonZeroU32::new((i + 1) as u32)
+            .ok_or_else(|| status::internal("1-based roster index must be non-zero"))?;
+        raw_roster.insert(idx, view.data.to_vec());
+    }
+    let roster_hash = compute_roster_hash(num_decryptors, threshold, &raw_roster)?;
+    let cfg = CommitteeConfig::new(
+        my_idx,
+        num_decryptors,
+        threshold,
+        roster_hash,
+        session_context.to_vec(),
+    )?;
+    let proto = cfg.to_proto(())?;
+    proto.serialize().map_err(|e| status::internal(&format!("Serialize error: {}", e)))
+}
+
+/// SAFETY: `out` must be valid for writes.
+unsafe fn build_committee_config(
+    my_index: u32,
+    num_decryptors: u32,
+    threshold: u32,
+    session_context: &[u8],
+    roster_views: &[ffi::ByteSliceView],
+    out: *mut Vec<u8>,
+) -> ffi::FfiStatus {
+    build_committee_config_impl(my_index, num_decryptors, threshold, session_context, roster_views)
+        .map(|bytes| unsafe { *out = bytes })
         .into()
 }
 

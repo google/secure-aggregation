@@ -273,6 +273,17 @@ RnsPolynomialWrapper CloneRnsPolynomialWrapper(const RnsPolynomialWrapper* in) {
           in->ptr->Clone())};
 }
 
+bool RnsPolynomialWrapperEquals(const RnsPolynomialWrapper* lhs,
+                                const RnsPolynomialWrapper* rhs) {
+  if (lhs == nullptr || rhs == nullptr) {
+    return lhs == rhs;
+  }
+  if (lhs->ptr == nullptr || rhs->ptr == nullptr) {
+    return lhs->ptr == rhs->ptr;
+  }
+  return *lhs->ptr == *rhs->ptr;
+}
+
 RnsPolynomialVecWrapper CloneRnsPolynomialVecWrapper(
     const RnsPolynomialVecWrapper* in) {
   RnsPolynomialVecWrapper result{
