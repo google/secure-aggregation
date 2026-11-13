@@ -88,6 +88,20 @@ message SecretSharingContribution {
   bytes encrypted_share = 1;
 }
 
+// A plaintext Feldman VSS share (index, f(index)) over Ristretto255.
+message FeldmanShareProto {
+  // 1-based share evaluation index in 1..=MAX_SHARES.
+  uint32 index = 1;
+  // Canonical 32-byte little-endian Ristretto255 scalar encoding.
+  bytes value = 2;
+}
+
+// Public Feldman VSS polynomial commitment (C_0, ..., C_{t-1}) over Ristretto255.
+message FeldmanCommitmentProto {
+  // Canonical 32-byte compressed Ristretto255 points C_k = a_k * G.
+  repeated bytes commitments = 1;
+}
+
 // Public key independent half of ciphertext for DP noise.
 message DPSetupContribution {
   // The public-key-independent half of the DP noise ciphertext (component_a).
