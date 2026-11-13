@@ -105,9 +105,9 @@ TEST(BasicServerAccumulatorTest, MergeSucceedsWithEmptyAccumulators) {
                               ServerAccumulator::Create(config));
   SECAGG_ASSERT_OK_AND_ASSIGN(auto accumulator2,
                               ServerAccumulator::Create(config));
-  SECAGG_ASSERT_OK_AND_ASSIGN(auto serialized_1,
+  SECAGG_ASSERT_OK_AND_ASSIGN([[maybe_unused]] auto serialized_1,
                               accumulator1->ToSerializedState());
-  SECAGG_ASSERT_OK_AND_ASSIGN(auto serialized_2,
+  SECAGG_ASSERT_OK_AND_ASSIGN([[maybe_unused]] auto serialized_2,
                               accumulator2->ToSerializedState());
 
   EXPECT_TRUE(accumulator1->Merge(std::move(accumulator2)).ok());
