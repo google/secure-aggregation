@@ -428,6 +428,42 @@ struct RangeProductMetadata {
     z: Vec<Scalar>,
 }
 
+struct RangeProofLabels {
+    comm_y: &'static [u8],
+    challenge_matrix: &'static [u8],
+    z: &'static [u8],
+    matrix_flattening: &'static [u8],
+}
+
+const RANGE_LABELS_R: RangeProofLabels = RangeProofLabels {
+    comm_y: b"comm_y_r",
+    challenge_matrix: b"range matrix r",
+    z: b"z_r",
+    matrix_flattening: b"matrix flattening r",
+};
+
+const RANGE_LABELS_E: RangeProofLabels = RangeProofLabels {
+    comm_y: b"comm_y_e",
+    challenge_matrix: b"range matrix e",
+    z: b"z_e",
+    matrix_flattening: b"matrix flattening e",
+};
+
+const RANGE_LABELS_VW: RangeProofLabels = RangeProofLabels {
+    comm_y: b"comm_y_vw",
+    challenge_matrix: b"range matrix v || w",
+    z: b"z_vw",
+    matrix_flattening: b"matrix flattening v || w",
+};
+
+fn append_scalar_slice(transcript: &mut impl Transcript, label: &'static [u8], scalars: &[Scalar]) {
+    let mut bytes = Vec::with_capacity(scalars.len() * 32);
+    for s in scalars {
+        bytes.extend_from_slice(s.as_bytes());
+    }
+    transcript.append_message(label, &bytes);
+}
+
 // Return the inner product that needs to be checked for the range proof, the commitment to y that
 // the verifier will need to verify it and the blinding information required for the proof.
 //
@@ -450,7 +486,7 @@ fn generate_range_product(
     prover: &LinearInnerProductProverVerifier,
     start: usize,
     transcript: &mut (impl Transcript + Clone),
-    challenge_label: &'static [u8],
+    labels: &RangeProofLabels,
 ) -> Result<RangeProductMetadata, status::StatusError> {
     // Check that computing loose bound does not result in an overflow.
     check_loose_bound_will_not_overflow(bound, v.len())?;
@@ -481,11 +517,11 @@ fn generate_range_product(
         }
         delta_y = Scalar::random(&mut rng);
         comm_y = prover.commit_partial(&scalar_y, delta_y, start, start + 128)?;
-        transcript.append_message(b"comm_y", &comm_y.compress().to_bytes());
+        transcript.append_message(labels.comm_y, &comm_y.compress().to_bytes());
         // We generate two challenge matrices with uniform 1/0 entries, by adding one and
         // subtracting the other we get a challenge matrix with the correct distribution.
-        R1 = generate_challenge_matrix(transcript, challenge_label, v.len());
-        R2 = generate_challenge_matrix(transcript, challenge_label, v.len());
+        R1 = generate_challenge_matrix(transcript, labels.challenge_matrix, v.len());
+        R2 = generate_challenge_matrix(transcript, labels.challenge_matrix, v.len());
         let z_or_error = try_matrices_and_compute_z(v, &R1, &R2, &y, half_loose_bound);
         if z_or_error.is_ok() {
             z = z_or_error.unwrap();
@@ -507,16 +543,17 @@ fn generate_range_product(
         *transcript = transcript_backup.clone();
     }
 
-    // Flatten the matrix R for the inner product relation, combining the 128 rows.
-    let (R, psi) = flatten_challenge_matrix(transcript, R1, R2, b"matrix flattening")?;
-
     // Adding half_loose_bound makes sure the conversion to u128 is valid.
-    let scalar_z = z
+    let scalar_z: Vec<Scalar> = z
         .into_iter()
         .map(|z| {
             Scalar::from((z + half_loose_bound) as u128) - Scalar::from(half_loose_bound as u128)
         })
         .collect();
+    append_scalar_slice(transcript, labels.z, &scalar_z);
+
+    // Flatten the matrix R for the inner product relation, combining the 128 rows.
+    let (R, psi) = flatten_challenge_matrix(transcript, R1, R2, labels.matrix_flattening)?;
 
     Ok(RangeProductMetadata { R, comm_y, y: scalar_y, delta_y, psi, z: scalar_z })
 }
@@ -530,8 +567,13 @@ fn generate_range_product_for_verification_and_verify_z_bound(
     comm_y: RistrettoPoint,
     z: &[Scalar],
     transcript: &mut impl Transcript,
-    challenge_label: &'static [u8],
+    labels: &RangeProofLabels,
 ) -> Result<(Vec<Scalar>, Vec<Scalar>), status::StatusError> {
+    if z.len() != 128 {
+        return Err(status::permission_denied(
+            "Proof verification failed, z_r, z_e, z_vw are not of correct length (128).",
+        ));
+    }
     // Check that computing loose bound does not result in an overflow.
     check_loose_bound_will_not_overflow(bound, n)?;
 
@@ -553,13 +595,14 @@ fn generate_range_product_for_verification_and_verify_z_bound(
         }
     }
 
-    transcript.append_message(b"comm_y", &comm_y.compress().to_bytes());
+    transcript.append_message(labels.comm_y, &comm_y.compress().to_bytes());
     // We generate two challenge matrices with uniform 1/0 entries, by adding one and
     // subtracting the other we get a challenge matrix with the correct distribution.
-    let R1 = generate_challenge_matrix(transcript, challenge_label, n);
-    let R2 = generate_challenge_matrix(transcript, challenge_label, n);
+    let R1 = generate_challenge_matrix(transcript, labels.challenge_matrix, n);
+    let R2 = generate_challenge_matrix(transcript, labels.challenge_matrix, n);
+    append_scalar_slice(transcript, labels.z, z);
     // Flatten the matrix R for the inner product relation, combining the 128 rows.
-    flatten_challenge_matrix(transcript, R1, R2, b"matrix flattening")
+    flatten_challenge_matrix(transcript, R1, R2, labels.matrix_flattening)
 }
 
 // To prove that there exists small degree n polynomials r and e such that
@@ -778,7 +821,7 @@ impl<'a> ZeroKnowledgeProver<RlweRelationProofStatement<'a>, RlweRelationProofWi
             &self.lip,
             range_comm_offset,
             transcript,
-            b"range matrix r",
+            &RANGE_LABELS_R,
         )?;
         let range_product_e = generate_range_product(
             &signed_e,
@@ -786,7 +829,7 @@ impl<'a> ZeroKnowledgeProver<RlweRelationProofStatement<'a>, RlweRelationProofWi
             &self.lip,
             range_comm_offset + 128,
             transcript,
-            b"range matrix e",
+            &RANGE_LABELS_E,
         )?;
         let range_product_vw = generate_range_product(
             &signed_vw,
@@ -794,7 +837,7 @@ impl<'a> ZeroKnowledgeProver<RlweRelationProofStatement<'a>, RlweRelationProofWi
             &self.lip,
             range_comm_offset + 256,
             transcript,
-            b"range matrix v || w",
+            &RANGE_LABELS_VW,
         )?;
 
         // We can combine the product proofs required for the range proofs into the existing
@@ -954,7 +997,7 @@ impl<'a> ZeroKnowledgeVerifier<RlweRelationProofStatement<'a>, RlweRelationProof
             comm_y_r,
             &proof.z_r,
             transcript,
-            b"range matrix r",
+            &RANGE_LABELS_R,
         )?;
         let (R_e, psi_e) = generate_range_product_for_verification_and_verify_z_bound(
             n,
@@ -962,7 +1005,7 @@ impl<'a> ZeroKnowledgeVerifier<RlweRelationProofStatement<'a>, RlweRelationProof
             comm_y_e,
             &proof.z_e,
             transcript,
-            b"range matrix e",
+            &RANGE_LABELS_E,
         )?;
         let (R_vw, psi_vw) = generate_range_product_for_verification_and_verify_z_bound(
             n + MAX_RHOS,
@@ -970,7 +1013,7 @@ impl<'a> ZeroKnowledgeVerifier<RlweRelationProofStatement<'a>, RlweRelationProof
             comm_y_vw,
             &proof.z_vw,
             transcript,
-            b"range matrix v || w",
+            &RANGE_LABELS_VW,
         )?;
 
         // We can combine the product proofs required for the range proofs into the existing
@@ -1280,13 +1323,19 @@ mod tests {
     }
 
     #[test]
+    #[allow(non_snake_case)]
     fn test_generate_range_product() -> googletest::Result<()> {
+        const TEST_LABELS: RangeProofLabels = RangeProofLabels {
+            comm_y: b"comm_y_test",
+            challenge_matrix: b"test vector",
+            z: b"z_test",
+            matrix_flattening: b"matrix flattening test",
+        };
         let bound = 10;
         let v = [1, -2, 3, -4];
         let prover = LinearInnerProductProverVerifier::new(b"42", 132);
         let mut transcript = MerlinTranscript::new(b"42");
-        let result =
-            generate_range_product(&v, bound, &prover, 4, &mut transcript, b"test vector")?;
+        let result = generate_range_product(&v, bound, &prover, 4, &mut transcript, &TEST_LABELS)?;
         let mut private_vec = [Scalar::from(0u128); 132];
         for i in 0..4 {
             private_vec[i] = Scalar::from((v[i] + (bound as i128)) as u128) - Scalar::from(bound);
@@ -1310,6 +1359,18 @@ mod tests {
         assert_eq!(inner_product, expected_result);
         let expected_comm_y = prover.commit_partial(&result.y, result.delta_y, 4, 132)?;
         assert_eq!(result.comm_y, expected_comm_y);
+
+        let mut verifier_transcript = MerlinTranscript::new(b"42");
+        let (verif_R, verif_psi) = generate_range_product_for_verification_and_verify_z_bound(
+            v.len(),
+            bound,
+            result.comm_y,
+            &result.z,
+            &mut verifier_transcript,
+            &TEST_LABELS,
+        )?;
+        assert_eq!(verif_R, result.R);
+        assert_eq!(verif_psi, result.psi);
         Ok(())
     }
 
@@ -1737,6 +1798,311 @@ mod tests {
                 .message()
                 .contains("final check"));
         }
+        Ok(())
+    }
+
+    #[derive(Clone, Debug, PartialEq, Eq)]
+    enum TranscriptEvent {
+        Append { label: &'static [u8], message: Vec<u8> },
+        AppendU64 { label: &'static [u8], message: u64 },
+        Challenge { label: &'static [u8], output: Vec<u8> },
+    }
+
+    #[derive(Clone)]
+    struct RecordingTranscript {
+        inner: MerlinTranscript,
+        events: Vec<TranscriptEvent>,
+    }
+
+    impl RecordingTranscript {
+        fn new(label: &'static [u8]) -> Self {
+            Self { inner: MerlinTranscript::new(label), events: Vec::new() }
+        }
+
+        fn first_index_of(&self, is_challenge: bool, label: &[u8]) -> Option<usize> {
+            self.events.iter().position(|e| match e {
+                TranscriptEvent::Append { label: l, .. } => !is_challenge && *l == label,
+                TranscriptEvent::Challenge { label: l, .. } => is_challenge && *l == label,
+                TranscriptEvent::AppendU64 { .. } => false,
+            })
+        }
+
+        fn append_payload(&self, label: &[u8]) -> Option<&[u8]> {
+            self.events.iter().find_map(|e| match e {
+                TranscriptEvent::Append { label: l, message } if *l == label => {
+                    Some(message.as_slice())
+                }
+                _ => None,
+            })
+        }
+
+        fn challenge_outputs(&self, label: &[u8]) -> Vec<Vec<u8>> {
+            self.events
+                .iter()
+                .filter_map(|e| match e {
+                    TranscriptEvent::Challenge { label: l, output } if *l == label => {
+                        Some(output.clone())
+                    }
+                    _ => None,
+                })
+                .collect()
+        }
+    }
+
+    impl Transcript for RecordingTranscript {
+        fn append_message(&mut self, label: &'static [u8], message: &[u8]) {
+            self.inner.append_message(label, message);
+            self.events.push(TranscriptEvent::Append { label, message: message.to_vec() });
+        }
+
+        fn append_u64(&mut self, label: &'static [u8], message: u64) {
+            self.inner.append_u64(label, message);
+            self.events.push(TranscriptEvent::AppendU64 { label, message });
+        }
+
+        fn challenge_bytes(&mut self, label: &'static [u8], dest: &mut [u8]) {
+            self.inner.challenge_bytes(label, dest);
+            self.events.push(TranscriptEvent::Challenge { label, output: dest.to_vec() });
+        }
+    }
+
+    #[test]
+    fn test_range_verification_rejects_wrong_z_length() -> googletest::Result<()> {
+        let comm_y = RistrettoPoint::hash_from_bytes::<Sha3_512>(b"comm_y");
+        for bad_len in [0usize, 127, 129] {
+            let bad_z = vec![Scalar::from(0u64); bad_len];
+            let mut transcript = MerlinTranscript::new(b"test");
+            let err = generate_range_product_for_verification_and_verify_z_bound(
+                4,
+                10,
+                comm_y,
+                &bad_z,
+                &mut transcript,
+                &RANGE_LABELS_R,
+            )
+            .expect_err("Wrong z length should be rejected");
+            assert!(err.message().contains("not of correct length (128)"));
+        }
+
+        let qvec = vec![1000_000_009];
+        let seed_wrapper = generate_seed()?;
+        let ahe_parameters = create_public_parameters(2, 54001, &qvec, 1, 1.0, 1.0, &seed_wrapper)?;
+        let context = get_rns_context_ref(&ahe_parameters);
+        let n = 4;
+        let q = 1000_000_009;
+        let moduli = get_moduli(&ahe_parameters);
+
+        let a = read_small_rns_polynomial_from_buffer(&[1, 2, 3, 4], n as u64, &moduli)?;
+        let c = read_small_rns_polynomial_from_buffer(&[5, -8, 9, 17], n as u64, &moduli)?;
+        let r = read_small_rns_polynomial_from_buffer(&[1, 0, 1, -1], n as u64, &moduli)?;
+        let e = read_small_rns_polynomial_from_buffer(&[5, -9, 1, 12], n as u64, &moduli)?;
+        let v = read_small_rns_polynomial_from_buffer(&[-1, -1, 4, 0], n as u64, &moduli)?;
+
+        let statement = RlweRelationProofStatement {
+            n,
+            context,
+            a: &a,
+            flip_a: false,
+            c: &c,
+            q,
+            bound_e: 16,
+            bound_r: 1,
+        };
+        let witness = RlweRelationProofWitness { r: &r, e: &e, v: &v };
+        let transcript_initializer = b"Rlwe Test Transcript";
+
+        let prover = RlweRelationProverVerifier::new(b"42", statement.n);
+        let verifier = RlweRelationProverVerifier::new(b"42", statement.n);
+        let mut transcript = MerlinTranscript::new(transcript_initializer);
+        let base_proof = prover.prove(&statement, &witness, &mut transcript)?;
+
+        let mut short_zr = base_proof.clone();
+        short_zr.z_r.pop();
+        let mut transcript = MerlinTranscript::new(transcript_initializer);
+        assert!(verifier
+            .verify(&statement, &short_zr, &mut transcript)
+            .expect_err("Short z_r should fail")
+            .message()
+            .contains("not of correct length (128)"));
+
+        let mut long_ze = base_proof.clone();
+        long_ze.z_e.push(Scalar::from(0u64));
+        let mut transcript = MerlinTranscript::new(transcript_initializer);
+        assert!(verifier
+            .verify(&statement, &long_ze, &mut transcript)
+            .expect_err("Long z_e should fail")
+            .message()
+            .contains("not of correct length (128)"));
+
+        let mut empty_zvw = base_proof;
+        empty_zvw.z_vw.clear();
+        let mut transcript = MerlinTranscript::new(transcript_initializer);
+        assert!(verifier
+            .verify(&statement, &empty_zvw, &mut transcript)
+            .expect_err("Empty z_vw should fail")
+            .message()
+            .contains("not of correct length (128)"));
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_transcript_absorbs_z_before_flattening_and_phi() -> googletest::Result<()> {
+        let qvec = vec![1000_000_009];
+        let seed_wrapper = generate_seed()?;
+        let ahe_parameters = create_public_parameters(2, 54001, &qvec, 1, 1.0, 1.0, &seed_wrapper)?;
+        let context = get_rns_context_ref(&ahe_parameters);
+        let n = 4;
+        let q = 1000_000_009;
+        let moduli = get_moduli(&ahe_parameters);
+
+        let a = read_small_rns_polynomial_from_buffer(&[1, 2, 3, 4], n as u64, &moduli)?;
+        let c = read_small_rns_polynomial_from_buffer(&[5, -8, 9, 17], n as u64, &moduli)?;
+        let r = read_small_rns_polynomial_from_buffer(&[1, 0, 1, -1], n as u64, &moduli)?;
+        let e = read_small_rns_polynomial_from_buffer(&[5, -9, 1, 12], n as u64, &moduli)?;
+        let v = read_small_rns_polynomial_from_buffer(&[-1, -1, 4, 0], n as u64, &moduli)?;
+
+        let statement = RlweRelationProofStatement {
+            n,
+            context,
+            a: &a,
+            flip_a: false,
+            c: &c,
+            q,
+            bound_e: 16,
+            bound_r: 1,
+        };
+        let witness = RlweRelationProofWitness { r: &r, e: &e, v: &v };
+        let transcript_initializer = b"Rlwe Test Transcript";
+
+        let prover = RlweRelationProverVerifier::new(b"42", statement.n);
+        let verifier = RlweRelationProverVerifier::new(b"42", statement.n);
+
+        let mut prover_tx = RecordingTranscript::new(transcript_initializer);
+        let proof = prover.prove(&statement, &witness, &mut prover_tx)?;
+
+        let mut verifier_tx = RecordingTranscript::new(transcript_initializer);
+        verifier.verify(&statement, &proof, &mut verifier_tx)?;
+
+        assert_eq!(prover_tx.events, verifier_tx.events);
+
+        let idx_comm_y_r = verifier_tx.first_index_of(false, b"comm_y_r").unwrap();
+        let idx_mat_r = verifier_tx.first_index_of(true, b"range matrix r").unwrap();
+        let idx_z_r = verifier_tx.first_index_of(false, b"z_r").unwrap();
+        let idx_flat_r = verifier_tx.first_index_of(true, b"matrix flattening r").unwrap();
+
+        let idx_comm_y_e = verifier_tx.first_index_of(false, b"comm_y_e").unwrap();
+        let idx_mat_e = verifier_tx.first_index_of(true, b"range matrix e").unwrap();
+        let idx_z_e = verifier_tx.first_index_of(false, b"z_e").unwrap();
+        let idx_flat_e = verifier_tx.first_index_of(true, b"matrix flattening e").unwrap();
+
+        let idx_comm_y_vw = verifier_tx.first_index_of(false, b"comm_y_vw").unwrap();
+        let idx_mat_vw = verifier_tx.first_index_of(true, b"range matrix v || w").unwrap();
+        let idx_z_vw = verifier_tx.first_index_of(false, b"z_vw").unwrap();
+        let idx_flat_vw = verifier_tx.first_index_of(true, b"matrix flattening v || w").unwrap();
+
+        let idx_phi = verifier_tx.first_index_of(true, b"phi").unwrap();
+
+        assert!(idx_comm_y_r < idx_mat_r);
+        assert!(idx_mat_r < idx_z_r);
+        assert!(idx_z_r < idx_flat_r);
+        assert!(idx_flat_r < idx_comm_y_e);
+        assert!(idx_comm_y_e < idx_mat_e);
+        assert!(idx_mat_e < idx_z_e);
+        assert!(idx_z_e < idx_flat_e);
+        assert!(idx_flat_e < idx_comm_y_vw);
+        assert!(idx_comm_y_vw < idx_mat_vw);
+        assert!(idx_mat_vw < idx_z_vw);
+        assert!(idx_z_vw < idx_flat_vw);
+        assert!(idx_flat_vw < idx_phi);
+
+        for (label, z_vec) in
+            [(&b"z_r"[..], &proof.z_r), (&b"z_e"[..], &proof.z_e), (&b"z_vw"[..], &proof.z_vw)]
+        {
+            let expected_bytes: Vec<u8> = z_vec.iter().flat_map(|s| *s.as_bytes()).collect();
+            assert_eq!(verifier_tx.append_payload(label), Some(expected_bytes.as_slice()));
+        }
+
+        let toggle_scalar = |s: Scalar| {
+            if s == Scalar::from(0u64) {
+                Scalar::from(1u64)
+            } else {
+                Scalar::from(0u64)
+            }
+        };
+
+        // Mutating z_r within bounds must alter psi_r (and subsequent challenges) and fail.
+        {
+            let mut mutated = proof.clone();
+            mutated.z_r[0] = toggle_scalar(mutated.z_r[0]);
+            let mut tx = RecordingTranscript::new(transcript_initializer);
+            assert!(verifier
+                .verify(&statement, &mutated, &mut tx)
+                .expect_err("Mutated z_r must fail verification")
+                .message()
+                .contains("final check"));
+            assert_eq!(
+                tx.challenge_outputs(b"range matrix r"),
+                verifier_tx.challenge_outputs(b"range matrix r")
+            );
+            assert_ne!(
+                tx.challenge_outputs(b"matrix flattening r"),
+                verifier_tx.challenge_outputs(b"matrix flattening r")
+            );
+            assert_ne!(tx.challenge_outputs(b"phi"), verifier_tx.challenge_outputs(b"phi"));
+        }
+
+        // Mutating z_e within bounds must leave psi_r intact, alter psi_e and phi, and fail.
+        {
+            let mut mutated = proof.clone();
+            mutated.z_e[0] = toggle_scalar(mutated.z_e[0]);
+            let mut tx = RecordingTranscript::new(transcript_initializer);
+            assert!(verifier
+                .verify(&statement, &mutated, &mut tx)
+                .expect_err("Mutated z_e must fail verification")
+                .message()
+                .contains("final check"));
+            assert_eq!(
+                tx.challenge_outputs(b"matrix flattening r"),
+                verifier_tx.challenge_outputs(b"matrix flattening r")
+            );
+            assert_eq!(
+                tx.challenge_outputs(b"range matrix e"),
+                verifier_tx.challenge_outputs(b"range matrix e")
+            );
+            assert_ne!(
+                tx.challenge_outputs(b"matrix flattening e"),
+                verifier_tx.challenge_outputs(b"matrix flattening e")
+            );
+            assert_ne!(tx.challenge_outputs(b"phi"), verifier_tx.challenge_outputs(b"phi"));
+        }
+
+        // Mutating z_vw within bounds must leave psi_r and psi_e intact, alter psi_vw and phi, and
+        // fail.
+        {
+            let mut mutated = proof.clone();
+            mutated.z_vw[0] = toggle_scalar(mutated.z_vw[0]);
+            let mut tx = RecordingTranscript::new(transcript_initializer);
+            assert!(verifier
+                .verify(&statement, &mutated, &mut tx)
+                .expect_err("Mutated z_vw must fail verification")
+                .message()
+                .contains("final check"));
+            assert_eq!(
+                tx.challenge_outputs(b"matrix flattening e"),
+                verifier_tx.challenge_outputs(b"matrix flattening e")
+            );
+            assert_eq!(
+                tx.challenge_outputs(b"range matrix v || w"),
+                verifier_tx.challenge_outputs(b"range matrix v || w")
+            );
+            assert_ne!(
+                tx.challenge_outputs(b"matrix flattening v || w"),
+                verifier_tx.challenge_outputs(b"matrix flattening v || w")
+            );
+            assert_ne!(tx.challenge_outputs(b"phi"), verifier_tx.challenge_outputs(b"phi"));
+        }
+
         Ok(())
     }
 }
