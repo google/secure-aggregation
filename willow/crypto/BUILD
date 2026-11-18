@@ -430,7 +430,6 @@ rust_test(
         "@protobuf//rust:protobuf",
         "@crate_index//:curve25519-dalek",
         "@crate_index//:merlin",
-        "@crate_index//:sha3",
         "//ffi_utils:status_matchers_rs",
         "//shell_wrapper:ahe",
         "//shell_wrapper:ahe_cxx",

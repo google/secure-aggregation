@@ -14,7 +14,7 @@
 
 use curve25519_dalek::ristretto::{CompressedRistretto, RistrettoPoint};
 use curve25519_dalek::scalar::Scalar;
-use rand::Rng;
+use rand::RngExt;
 use shell_types::{write_rns_polynomial_to_buffer_128, RnsContextRef, RnsPolynomial};
 use zk_linear_innerproduct::{LinearInnerProductProof, LinearInnerProductProverVerifier};
 use zk_traits::{
@@ -455,7 +455,7 @@ fn generate_range_product(
     // Check that computing loose bound does not result in an overflow.
     check_loose_bound_will_not_overflow(bound, v.len())?;
 
-    let mut rng = rand::thread_rng();
+    let mut rng = rand::rng();
     let loose_bound = bound * 2500 * (u128::isqrt(v.len() as u128) + 1);
     let half_loose_bound = (loose_bound / 2) as i128;
     let max_y = half_loose_bound + (half_loose_bound + 127) / 128;
@@ -473,7 +473,7 @@ fn generate_range_product(
     let mut attempts = 0;
     loop {
         attempts += 1;
-        y = (0..128).map(|_| rng.gen_range(0..possible_y) as i128).collect();
+        y = (0..128).map(|_| rng.random_range(0..possible_y) as i128).collect();
         for i in 0..128 {
             scalar_y[i] = Scalar::from(y[i] as u128);
             y[i] -= max_y;
@@ -635,7 +635,7 @@ impl<'a> ZeroKnowledgeProver<RlweRelationProofStatement<'a>, RlweRelationProofWi
             }
         }
 
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rng();
 
         let range_comm_offset = 3 * n + MAX_RHOS;
 

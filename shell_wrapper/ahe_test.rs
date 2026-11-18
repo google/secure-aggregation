@@ -22,7 +22,7 @@ use googletest::{
     matchers::{contains, eq, not},
     Result,
 };
-use rand::Rng;
+use rand::RngExt;
 use shell_types::{add_in_place, create_empty_rns_polynomial, write_rns_polynomial_to_buffer_128};
 
 const LOG_N: u64 = 11;
@@ -84,8 +84,8 @@ fn encrypt_add_recover() -> Result<()> {
     let mut coeffs0: Vec<u64> = Vec::with_capacity(num_messages);
     let mut coeffs1: Vec<u64> = Vec::with_capacity(num_messages);
     for _ in 0..num_messages {
-        coeffs0.push(rand::thread_rng().gen_range(0..MAX_VALUE));
-        coeffs1.push(rand::thread_rng().gen_range(0..MAX_VALUE));
+        coeffs0.push(rand::rng().random_range(0..MAX_VALUE));
+        coeffs1.push(rand::rng().random_range(0..MAX_VALUE));
     }
 
     // Encrypt the two vectors.
@@ -254,7 +254,7 @@ fn generate_ahe_encrypt_writes_to_wraparound() -> Result<()> {
 
     let mut coeffs = vec![0u64; 8];
     for _ in 0..8 {
-        coeffs.push(rand::thread_rng().gen_range(0..MAX_VALUE));
+        coeffs.push(rand::rng().random_range(0..MAX_VALUE));
     }
     let mut ct_b = create_empty_rns_polynomial();
     let mut ct_a = create_empty_rns_polynomial();
@@ -320,7 +320,7 @@ fn generate_partial_decrypt_writes_to_error_flood_and_wraparound() -> Result<()>
 
     let mut coeffs = vec![0u64; 8];
     for _ in 0..8 {
-        coeffs.push(rand::thread_rng().gen_range(0..MAX_VALUE));
+        coeffs.push(rand::rng().random_range(0..MAX_VALUE));
     }
     let mut ct_b = create_empty_rns_polynomial();
     let mut ct_a = create_empty_rns_polynomial();

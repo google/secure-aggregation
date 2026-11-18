@@ -18,7 +18,7 @@ use googletest::{
     verify_that, Result,
 };
 use kahe::{create_public_parameters, decrypt, encrypt, generate_secret_key, PackedVectorConfig};
-use rand::Rng;
+use rand::RngExt;
 use status::StatusErrorCode;
 use status_matchers_rs::status_is;
 use std::collections::{BTreeMap, HashMap};
@@ -78,7 +78,7 @@ fn encrypt_decrypt_padding() -> Result<()> {
     let num_packed_coeffs =
         (num_input_values + packing_dimension - 1) / packing_dimension + 1 as usize;
     let input_values: Vec<u64> =
-        (0..num_input_values).map(|_| rand::thread_rng().gen_range(0..input_domain)).collect();
+        (0..num_input_values).map(|_| rand::rng().random_range(0..input_domain)).collect();
 
     // Encrypt the vector. Pass a longer length than what we need.
     let padded_length = (num_packed_coeffs * packing_dimension) as usize;
@@ -131,7 +131,7 @@ fn encrypt_decrypt_long() -> Result<()> {
     let num_input_values = 3 * poly_capacity + 1;
     let num_packed_coeffs = (num_input_values + packing_dimension - 1) / packing_dimension as usize;
     let input_values: Vec<u64> =
-        (0..num_input_values).map(|_| rand::thread_rng().gen_range(0..input_domain)).collect();
+        (0..num_input_values).map(|_| rand::rng().random_range(0..input_domain)).collect();
     let plaintext = HashMap::from([(DEFAULT_ID, input_values.as_slice())]);
     let packed_vector_configs = BTreeMap::from([(
         DEFAULT_ID.to_string(),
@@ -154,7 +154,7 @@ fn encrypt_decrypt_long() -> Result<()> {
     // If the input is too long, we should fail.
     let num_values_too_long = num_public_polynomials * poly_capacity + 1;
     let input_values_too_long: Vec<u64> =
-        (0..num_values_too_long).map(|_| rand::thread_rng().gen_range(0..input_domain)).collect();
+        (0..num_values_too_long).map(|_| rand::rng().random_range(0..input_domain)).collect();
     let plaintext_too_long = HashMap::from([(DEFAULT_ID, input_values_too_long.as_slice())]);
     match encrypt(&plaintext_too_long, &packed_vector_configs, &secret_key, &params, &mut prng) {
         Err(e) => expect_that!(e, status_is(StatusErrorCode::INVALID_ARGUMENT)),
@@ -206,12 +206,10 @@ fn encrypt_decrypt_two_vectors() -> Result<()> {
     ]);
 
     // The plaintext contains two vectors.
-    let input_values0: Vec<u64> = (0..num_input_values[0])
-        .map(|_| rand::thread_rng().gen_range(0..input_domains[0]))
-        .collect();
-    let input_values1: Vec<u64> = (0..num_input_values[1])
-        .map(|_| rand::thread_rng().gen_range(0..input_domains[1]))
-        .collect();
+    let input_values0: Vec<u64> =
+        (0..num_input_values[0]).map(|_| rand::rng().random_range(0..input_domains[0])).collect();
+    let input_values1: Vec<u64> =
+        (0..num_input_values[1]).map(|_| rand::rng().random_range(0..input_domains[1])).collect();
     let plaintext =
         HashMap::from([(ID0, input_values0.as_slice()), (ID1, input_values1.as_slice())]);
     let ciphertext = encrypt(&plaintext, &packed_vector_configs, &secret_key, &params, &mut prng)?;

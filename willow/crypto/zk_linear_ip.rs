@@ -194,7 +194,7 @@ impl
         transcript.append_message(b"C", C.compress().as_bytes());
 
         // Sample mask and compute commitment to it and its inner product with public b
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rng();
         let r: Vec<_> = (0..witness.a.len()).map(|_| Scalar::random(&mut rng)).collect();
         let delta_r = Scalar::random(&mut rng);
         let comm_r = self.commit(&r, delta_r)?;
@@ -300,7 +300,7 @@ mod tests {
     #[gtest]
     fn test_valid_linear_zk_inner_product_proof() -> googletest::Result<()> {
         let a: Vec<Scalar> = (1..5).map(|x| Scalar::from(x as u64)).collect();
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rng();
 
         let prover = LinearInnerProductProverVerifier::new(b"42", a.len());
         let delta_a = Scalar::random(&mut rng);
@@ -328,7 +328,7 @@ mod tests {
     #[gtest]
     fn test_invalid_linear_zk_inner_product_proof() -> googletest::Result<()> {
         let a: Vec<Scalar> = (1..5).map(|x| Scalar::from(x as u64)).collect();
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rng();
         let mut transcript = MerlinTranscript::new(b"linear_ip_zkp_test");
 
         let prover = LinearInnerProductProverVerifier::new(b"42", a.len());

@@ -15,7 +15,7 @@
 use aggregation_config::AggregationConfig;
 use ahe_traits::{AheBase, PartialDec};
 use kahe_traits::KaheBase;
-use rand::Rng;
+use rand::RngExt;
 use shell_kahe::ShellKahe;
 use shell_vahe::ShellVahe;
 use std::collections::HashMap;
@@ -23,14 +23,14 @@ use vahe_traits::Recover;
 
 pub fn generate_random_nonce() -> Vec<u8> {
     let mut nonce = vec![0u8; 16];
-    rand::thread_rng().fill(&mut nonce[..]);
+    rand::rng().fill(&mut nonce[..]);
     nonce
 }
 
 pub fn generate_random_unsigned_vector(num_values: usize, max_absolute_value: u64) -> Vec<u64> {
     let mut pt: Vec<u64> = Vec::with_capacity(num_values);
     for _ in 0..num_values {
-        pt.push(rand::thread_rng().gen_range(0..max_absolute_value));
+        pt.push(rand::rng().random_range(0..max_absolute_value));
     }
     pt
 }
@@ -38,7 +38,7 @@ pub fn generate_random_unsigned_vector(num_values: usize, max_absolute_value: u6
 pub fn generate_random_signed_vector(num_values: usize, max_absolute_value: i64) -> Vec<i64> {
     let mut pt: Vec<i64> = Vec::with_capacity(num_values);
     for _ in 0..num_values {
-        let v: i64 = rand::thread_rng().gen_range(0..2 * max_absolute_value).try_into().unwrap();
+        let v: i64 = rand::rng().random_range(0..2 * max_absolute_value).try_into().unwrap();
         pt.push(v - max_absolute_value);
     }
     pt

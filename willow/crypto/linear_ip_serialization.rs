@@ -81,7 +81,7 @@ mod tests {
     #[allow(non_snake_case)]
     fn test_proof_proto_roundtrip() -> googletest::Result<()> {
         let a: Vec<Scalar> = (1..5).map(|x| Scalar::from(x as u64)).collect();
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rng();
 
         let prover = LinearInnerProductProverVerifier::new(b"42", a.len());
         let delta_a = Scalar::random(&mut rng);
