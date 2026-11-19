@@ -51,20 +51,20 @@ impl StatusIsMatcher {
 }
 
 impl<T: Debug> Matcher<&Result<T, StatusError>> for StatusIsMatcher {
-    fn matches(&self, actual: &Result<T, StatusError>) -> MatcherResult {
+    fn matches(&self, actual: &&Result<T, StatusError>) -> MatcherResult {
         if let Err(error) = actual {
-            self.matches(error)
+            self.matches(&error)
         } else {
             MatcherResult::NoMatch
         }
     }
 
-    fn explain_match(&self, actual: &Result<T, StatusError>) -> Description {
+    fn explain_match(&self, actual: &&Result<T, StatusError>) -> Description {
         let Err(status_error) = actual else {
             return Description::new().text("which is a success");
         };
 
-        self.explain_match(status_error)
+        self.explain_match(&status_error)
     }
 
     fn describe(&self, result: MatcherResult) -> Description {
@@ -90,19 +90,19 @@ impl<T: Debug> Matcher<&Result<T, StatusError>> for StatusIsMatcher {
 }
 
 impl Matcher<&StatusError> for StatusIsMatcher {
-    fn matches(&self, actual: &StatusError) -> MatcherResult {
+    fn matches(&self, actual: &&StatusError) -> MatcherResult {
         if actual.code() != self.expected_code {
             return MatcherResult::NoMatch;
         }
 
         if let Some(message_matcher) = &self.message_matcher {
-            message_matcher.matches(&actual.message())
+            message_matcher.matches(&&*actual.message())
         } else {
             MatcherResult::Match
         }
     }
 
-    fn explain_match(&self, actual: &StatusError) -> Description {
+    fn explain_match(&self, actual: &&StatusError) -> Description {
         let code = actual.code();
         let message = actual.message();
         let Some(message_matcher) = &self.message_matcher else {
@@ -110,11 +110,11 @@ impl Matcher<&StatusError> for StatusIsMatcher {
                 .text(format!("which is a StatusError with code {}", code.as_str()));
         };
 
-        match (actual.code() == self.expected_code, message_matcher.matches(&message)) {
+        match (actual.code() == self.expected_code, message_matcher.matches(&&*message)) {
             (true, MatcherResult::NoMatch) => Description::new().text(format!(
                 "which is a StatusError with error message: {}, {}",
                 message,
-                message_matcher.explain_match(&message)
+                message_matcher.explain_match(&&*message)
             )),
             (false, MatcherResult::Match) => Description::new()
                 .text(format!("which is a StatusError with code {}", code.as_str())),
@@ -122,7 +122,7 @@ impl Matcher<&StatusError> for StatusIsMatcher {
                 "which is a StatusError with code {} and error message: {}, {}",
                 code.as_str(),
                 message,
-                message_matcher.explain_match(&message)
+                message_matcher.explain_match(&&*message)
             )),
         }
     }
