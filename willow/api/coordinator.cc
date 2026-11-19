@@ -93,6 +93,14 @@ absl::StatusOr<std::string> Coordinator::ToSerializedState() const {
                      serialized_state.size());
 }
 
+absl::Status Coordinator::ConfigureCommittee(
+    const CommitteeConfigProto& committee_config) {
+  std::string config_str = committee_config.SerializeAsString();
+  SECAGG_RETURN_IF_FFI_ERROR(
+      coordinator_->ConfigureCommittee(ToRustSlice(config_str)));
+  return absl::OkStatus();
+}
+
 absl::StatusOr<VerifyKeyContributionsRequest>
 Coordinator::HandleSetupSubmissions(
     absl::Span<const SetupContribution> non_reputable_contributions,
@@ -131,6 +139,70 @@ absl::StatusOr<PartialDecryptionRequest> Coordinator::PrepareDecryptionRequest(
         "Failed to parse PartialDecryptionRequest from serialized FFI bytes.");
   }
   return dec_request;
+}
+
+absl::Status Coordinator::AggregatePartialDecryptions(
+    absl::Span<const PartialDecryptionResponse> partial_responses) {
+  SerializedProtoSpan<PartialDecryptionResponse> responses_helper(
+      partial_responses);
+  SECAGG_RETURN_IF_FFI_ERROR(
+      coordinator_->AggregatePartialDecryptions(responses_helper.slice));
+  return absl::OkStatus();
+}
+
+absl::StatusOr<std::vector<std::pair<uint32_t, RecoveryRequest>>>
+Coordinator::CreateIndexedRecoveryRequests() const {
+  rust::Vec<IndexedSerializedRecoveryRequest> raw_requests;
+  SECAGG_RETURN_IF_FFI_ERROR(
+      coordinator_->CreateIndexedRecoveryRequests(raw_requests));
+
+  std::vector<std::pair<uint32_t, RecoveryRequest>> requests;
+  requests.reserve(raw_requests.size());
+  for (const auto& item : raw_requests) {
+    RecoveryRequest req;
+    if (!req.ParseFromArray(item.request_bytes.data(),
+                            item.request_bytes.size())) {
+      return absl::InternalError(
+          "Failed to parse RecoveryRequest from serialized FFI bytes.");
+    }
+    requests.emplace_back(item.survivor_index, std::move(req));
+  }
+  return requests;
+}
+
+absl::StatusOr<std::vector<RecoveryRequest>>
+Coordinator::CreateRecoveryRequests() {
+  SECAGG_ASSIGN_OR_RETURN(auto indexed_requests,
+                          CreateIndexedRecoveryRequests());
+  std::vector<RecoveryRequest> requests;
+  requests.reserve(indexed_requests.size());
+  for (auto& [survivor_index, req] : indexed_requests) {
+    requests.push_back(std::move(req));
+  }
+  return requests;
+}
+
+absl::Status Coordinator::RecoverDroppedDecryptors(
+    absl::Span<const RecoveryResponse> recovery_responses) {
+  SerializedProtoSpan<RecoveryResponse> responses_helper(recovery_responses);
+  SECAGG_RETURN_IF_FFI_ERROR(
+      coordinator_->RecoverDroppedDecryptors(responses_helper.slice));
+  return absl::OkStatus();
+}
+
+absl::StatusOr<FinalizedPartialDecryption>
+Coordinator::FinalizePartialDecryption() {
+  rust::Vec<uint8_t> result_bytes;
+  SECAGG_RETURN_IF_FFI_ERROR(
+      coordinator_->FinalizePartialDecryption(result_bytes));
+
+  FinalizedPartialDecryption finalized_pd;
+  if (!finalized_pd.ParseFromArray(result_bytes.data(), result_bytes.size())) {
+    return absl::InternalError(
+        "Failed to parse FinalizedPartialDecryption from serialized FFI "
+        "bytes.");
+  }
+  return finalized_pd;
 }
 
 absl::StatusOr<FinalizedPartialDecryption>

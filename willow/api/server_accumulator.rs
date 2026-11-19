@@ -536,7 +536,7 @@ pub struct FinalResultDecryptor {
     ///
     /// NOTE: We technically only need client_sum, not decryptor_public_key_shares or
     /// partial_decryption_sum, but because of the monolithic SecureAggregationServer trait
-    /// (b/476137863) we need a complete CiphertextAccumulatorState to call the decryption
+    /// (b/476380769) we need a complete CiphertextAccumulatorState to call the decryption
     /// functions.
     accumulator_state: CiphertextAccumulatorState<ShellKahe, ShellVahe>,
 
