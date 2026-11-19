@@ -28,7 +28,7 @@ pub trait AheBase: Sized {
     type SecretKeyShare;
 
     /// Public key share.
-    type PublicKeyShare: Clone;
+    type PublicKeyShare: Clone + PartialEq + Eq;
 
     type KeyGenMetadata;
 

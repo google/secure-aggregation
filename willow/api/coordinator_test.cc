@@ -172,6 +172,97 @@ TEST(CoordinatorTest, AggregateAndFinalizeFailsWhenNotInCorrectState) {
   EXPECT_FALSE(finalize_or.ok());
 }
 
+TEST(CoordinatorTest,
+     ConfigureCommitteeAndRecoverableSetupPreservesStateAcrossSerialization) {
+  AggregationConfigProto config = CreateValidConfig();
+  SECAGG_ASSERT_OK_AND_ASSIGN(auto coordinator, Coordinator::Create(config));
+
+  constexpr uint32_t kNumDecryptors = 3;
+  constexpr uint32_t kThreshold = 2;
+  constexpr absl::string_view kSessionContext = "coordinator_test_session";
+
+  std::vector<std::unique_ptr<ShellTestingDecryptor>> decryptors;
+  std::vector<std::string> roster_pks;
+  for (uint32_t i = 1; i <= kNumDecryptors; ++i) {
+    SECAGG_ASSERT_OK_AND_ASSIGN(auto dec,
+                                ShellTestingDecryptor::Create(config));
+    SECAGG_ASSERT_OK_AND_ASSIGN(std::string pk, dec->GenerateHpkePublicKey());
+    roster_pks.push_back(std::move(pk));
+    decryptors.push_back(std::move(dec));
+  }
+
+  SECAGG_ASSERT_OK_AND_ASSIGN(CommitteeConfigProto coord_committee_cfg,
+                              ShellTestingDecryptor::BuildCommitteeConfig(
+                                  /*my_index=*/1, kNumDecryptors, kThreshold,
+                                  kSessionContext, roster_pks));
+  SECAGG_ASSERT_OK(coordinator->ConfigureCommittee(coord_committee_cfg));
+
+  // Serialize and reinstantiate in PreSetup state with committee_config.
+  SECAGG_ASSERT_OK_AND_ASSIGN(std::string pre_setup_state,
+                              coordinator->ToSerializedState());
+  SECAGG_ASSERT_OK_AND_ASSIGN(
+      coordinator, Coordinator::CreateFromSerializedState(pre_setup_state));
+
+  std::vector<SetupContribution> non_reputable;
+  for (uint32_t i = 1; i <= kNumDecryptors; ++i) {
+    SECAGG_ASSERT_OK_AND_ASSIGN(
+        CommitteeConfigProto dec_cfg,
+        ShellTestingDecryptor::BuildCommitteeConfig(
+            i, kNumDecryptors, kThreshold, kSessionContext, roster_pks));
+    SECAGG_ASSERT_OK_AND_ASSIGN(
+        SetupContribution contrib,
+        decryptors[i - 1]->CreateRecoverableSetupContribution(dec_cfg,
+                                                              roster_pks));
+    non_reputable.push_back(std::move(contrib));
+  }
+
+  std::vector<SetupContribution> reputable;
+  SECAGG_ASSERT_OK_AND_ASSIGN(
+      auto verify_request,
+      coordinator->HandleSetupSubmissions(non_reputable, reputable));
+  EXPECT_THAT(verify_request.key_contributions(), SizeIs(kNumDecryptors));
+
+  // ConfigureCommittee must fail once past PreSetup.
+  EXPECT_THAT(
+      coordinator->ConfigureCommittee(coord_committee_cfg),
+      StatusIs(absl::StatusCode::kFailedPrecondition, HasSubstr("PreSetup")));
+
+  // CreateRecoveryRequests, RecoverDroppedDecryptors, and
+  // FinalizePartialDecryption must fail in KeySharesReceived state.
+  EXPECT_THAT(coordinator->CreateRecoveryRequests(),
+              StatusIs(absl::StatusCode::kFailedPrecondition));
+  EXPECT_THAT(coordinator->RecoverDroppedDecryptors({}),
+              StatusIs(absl::StatusCode::kFailedPrecondition));
+  EXPECT_THAT(coordinator->FinalizePartialDecryption(),
+              StatusIs(absl::StatusCode::kFailedPrecondition));
+
+  // Serialize and reinstantiate in KeySharesReceived state with
+  // dealer_setup_info and setup_transcript_hash.
+  SECAGG_ASSERT_OK_AND_ASSIGN(std::string post_setup_state,
+                              coordinator->ToSerializedState());
+  SECAGG_ASSERT_OK_AND_ASSIGN(
+      coordinator, Coordinator::CreateFromSerializedState(post_setup_state));
+  SECAGG_ASSERT_OK_AND_ASSIGN(std::string roundtrip_post_setup_state,
+                              coordinator->ToSerializedState());
+
+  CoordinatorState orig_state;
+  ASSERT_TRUE(orig_state.ParseFromString(post_setup_state));
+  CoordinatorState parsed_state;
+  ASSERT_TRUE(parsed_state.ParseFromString(roundtrip_post_setup_state));
+  EXPECT_EQ(parsed_state.status(), COORDINATOR_STATUS_KEY_SHARES_RECEIVED);
+  EXPECT_EQ(parsed_state.dealer_setup_info().size(), kNumDecryptors);
+  EXPECT_EQ(parsed_state.setup_transcript_hash().size(), 32);
+  EXPECT_EQ(parsed_state.setup_transcript_hash(),
+            orig_state.setup_transcript_hash());
+  for (uint32_t i = 1; i <= kNumDecryptors; ++i) {
+    ASSERT_TRUE(parsed_state.dealer_setup_info().contains(i));
+    ASSERT_TRUE(orig_state.dealer_setup_info().contains(i));
+    EXPECT_EQ(parsed_state.dealer_setup_info().at(i).dealer_index(), i);
+    EXPECT_EQ(parsed_state.dealer_setup_info().at(i).encrypted_shares().size(),
+              kNumDecryptors - 1);
+  }
+}
+
 }  // namespace
 }  // namespace willow
 }  // namespace secure_aggregation

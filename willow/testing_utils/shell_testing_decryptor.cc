@@ -25,6 +25,8 @@
 #include "absl/memory/memory.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/string_view.h"
+#include "absl/types/span.h"
 #include "ffi_utils/cxx_utils.h"
 #include "ffi_utils/status_macros.h"
 #include "willow/input_encoding/codec.h"
@@ -72,6 +74,74 @@ ShellTestingDecryptor::CreateSetupContribution() {
     return absl::InternalError("Failed to parse SetupContribution");
   }
   return contribution;
+}
+
+absl::StatusOr<std::string> ShellTestingDecryptor::GenerateHpkePublicKey() {
+  rust::Vec<uint8_t> out;
+  SECAGG_RETURN_IF_FFI_ERROR(decryptor_->generate_hpke_public_key(&out));
+  return std::string(reinterpret_cast<const char*>(out.data()), out.size());
+}
+
+absl::StatusOr<willow::CommitteeConfigProto>
+ShellTestingDecryptor::BuildCommitteeConfig(
+    uint32_t my_index, uint32_t num_decryptors, uint32_t threshold,
+    absl::string_view session_context,
+    absl::Span<const std::string> roster_hpke_public_keys) {
+  std::vector<ByteSliceView> views;
+  views.reserve(roster_hpke_public_keys.size());
+  for (const auto& pk : roster_hpke_public_keys) {
+    views.push_back(ByteSliceView{ToRustSlice(pk)});
+  }
+  rust::Slice<const ByteSliceView> views_slice(views.data(), views.size());
+
+  rust::Vec<uint8_t> out;
+  SECAGG_RETURN_IF_FFI_ERROR(
+      build_committee_config(my_index, num_decryptors, threshold,
+                             ToRustSlice(session_context), views_slice, &out));
+
+  willow::CommitteeConfigProto config_proto;
+  if (!config_proto.ParseFromArray(out.data(), out.size())) {
+    return absl::InternalError("Failed to parse CommitteeConfigProto");
+  }
+  return config_proto;
+}
+
+absl::StatusOr<willow::SetupContribution>
+ShellTestingDecryptor::CreateRecoverableSetupContribution(
+    const willow::CommitteeConfigProto& committee_config,
+    absl::Span<const std::string> roster_hpke_public_keys) {
+  std::string config_bytes = committee_config.SerializeAsString();
+  std::vector<ByteSliceView> views;
+  views.reserve(roster_hpke_public_keys.size());
+  for (const auto& pk : roster_hpke_public_keys) {
+    views.push_back(ByteSliceView{ToRustSlice(pk)});
+  }
+  rust::Slice<const ByteSliceView> views_slice(views.data(), views.size());
+
+  rust::Vec<uint8_t> out;
+  SECAGG_RETURN_IF_FFI_ERROR(decryptor_->create_recoverable_setup_contribution(
+      ToRustSlice(config_bytes), views_slice, &out));
+
+  willow::SetupContribution contribution;
+  if (!contribution.ParseFromArray(out.data(), out.size())) {
+    return absl::InternalError("Failed to parse recoverable SetupContribution");
+  }
+  return contribution;
+}
+
+absl::StatusOr<willow::RecoveryResponse>
+ShellTestingDecryptor::HandleRecoveryRequest(
+    const willow::RecoveryRequest& request) {
+  std::string req_bytes = request.SerializeAsString();
+  rust::Vec<uint8_t> out;
+  SECAGG_RETURN_IF_FFI_ERROR(
+      decryptor_->handle_recovery_request(ToRustSlice(req_bytes), &out));
+
+  willow::RecoveryResponse response;
+  if (!response.ParseFromArray(out.data(), out.size())) {
+    return absl::InternalError("Failed to parse RecoveryResponse");
+  }
+  return response;
 }
 
 absl::StatusOr<willow::ShellAhePublicKey>

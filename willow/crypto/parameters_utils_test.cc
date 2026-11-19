@@ -40,6 +40,17 @@ TEST(ParameterUtilsTest, CreateHumanReadableShellConfigTest) {
   ASSERT_TRUE(result.ok());
   EXPECT_THAT(*result, ::testing::HasSubstr("ShellKaheConfig"));
   EXPECT_THAT(*result, ::testing::HasSubstr("ShellAheConfig"));
+
+  config.set_max_number_of_decryptors(100);
+  auto multi_decryptor_result = CreateHumanReadableShellConfig(config);
+  ASSERT_TRUE(multi_decryptor_result.ok());
+  EXPECT_THAT(*multi_decryptor_result, ::testing::HasSubstr("ShellKaheConfig"));
+  EXPECT_THAT(*multi_decryptor_result, ::testing::HasSubstr("ShellAheConfig"));
+
+  config.set_max_number_of_decryptors(101);
+  auto too_many_decryptors = CreateHumanReadableShellConfig(config);
+  EXPECT_EQ(too_many_decryptors.status().code(),
+            absl::StatusCode::kInvalidArgument);
 }
 
 TEST(ParameterUtilsTest, CreateHumanReadableShellConfigInvalidConfigTest) {
