@@ -14,7 +14,9 @@
 
 use ahe_traits::{AheKeygen, PartialDec};
 use decryptor::{Decryptor, DecryptorState};
-use messages::{DecryptorPublicKey, PartialDecryptionRequest, PartialDecryptionResponse};
+use messages::{
+    DecryptorPublicKey, DecryptorStatus, PartialDecryptionRequest, PartialDecryptionResponse,
+};
 use shell_kahe::ShellKahe;
 use status::StatusError;
 use std::rc::Rc;
@@ -59,6 +61,7 @@ where
         let (sk_share, pk_share, _) =
             self.decryptor.vahe().key_gen(&mut self.decryptor.prng.borrow_mut())?;
         decryptor_state.sk_share = Some(sk_share);
+        decryptor_state.status = DecryptorStatus::AwaitingDecryptionRequest;
         self.decryptor.vahe().aggregate_public_key_shares(std::iter::once(&pk_share))
     }
 
