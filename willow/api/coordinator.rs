@@ -221,7 +221,8 @@ impl WillowShellCoordinator {
 
         let verify_request =
             self.coord.handle_setup_submissions(non_reputable, reputable, &mut self.coord_state)?;
-        let proto = verify_request.to_proto(&*self)?;
+        let mut proto = verify_request.to_proto(&*self)?;
+        proto.set_aggregation_config(self.aggregation_config.to_proto(())?);
         proto.serialize().map_err(|e| {
             status::internal(&format!("Failed to serialize VerifyKeyContributionsRequest: {}", e))
         })
@@ -251,7 +252,8 @@ impl WillowShellCoordinator {
         let ct =
             <ShellVahe as AheBase>::PartialDecCiphertext::from_proto(ct_proto, self.coord.vahe())?;
 
-        let request = self.coord.prepare_decryption_request(&ct, &mut self.coord_state)?;
+        let mut request = self.coord.prepare_decryption_request(&ct, &mut self.coord_state)?;
+        request.aggregation_config = Some(self.aggregation_config.clone());
         let proto = request.to_proto(&*self)?;
         proto.serialize().map_err(|e| {
             status::internal(&format!("Failed to serialize PartialDecryptionRequest: {}", e))

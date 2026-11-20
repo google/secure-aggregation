@@ -16,13 +16,18 @@ syntax = "proto3";
 
 package secure_aggregation.willow;
 import "willow/proto/shell/ciphertexts.proto";
+import "willow/proto/willow/aggregation_config.proto";
 import "willow/proto/willow/messages.proto";
 
 option java_multiple_files = true;
 option java_outer_classname = "ReputableDecryptorProto";
 
 // Request message for creating a setup contribution.
-message CreateSetupContributionRequest {}
+message CreateSetupContributionRequest {
+  // The aggregation config of the session that the contribution is for. Its
+  // key_id is the context of the scheme.
+  AggregationConfigProto aggregation_config = 1;
+}
 
 // Error status.
 message ReputableDecryptorStatus {

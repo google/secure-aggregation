@@ -41,6 +41,7 @@ proto_library(
     name = "reputable_decryptor_proto",
     srcs = ["reputable_decryptor.proto"],
     deps = [
+        ":aggregation_config_proto",
         ":messages_proto",
         
         "//willow/proto/shell:shell_ciphertexts_proto",
