@@ -99,6 +99,9 @@ TEST(CoordinatorTest, SerializeAndReinstantiatePreservesState) {
       auto verify_request,
       coordinator->HandleSetupSubmissions(non_reputable, reputable));
   EXPECT_THAT(verify_request.key_contributions(), SizeIs(1));
+  EXPECT_EQ(verify_request.aggregation_config().key_id(), config.key_id());
+  EXPECT_EQ(verify_request.aggregation_config().max_number_of_clients(),
+            config.max_number_of_clients());
 
   // Serialize and reinstantiate in KeySharesReceived state with populated
   // encrypted_randomness_shares.

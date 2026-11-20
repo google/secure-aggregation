@@ -104,6 +104,9 @@ TEST(WillowV1ApiE2ETest, MultiDecryptorCoordinatorFullPipelineWithCodec) {
   SECAGG_ASSERT_OK_AND_ASSIGN(VerifyKeyContributionsRequest verify_request,
                               coordinator->HandleSetupSubmissions(
                                   non_reputable_contribs, reputable_contribs));
+  EXPECT_EQ(verify_request.aggregation_config().key_id(), config.key_id());
+  EXPECT_EQ(verify_request.aggregation_config().max_number_of_clients(),
+            config.max_number_of_clients());
 
   // Serialize and reinstantiate Coordinator after setup round.
   SECAGG_ASSERT_OK_AND_ASSIGN(std::string serialized_coord_state,
@@ -193,6 +196,9 @@ TEST(WillowV1ApiE2ETest, MultiDecryptorCoordinatorFullPipelineWithCodec) {
   SECAGG_ASSERT_OK_AND_ASSIGN(PartialDecryptionRequest dec_request,
                               coordinator->PrepareDecryptionRequest(
                                   acc_dec_req.partial_dec_ciphertext()));
+  EXPECT_EQ(dec_request.aggregation_config().key_id(), config.key_id());
+  EXPECT_EQ(dec_request.aggregation_config().max_number_of_clients(),
+            config.max_number_of_clients());
 
   // Serialize and reinstantiate Coordinator while awaiting partial decryptions.
   SECAGG_ASSERT_OK_AND_ASSIGN(serialized_coord_state,
