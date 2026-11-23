@@ -80,7 +80,8 @@ message ActiveSession {
   // The status of the protocol session.
   SessionStatus session_status = 4;
 
-  // Additional details about the session, if needed.
+  // The AggregationConfigProto of the session. The member derives its
+  // cryptographic parameters from it; its key_id is the context of the scheme.
   google.protobuf.Any details = 3;
 }
 

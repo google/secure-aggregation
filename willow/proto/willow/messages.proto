@@ -126,6 +126,9 @@ message RecoveryResponse {
 // contributions.
 message VerifyKeyContributionsRequest {
   repeated KeyContribution key_contributions = 1;
+  // The aggregation config of the session whose contributions are verified. Its
+  // key_id is the context of the scheme.
+  AggregationConfigProto aggregation_config = 2;
 }
 
 // Finalized partial decryption after aggregating responses from decryptors.
